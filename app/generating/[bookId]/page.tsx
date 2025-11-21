@@ -29,17 +29,12 @@ export default function GeneratingPage() {
   }, [bookId, router])
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center justify-between overflow-hidden bg-blue-100 p-4 font-display dark:bg-slate-900">
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
-        <button className="flex h-12 w-12 items-center justify-center rounded-full bg-white/30 backdrop-blur-sm text-gray-700 transition-colors hover:bg-white/50 dark:bg-black/30 dark:text-gray-300 dark:hover:bg-black/50">
-          <span className="material-symbols-outlined text-2xl">volume_up</span>
-        </button>
-      </div>
-
+    <div className="relative flex min-h-screen w-full flex-col items-center justify-between overflow-hidden bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 p-4 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       <div className="mt-12 w-full max-w-md text-center sm:mt-16">
-        <h2 className="font-display text-3xl font-bold leading-tight tracking-light text-[#1e3a8a] dark:text-blue-200 sm:text-4xl">
-          Mixing the magic...
+        <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2">
+          ✨ Mixing the magic...
         </h2>
+        <p className="text-gray-600 dark:text-gray-300">Creating your storybook</p>
       </div>
 
       <div className="relative mb-4 mt-8 flex max-w-sm flex-grow items-end justify-center">
@@ -52,7 +47,7 @@ export default function GeneratingPage() {
         </div>
 
         <div className="absolute bottom-0 left-1/2 h-full w-full -translate-x-1/2">
-          <div className="absolute bottom-[75%] left-[60%] h-16 w-16 -translate-x-1/2">
+          <div className="absolute bottom-[75%] left-[60%] h-16 w-16 -translate-x-1/2 animate-bounce">
             <span
               className="material-symbols-outlined text-5xl text-pink-400 drop-shadow-lg dark:text-pink-500"
               style={{ transform: 'rotate(15deg)' }}
@@ -60,7 +55,7 @@ export default function GeneratingPage() {
               filter_vintage
             </span>
           </div>
-          <div className="absolute bottom-[60%] right-[65%] h-12 w-12">
+          <div className="absolute bottom-[60%] right-[65%] h-12 w-12 animate-pulse">
             <span
               className="material-symbols-outlined text-4xl text-purple-400 drop-shadow-lg dark:text-purple-500"
               style={{ transform: 'rotate(-25deg)' }}
@@ -70,7 +65,7 @@ export default function GeneratingPage() {
           </div>
         </div>
 
-        <div className="absolute bottom-[75%] left-1/2 mb-4 -translate-x-1/2">
+        <div className="absolute bottom-[75%] left-1/2 mb-4 -translate-x-1/2 animate-bounce" style={{ animationDelay: '0.5s' }}>
           <div className="relative h-20 w-20">
             <img
               className="h-full w-full object-contain drop-shadow-lg"
@@ -81,15 +76,16 @@ export default function GeneratingPage() {
         </div>
       </div>
 
-      <div className="mb-8 w-full max-w-md rounded-lg bg-white/30 p-4 shadow-lg backdrop-blur-sm sm:mb-12 dark:bg-black/30">
-        <div className="flex flex-col gap-3">
-          <div className="flex justify-between gap-6">
-            <p className="text-base font-medium leading-normal text-[#1e3a8a] dark:text-blue-200">
+      <div className="mb-8 w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-6 shadow-xl backdrop-blur-md sm:mb-12">
+        <div className="flex flex-col gap-4">
+          <div className="flex justify-between items-center">
+            <p className="text-base font-semibold text-gray-700 dark:text-gray-200">
               Stirring up your story...
             </p>
+            <span className="material-symbols-outlined animate-spin text-blue-500">sync</span>
           </div>
-          <div className="h-2 rounded-full bg-primary/20 dark:bg-primary/30">
-            <div className="h-2 rounded-full bg-primary" style={{ width: '75%' }} />
+          <div className="h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 animate-pulse" style={{ width: '75%' }} />
           </div>
         </div>
       </div>
