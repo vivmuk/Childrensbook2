@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { setBook, getBook, type Book } from '@/lib/storage'
-
-const openai = new OpenAI({
-  apiKey: process.env.VENICE_API_KEY,
-  baseURL: 'https://api.venice.ai/api/v1',
-})
 
 const AGE_TO_COMPLEXITY: Record<string, string> = {
   kindergarten: 'very simple, with short sentences and basic words',
@@ -54,27 +48,43 @@ Format the response as JSON with this structure:
   ]
 }`
 
-    // Generate story text
-    const completion = await openai.chat.completions.create({
-      model: 'venice-uncensored',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a creative children\'s book author. Always respond with valid JSON only, no additional text.',
+    // Generate story text using Venice API directly
+    const completionResponse = await fetch(
+      'https://api.venice.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.VENICE_API_KEY}`,
+          'Content-Type': 'application/json',
         },
-        { role: 'user', content: storyPrompt },
-      ],
-      temperature: 0.8,
-      max_completion_tokens: 2000,
-      extra_body: {
-        venice_parameters: {
-          include_venice_system_prompt: false,
-        },
-      },
-    })
+        body: JSON.stringify({
+          model: 'venice-uncensored',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a creative children\'s book author. Always respond with valid JSON only, no additional text.',
+            },
+            { role: 'user', content: storyPrompt },
+          ],
+          temperature: 0.8,
+          max_completion_tokens: 2000,
+          venice_parameters: {
+            include_venice_system_prompt: false,
+          },
+        }),
+      }
+    )
 
-    const storyContent = completion.choices[0].message.content
+    if (!completionResponse.ok) {
+      throw new Error(
+        `Venice API error: ${completionResponse.statusText}`
+      )
+    }
+
+    const completion = await completionResponse.json()
+
+    const storyContent = completion.choices?.[0]?.message?.content
     if (!storyContent) {
       throw new Error('No story content generated')
     }
