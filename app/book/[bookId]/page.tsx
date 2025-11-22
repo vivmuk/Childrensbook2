@@ -27,6 +27,7 @@ export default function BookViewerPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [isPageTransitioning, setIsPageTransitioning] = useState(false)
+  const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     const fetchBook = async () => {
@@ -369,15 +370,34 @@ export default function BookViewerPage() {
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 dark:bg-gray-900/90 p-4 shadow-sm backdrop-blur-md">
-        <button
-          onClick={() => router.back()}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
-        >
-          <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
-        </button>
-        <h2 className="flex-1 text-center text-lg font-bold text-gray-800 dark:text-gray-100 truncate px-4">
-          {book.title}
-        </h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/')}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 transition-colors"
+            title="Home"
+          >
+            <Icon name="home" className="text-purple-700 dark:text-purple-300" size={24} />
+          </button>
+          <button
+            onClick={() => router.back()}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+            title="Back"
+          >
+            <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 flex-1 justify-center">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-white/50 backdrop-blur-sm border-2 border-white/60 flex items-center justify-center">
+            <img
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuqyg_Asjsvty0tzYyB8sHQMgmo8HxFMLBQkGxQ-YWrQd1H1C1hxlO9XQItRXtU3EqZsQREdO9LJ1Ie7H7WYMP5aY0A31jbZ9fsQVUWafv3bcsJ2whAAhxcmp7zZRKazVaD0ztLi_Pa-WeiXQeu9dpTFGKAvYwQLkCSfGZsKpVYIV2_LJnapPvyM_ynHNh5ZLTEyFXmqQ7qiPO0r69pIRPgGl0Hvol7tSFTSihOnxUAMj6kg-mJc-LWCdbo2kREVe5bROQ3mGCNA"
+              alt="KinderQuill"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 truncate px-4">
+            {book.title}
+          </h2>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownloadHTML}
@@ -387,9 +407,16 @@ export default function BookViewerPage() {
             <Icon name="download" className="text-lg" size={24} />
           </button>
           {book.audioUrl ? (
-            <audio controls className="h-8 w-24 rounded-lg">
-              <source src={book.audioUrl} type="audio/mpeg" />
-            </audio>
+            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-full px-3 py-2 border border-blue-200 dark:border-blue-800">
+              <audio 
+                ref={setAudioRef}
+                controls 
+                className="h-8 rounded-lg"
+                style={{ minWidth: '140px', maxWidth: '200px' }}
+              >
+                <source src={book.audioUrl} type="audio/mpeg" />
+              </audio>
+            </div>
           ) : (
             <button
               onClick={handleGenerateAudio}
@@ -399,7 +426,7 @@ export default function BookViewerPage() {
             >
               <Icon 
                 name={isGeneratingAudio ? 'hourglass_empty' : 'volume_up'} 
-                className="text-lg animate-spin" 
+                className={`text-lg ${isGeneratingAudio ? 'animate-spin' : ''}`}
                 size={24} 
               />
             </button>

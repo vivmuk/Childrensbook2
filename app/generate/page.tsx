@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
+import { MagicAnimation } from '@/components/MagicAnimation'
 
 const AGE_RANGES = [
   { value: 'kindergarten', label: 'Kindergarten' },
@@ -112,66 +113,53 @@ export default function GeneratePage() {
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-sm">
-        <button
-          onClick={() => router.back()}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
-        >
-          <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
-        </button>
-        <h2 className="flex-1 text-center text-lg font-bold text-gray-800 dark:text-gray-100">
-          Create Your Story
-        </h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/')}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 transition-colors"
+            title="Home"
+          >
+            <Icon name="home" className="text-purple-700 dark:text-purple-300" size={24} />
+          </button>
+          <button
+            onClick={() => router.back()}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
+            title="Back"
+          >
+            <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 flex-1 justify-center">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-white/50 backdrop-blur-sm border-2 border-white/60 flex items-center justify-center">
+            <img
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuqyg_Asjsvty0tzYyB8sHQMgmo8HxFMLBQkGxQ-YWrQd1H1C1hxlO9XQItRXtU3EqZsQREdO9LJ1Ie7H7WYMP5aY0A31jbZ9fsQVUWafv3bcsJ2whAAhxcmp7zZRKazVaD0ztLi_Pa-WeiXQeu9dpTFGKAvYwQLkCSfGZsKpVYIV2_LJnapPvyM_ynHNh5ZLTEyFXmqQ7qiPO0r69pIRPgGl0Hvol7tSFTSihOnxUAMj6kg-mJc-LWCdbo2kREVe5bROQ3mGCNA"
+              alt="KinderQuill"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
+            Create Your Story
+          </h2>
+        </div>
         <div className="w-10" />
       </div>
 
       <main className="flex grow flex-col items-center justify-center px-4 py-8 text-center max-w-2xl mx-auto w-full">
         {isGenerating ? (
           /* Generating State - Magic Screen */
-          <div className="flex flex-col items-center justify-between w-full h-full">
-            <div className="mt-12 w-full max-w-md text-center sm:mt-16">
-              <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2 flex items-center justify-center gap-2">
-                <Icon name="auto_awesome" className="text-yellow-400 animate-spin" size={48} />
-                <span>Mixing the magic...</span>
+          <div className="flex flex-col items-center justify-between w-full h-full min-h-[600px]">
+            <div className="mt-8 w-full max-w-md text-center">
+              <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2">
+                Mixing the magic...
               </h2>
-              <p className="text-gray-600 dark:text-gray-300 text-lg">Creating your storybook</p>
+              <p className="text-gray-600 dark:text-gray-300 text-lg mb-6">Creating your storybook</p>
             </div>
 
-            <div className="relative mb-4 mt-8 flex max-w-sm flex-grow items-end justify-center w-full">
-              <div className="absolute inset-0">
-                <img
-                  className="h-full w-full object-bottom object-contain opacity-30 dark:opacity-20"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPefRPga_iFGmdwrUpNGUlM1IPtgS7kKBTI26TfUUe0LtS6CZfjsGWd4y0sxinCV4ilV4gHi0qUTNKyE8CB-UlCw3RI1Y92E0Ya8PfnHioyuQvZRYNK8DAO1PSTGH6Pcw680UGFKVervahwP2P277pERJuscfKe98q6ku9t5UegC8xcK-ovZEC2kk4GUiQz1lOZyaELz-TSKho6F9RynfVZNSAEBtr-YNeL3D_8CIKHV8BA4xWc2T1Lt03Yd5Wlbc53U9B1mz3TQ"
-                  alt="A large, whimsical tree with many branches"
-                />
-              </div>
-
-              <div className="absolute bottom-0 left-1/2 h-full w-full -translate-x-1/2">
-                <div className="absolute bottom-[75%] left-[60%] h-16 w-16 -translate-x-1/2 animate-bounce" style={{ animationDelay: '0s', transform: 'rotate(15deg)' }}>
-                  <Icon name="filter_vintage" className="text-pink-400 drop-shadow-lg dark:text-pink-500" size={48} />
-                </div>
-                <div className="absolute bottom-[60%] right-[65%] h-12 w-12 animate-pulse" style={{ animationDelay: '0.5s', transform: 'rotate(-25deg)' }}>
-                  <Icon name="local_florist" className="text-purple-400 drop-shadow-lg dark:text-purple-500" size={36} />
-                </div>
-                <div className="absolute bottom-[40%] left-[70%] h-14 w-14 -translate-x-1/2 animate-bounce" style={{ animationDelay: '1s', transform: 'rotate(-10deg)' }}>
-                  <Icon name="filter_vintage" className="text-pink-400 drop-shadow-lg dark:text-pink-500" size={48} />
-                </div>
-                <div className="absolute bottom-[25%] right-[75%] h-16 w-16 animate-pulse" style={{ animationDelay: '1.5s', transform: 'rotate(20deg)' }}>
-                  <Icon name="local_florist" className="text-purple-400 drop-shadow-lg dark:text-purple-500" size={36} />
-                </div>
-              </div>
-
-              <div className="absolute bottom-[75%] left-1/2 mb-4 -translate-x-1/2 animate-bounce" style={{ animationDelay: '0.75s' }}>
-                <div className="relative h-20 w-20">
-                  <img
-                    className="h-full w-full object-contain drop-shadow-lg"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoUqt16DwM9LYqi669g9_oh0m5Km4_2DFQYbMninxdLX082Byou8X88oRzWJM16gEeZbRc0rTbeaCR6YZy0m7sE5RWt-ELkWy71T2R2avxHZXx07z4JtOLiHMEWB9a0MYDyoV-p37_ovATNJsmVh2bPrYAzp2SvgBN8Bhm_KJdjsmOnzM_isoTmQCoorxfg5gunjOyoZy_YGds639lxfjYLpFPWEJkZxF9KKzfR7qssC91wIST0FtHCtzrSk4WV57YfUuKbfasMg"
-                    alt="A cute, cartoon squirrel climbing the tree"
-                  />
-                </div>
-              </div>
+            <div className="flex-1 flex items-center justify-center w-full py-8">
+              <MagicAnimation />
             </div>
 
-            <div className="mb-8 w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-6 shadow-xl backdrop-blur-md sm:mb-12">
+            <div className="mb-8 w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-6 shadow-xl backdrop-blur-md">
               <div className="flex flex-col gap-4">
                 <div className="flex justify-between items-center">
                   <p className="text-base font-semibold text-gray-700 dark:text-gray-200">

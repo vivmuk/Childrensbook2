@@ -59,3 +59,105 @@ body {
   animation: zoomIn 0.6s ease-out;
 }
 
+/* Magic Animation Styles */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+@keyframes suckIn {
+  0% { transform: translate(0, 40px) scale(0.8); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate(150px, -100px) scale(0.2) rotate(360deg); opacity: 0; }
+}
+
+@keyframes jellyPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05) skewX(2deg); }
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes popOutBook {
+  0% { transform: translateY(-50px) scale(0.1); opacity: 0; }
+  60% { transform: translateY(20px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(0px) scale(1); opacity: 1; }
+}
+
+@keyframes flutter {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(0.95) skewY(2deg); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2) rotate(45deg); }
+}
+
+/* Magic Animation Element Classes */
+#main-scene {
+  animation: float 4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+#ai-cloud-group {
+  animation: jellyPulse 3s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.cloud-gear {
+  transform-origin: center;
+  animation: spin 4s linear infinite;
+}
+
+.cloud-gear.reverse {
+  animation: spin 5s linear infinite reverse;
+}
+
+.input-item {
+  opacity: 0;
+}
+
+#input-star { 
+  animation: suckIn 3s ease-in-out infinite; 
+  animation-delay: 0s; 
+}
+
+#input-pencil { 
+  animation: suckIn 3s ease-in-out infinite; 
+  animation-delay: 1s; 
+}
+
+#input-rocket { 
+  animation: suckIn 3s ease-in-out infinite; 
+  animation-delay: 2s; 
+}
+
+#result-book-group {
+  animation: popOutBook 3s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+.book-page-right {
+  transform-origin: left center;
+  animation: flutter 2s ease-in-out infinite alternate;
+}
+
+.sparkle {
+  transform-origin: center;
+  animation: twinkle 1.5s ease-in-out infinite;
+}
+
+.sparkle.s1 { 
+  animation-delay: 0.2s; 
+}
+
+.sparkle.s2 { 
+  animation-delay: 0.5s; 
+}
+
+.sparkle.s3 { 
+  animation-delay: 0.8s; 
+}
+
