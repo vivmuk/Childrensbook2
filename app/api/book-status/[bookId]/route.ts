@@ -16,6 +16,8 @@ export async function GET(
       status: book.status,
       progress: book.pages?.length || 0,
       totalPages: book.expectedPages || 8,
+      expectedPages: book.expectedPages || 8,
+      pages: book.pages || [],
     })
   } catch (error: any) {
     console.error('Error getting book status:', error)
