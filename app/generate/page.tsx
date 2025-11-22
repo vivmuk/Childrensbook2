@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { MagicAnimation } from '@/components/MagicAnimation'
+import { GeneratingGame } from '@/components/GeneratingGame'
 
 const AGE_RANGES = [
   { value: 'kindergarten', label: 'Kindergarten' },
@@ -147,32 +148,38 @@ export default function GeneratePage() {
       <main className="flex grow flex-col items-center justify-center px-4 py-8 text-center max-w-2xl mx-auto w-full">
         {isGenerating ? (
           /* Generating State - Magic Screen */
-          <div className="flex flex-col items-center justify-between w-full h-full min-h-[600px]">
-            <div className="mt-8 w-full max-w-md text-center">
-              <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2">
-                Mixing the magic...
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 text-lg mb-6">Creating your storybook</p>
-            </div>
-
-            <div className="flex-1 flex items-center justify-center w-full py-8">
-              <MagicAnimation />
-            </div>
-
-            <div className="mb-8 w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-6 shadow-xl backdrop-blur-md">
-              <div className="flex flex-col gap-4">
+          <div className="flex flex-col items-center w-full h-full min-h-[600px]">
+            {/* Progress Bar at Top */}
+            <div className="w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-4 shadow-xl backdrop-blur-md mb-6 mt-4">
+              <div className="flex flex-col gap-3">
                 <div className="flex justify-between items-center">
                   <p className="text-base font-semibold text-gray-700 dark:text-gray-200">
                     Stirring up your story...
                   </p>
-                  <Icon name="sync" className="animate-spin text-blue-500" size={24} />
+                  <Icon name="sync" className="animate-spin text-blue-500" size={20} />
                 </div>
-                <div className="h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                <div className="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                   <div 
                     className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out" 
                     style={{ width: `${generationProgress}%` }} 
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="mt-4 w-full max-w-md text-center mb-6">
+              <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2">
+                Mixing the magic...
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300 text-lg">Creating your storybook</p>
+            </div>
+
+            <div className="flex-1 flex flex-col items-center justify-center w-full py-8 gap-6">
+              <div className="w-full max-w-xl hidden md:block">
+                <MagicAnimation />
+              </div>
+              <div className="w-full">
+                <GeneratingGame />
               </div>
             </div>
           </div>

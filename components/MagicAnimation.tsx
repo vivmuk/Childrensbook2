@@ -2,8 +2,8 @@
 
 export function MagicAnimation() {
   return (
-    <div className="w-full max-w-2xl mx-auto">
-        <svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+    <div className="w-full max-w-2xl mx-auto" style={{ minHeight: '400px' }}>
+        <svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto" style={{ maxHeight: '500px' }}>
         <defs>
           <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" style={{ stopColor: '#E3FDFD', stopOpacity: 1 }} />

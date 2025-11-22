@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { MagicAnimation } from '@/components/MagicAnimation'
+import { GeneratingGame } from '@/components/GeneratingGame'
 
 export default function GeneratingPage() {
   const router = useRouter()
@@ -43,28 +44,34 @@ export default function GeneratingPage() {
         </button>
       </div>
 
-      <div className="mt-12 w-full max-w-md text-center sm:mt-16">
+      {/* Progress Bar at Top */}
+      <div className="w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-4 shadow-xl backdrop-blur-md mt-16 mb-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <p className="text-base font-semibold text-gray-700 dark:text-gray-200">
+              Stirring up your story...
+            </p>
+            <Icon name="sync" className="animate-spin text-blue-500" size={20} />
+          </div>
+          <div className="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 animate-pulse" style={{ width: '75%' }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 w-full max-w-md text-center mb-6">
         <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2">
           Mixing the magic...
         </h2>
         <p className="text-gray-600 dark:text-gray-300 text-lg">Creating your storybook</p>
       </div>
 
-      <div className="flex-1 flex items-center justify-center w-full py-8 min-h-[400px]">
-        <MagicAnimation />
-      </div>
-
-      <div className="mb-8 w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-6 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <p className="text-base font-semibold text-gray-700 dark:text-gray-200">
-              Stirring up your story...
-            </p>
-            <Icon name="sync" className="animate-spin text-blue-500" size={24} />
-          </div>
-          <div className="h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 animate-pulse" style={{ width: '75%' }} />
-          </div>
+      <div className="flex-1 flex flex-col items-center justify-center w-full py-8 gap-6">
+        <div className="w-full max-w-xl hidden md:block">
+          <MagicAnimation />
+        </div>
+        <div className="w-full">
+          <GeneratingGame />
         </div>
       </div>
     </div>
