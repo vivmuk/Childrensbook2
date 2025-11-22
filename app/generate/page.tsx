@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
-import { MagicAnimation } from '@/components/MagicAnimation'
 import { GeneratingGame } from '@/components/GeneratingGame'
 
 const AGE_RANGES = [
@@ -21,6 +20,29 @@ const ILLUSTRATION_STYLES = [
   'Vintage American cartoon',
   'Indian comic book art',
   'Classic adventure comic style',
+]
+
+const STORY_PROMPTS = [
+  'A brave little mouse who dreams of becoming a space explorer',
+  'A magical garden where plants tell stories and flowers sing',
+  'A young knight who is afraid of the dark but must save the kingdom',
+  'A shy robot who learns to make friends by sharing its inventions',
+  'A curious rabbit who discovers a secret door in the forest',
+  'A tiny dragon who cannot breathe fire but has a special hidden talent',
+  'A young girl who finds a talking compass that leads to lost toys',
+  'A brave squirrel who must save the forest from a mysterious silence',
+  'A friendly monster who lives under a child\'s bed and protects them from bad dreams',
+  'A magical paintbrush that brings drawings to life',
+  'A little penguin who loves to dance but lives where everyone waddles',
+  'A wise old tree that teaches children about nature through stories',
+  'A brave little star who falls from the sky and must find its way home',
+  'A young explorer who discovers a hidden underwater city',
+  'A magical library where books choose their readers',
+  'A little fox who learns that being different makes you special',
+  'A cloud who cannot make rain and must find its purpose',
+  'A brave butterfly who embarks on a journey across the seasons',
+  'A young inventor who creates a machine that makes everyone smile',
+  'A magical seed that grows into a tree of wishes',
 ]
 
 export default function GeneratePage() {
@@ -113,7 +135,7 @@ export default function GeneratePage() {
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-sm">
+      <div className="flex items-center justify-between p-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-sm flex-shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={() => router.push('/')}
@@ -145,7 +167,7 @@ export default function GeneratePage() {
         <div className="w-10" />
       </div>
 
-      <main className="flex grow flex-col items-center justify-center px-4 py-8 text-center max-w-2xl mx-auto w-full">
+      <main className="flex grow flex-col items-center justify-start px-4 py-2 text-center max-w-2xl mx-auto w-full overflow-y-auto min-h-0">
         {isGenerating ? (
           /* Generating State - Magic Screen */
           <div className="flex flex-col items-center w-full h-full min-h-[600px]">
@@ -174,22 +196,17 @@ export default function GeneratePage() {
               <p className="text-gray-600 dark:text-gray-300 text-lg">Creating your storybook</p>
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center w-full py-8 gap-6">
-              <div className="w-full max-w-xl hidden md:block">
-                <MagicAnimation />
-              </div>
-              <div className="w-full">
-                <GeneratingGame />
-              </div>
+            <div className="flex-1 flex items-center justify-center w-full py-8">
+              <GeneratingGame />
             </div>
           </div>
         ) : (
           /* Form State */
           <>
-            {/* Illustration */}
-            <div className="mx-auto w-full max-w-xs mb-8">
+            {/* Illustration - Minimized */}
+            <div className="mx-auto w-full max-w-[120px] mb-3">
               <div
-                className="aspect-square w-full bg-contain bg-center bg-no-repeat rounded-2xl shadow-lg"
+                className="aspect-square w-full bg-contain bg-center bg-no-repeat rounded-xl shadow-md"
                 style={{
                   backgroundImage:
                     'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBgxAGWRCcBULUnJqgvIcpUDARPA6HA7Jb_Z7cn000bl7LhpJaR1tBxt1fQWawCmnHktpfoYxghCRPlScKpEASscjupGf2qyw7977OD8DfGtKx4x951NC9lcOP1NJCRH1Kz7bUfFD8DM83wqgdp1p6tZysZVzVx53nHdI90YRbv93DH-Zzw-M49l3Rj47z3GYwx5qB3I42dznDYBXX8tH4b_B4ki_jLaygEa7ila4gWFMlbAa-5pbPnIlpel_16bbI0MQJ7LNRHxw")',
@@ -197,28 +214,43 @@ export default function GeneratePage() {
               />
             </div>
 
-            <h1 className="text-4xl font-bold mb-6 text-gray-800 dark:text-gray-100">
+            <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800 dark:text-gray-100">
               Dream Up a Story
             </h1>
 
             {/* Story Input */}
-            <div className="w-full mb-6">
-              <label className="flex flex-col">
-                <textarea
-                  value={storyIdea}
-                  onChange={(e) => setStoryIdea(e.target.value)}
-                  className="w-full min-h-40 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-4 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
-                  placeholder="A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."
+            <div className="w-full mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Your Story Idea
+                </label>
+                <button
+                  onClick={() => {
+                    const randomPrompt = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)]
+                    setStoryIdea(randomPrompt)
+                  }}
                   disabled={isGenerating}
-                />
-              </label>
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Generate a random story idea"
+                >
+                  <Icon name="auto_awesome" size={16} />
+                  <span>Generate Idea</span>
+                </button>
+              </div>
+              <textarea
+                value={storyIdea}
+                onChange={(e) => setStoryIdea(e.target.value)}
+                className="w-full min-h-32 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
+                placeholder="A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."
+                disabled={isGenerating}
+              />
             </div>
 
             {/* Advanced Options Toggle */}
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
               disabled={isGenerating}
-              className="mb-4 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:opacity-50"
+              className="mb-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:opacity-50"
             >
               {showAdvanced ? (
                 <span className="flex items-center gap-1">
@@ -235,7 +267,7 @@ export default function GeneratePage() {
 
             {/* Advanced Options */}
             {showAdvanced && (
-              <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-6 shadow-lg mb-6 backdrop-blur-sm">
+              <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-4 shadow-lg mb-3 backdrop-blur-sm">
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     <Icon name="child_care" className="text-lg" size={20} />
@@ -277,7 +309,7 @@ export default function GeneratePage() {
             )}
 
             {/* Generate Button */}
-            <div className="w-full pt-4">
+            <div className="w-full pt-3">
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating || !storyIdea.trim()}
@@ -300,6 +332,13 @@ export default function GeneratePage() {
           </>
         )}
       </main>
+
+      {/* Footer - Created with Venice.ai */}
+      <footer className="w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
+        </p>
+      </footer>
     </div>
   )
 }

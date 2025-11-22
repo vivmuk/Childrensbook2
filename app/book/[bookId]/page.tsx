@@ -501,6 +501,13 @@ export default function BookViewerPage() {
           </button>
         </div>
       </div>
+
+      {/* Footer - Created with Venice.ai */}
+      <footer className="w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
+        </p>
+      </footer>
     </div>
   )
 }

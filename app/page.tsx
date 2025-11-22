@@ -51,6 +51,13 @@ export default function WelcomePage() {
           </p>
         </div>
       </div>
+
+      {/* Footer - Created with Venice.ai */}
+      <footer className="w-full py-3 text-center bg-white/20 backdrop-blur-sm border-t border-white/30">
+        <p className="text-xs font-medium text-white/80">
+          Created with <span className="font-bold text-white">Venice.ai</span>
+        </p>
+      </footer>
     </div>
   )
 }

@@ -3,7 +3,6 @@
 import { useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
-import { MagicAnimation } from '@/components/MagicAnimation'
 import { GeneratingGame } from '@/components/GeneratingGame'
 
 export default function GeneratingPage() {
@@ -66,14 +65,16 @@ export default function GeneratingPage() {
         <p className="text-gray-600 dark:text-gray-300 text-lg">Creating your storybook</p>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center w-full py-8 gap-6">
-        <div className="w-full max-w-xl hidden md:block">
-          <MagicAnimation />
-        </div>
-        <div className="w-full">
-          <GeneratingGame />
-        </div>
+      <div className="flex-1 flex items-center justify-center w-full py-8">
+        <GeneratingGame />
       </div>
+
+      {/* Footer - Created with Venice.ai */}
+      <footer className="w-full py-3 text-center bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-t border-white/30 dark:border-gray-700">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
+        </p>
+      </footer>
     </div>
   )
 }
