@@ -72,12 +72,9 @@ export async function GET(
       doc.fontSize(36)
         .font('Helvetica-Bold')
         .fillColor('#1a1a1a')
-        .text(book.title, {
+        .text(book.title, 50, doc.page.height / 2 - 30, {
           align: 'center',
           width: doc.page.width - 100,
-          height: 120,
-          x: 50,
-          y: doc.page.height / 2 - 30,
         })
       
       doc.addPage()
@@ -95,11 +92,9 @@ export async function GET(
       doc.fontSize(16)
         .font('Helvetica')
         .fillColor('#2d2d2d')
-        .text(page.text, {
+        .text(page.text, 50, yAfterImage, {
           align: 'left',
           width: doc.page.width - 100,
-          x: 50,
-          y: yAfterImage,
           lineGap: 6,
           paragraphGap: 4,
         })
@@ -110,8 +105,7 @@ export async function GET(
         .text(
           `Page ${page.pageNumber}`,
           50,
-          doc.page.height - 40,
-          { align: 'left' }
+          doc.page.height - 40
         )
       
       if (i < book.pages.length - 1) {
