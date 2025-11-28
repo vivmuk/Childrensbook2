@@ -190,8 +190,8 @@ async function generateBookImages(
     : ''
 
   try {
-    // Generate title page image first
-    const titlePagePrompt = `A beautiful children's book cover illustration for "${book.title}". ${illustrationStyle} style, children's book cover, colorful, whimsical, high quality, detailed, charming, inviting, magical, with space for title text overlay at the top`
+    // Generate title page image first using nano-banana-pro model
+    const titlePagePrompt = `A beautiful children's book cover illustration for "${book.title}". ${illustrationStyle} style, children's book cover, colorful, whimsical, high quality, detailed, charming, inviting, magical`
     
     const titlePageResponse = await fetch(
       'https://api.venice.ai/api/v1/image/generate',
@@ -202,12 +202,12 @@ async function generateBookImages(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'qwen-image',
+          model: 'nano-banana-pro',
           prompt: titlePagePrompt,
           width: 1024,
           height: 768,
           format: 'webp',
-          steps: 8,
+          steps: 1,
         }),
       }
     )

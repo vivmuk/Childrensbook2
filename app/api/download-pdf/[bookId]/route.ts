@@ -58,25 +58,9 @@ export async function GET(
       }
     }
 
-    // Add title page if it exists
+    // Add title page if it exists (no overlay, just the image)
     if (book.titlePage) {
       addImageToPage(book.titlePage.image)
-      
-      // Add title overlay with semi-transparent background
-      doc.rect(0, doc.page.height / 2 - 60, doc.page.width, 120)
-        .fillOpacity(0.7)
-        .fillColor('#ffffff')
-        .fill()
-        .fillOpacity(1.0)
-      
-      doc.fontSize(36)
-        .font('Helvetica-Bold')
-        .fillColor('#1a1a1a')
-        .text(book.title, 50, doc.page.height / 2 - 30, {
-          align: 'center',
-          width: doc.page.width - 100,
-        })
-      
       doc.addPage()
     }
 
@@ -89,8 +73,8 @@ export async function GET(
       const yAfterImage = addImageToPage(page.image, imageHeight)
       
       // Add text below image with beautiful formatting
+      // Use default font to avoid font file issues in production
       doc.fontSize(16)
-        .font('Helvetica')
         .fillColor('#2d2d2d')
         .text(page.text, 50, yAfterImage, {
           align: 'left',
