@@ -321,12 +321,13 @@ export default function PDFViewPage() {
       {/* Content Pages */}
       {book.pages.map((page, index) => (
         <div key={index} className="page content-page">
-          <img src={page.image} alt={`Page ${page.pageNumber}`} className="page-image" />
+          <img src={page.image} alt={`Page ${index + 1}`} className="page-image" />
           <div className="page-text">{page.text}</div>
-          <div className="page-number">Page {page.pageNumber}</div>
+          <div className="page-number">Page {index + 1}</div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   )
 }
 
