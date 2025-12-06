@@ -1,0 +1,16 @@
+[1mdiff --git a/package.json b/package.json[m
+[1mindex 6f97f2b..6794510 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -10,11 +10,9 @@[m
+     "generate-samples": "node scripts/generate-sample-books.js"[m
+   },[m
+   "dependencies": {[m
+[31m-    "@types/pdfkit": "^0.17.4",[m
+     "axios": "^1.7.0",[m
+     "next": "^14.2.0",[m
+     "openai": "^4.47.0",[m
+[31m-    "pdfkit": "^0.17.2",[m
+     "puppeteer-core": "^24.32.0",[m
+     "react": "^18.3.0",[m
+     "react-dom": "^18.3.0"[m

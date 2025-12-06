@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBook } from '@/lib/storage'
 import puppeteer from 'puppeteer-core'
+import type { Browser } from 'puppeteer-core'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { bookId: string } }
 ) {
-  let browser = null
+  let browser: Browser | null = null
   try {
     const book = getBook(params.bookId)
 
@@ -62,7 +63,7 @@ export async function GET(
       }
     }
 
-    if (!browserLaunched) {
+    if (!browserLaunched || !browser) {
       throw new Error(`Failed to launch browser. Tried paths: ${chromiumPaths.join(', ')}. Last error: ${lastError?.message}`)
     }
 
