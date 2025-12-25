@@ -102,7 +102,7 @@ export async function POST(
 
     // Update book with audio URL
     book.audioUrl = audioUrl
-    setBook(params.bookId, book)
+    await setBook(params.bookId, book)
 
     console.log(`Successfully generated audio for book ${params.bookId}, size: ${audioBuffer.byteLength} bytes`)
 

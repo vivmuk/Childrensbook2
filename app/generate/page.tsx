@@ -45,11 +45,9 @@ const STORY_PROMPTS = [
   'A magical seed that grows into a tree of wishes',
 ]
 
-// ... imports
 import { useAuth } from '@/components/AuthContext'
 import { LoginModal } from '@/components/LoginModal'
-
-// ... 
+import { Header } from '@/components/Header'
 
 export default function GeneratePage() {
   const router = useRouter()
@@ -66,7 +64,6 @@ export default function GeneratePage() {
 
 
   useEffect(() => {
-    // ... (checkBookStatus)
     if (!bookId || !isGenerating) return
 
     const checkBookStatus = async () => {
@@ -167,7 +164,6 @@ export default function GeneratePage() {
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       <Header title="Create Your Story" />
-      {/* ... rest of the UI ... */}
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
