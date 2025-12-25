@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { setBook, getBook, type Book } from '@/lib/storage'
+import { setBook, getBook, type Book, getUserBooks } from '@/lib/storage'
+import { getAuth } from 'firebase-admin/auth'
+import { getAdminApp } from '@/lib/firebase-admin'
 
 const AGE_TO_COMPLEXITY: Record<string, string> = {
   kindergarten: 'very simple, with short sentences and basic words',
@@ -12,6 +14,32 @@ const AGE_TO_COMPLEXITY: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    let userId: string | undefined
+
+    // Check for Auth Token
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1]
+      try {
+        const app = getAdminApp()
+        const decodedToken = await getAuth(app).verifyIdToken(token)
+        userId = decodedToken.uid
+      } catch (e) {
+        console.warn('Invalid auth token provided', e)
+      }
+    }
+
+    if (userId) {
+      // Check 100 book limit
+      const userBooks = await getUserBooks(userId)
+      if (userBooks.length >= 100) {
+        return NextResponse.json(
+          { error: 'You have reached the limit of 100 books. Please contact support or delete some old books.' },
+          { status: 403 }
+        )
+      }
+    }
+
     const { storyIdea, ageRange, illustrationStyle } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
@@ -63,7 +91,7 @@ Format the response as JSON with this structure:
     {
       "pageNumber": 1,
       "text": "Page text here with 6-8 complete, engaging sentences that tell the story beautifully...",
-      "imageDescription": "Detailed visual description of the illustration including character appearances (maintain consistency), setting, mood, and action. Must be in ${illustrationStyle} style. Keep under 200 characters."
+      "imageDescription": "Extremely detailed visual description of the illustration. Include specific details about the setting, lighting, mood, and action. Describe characters in detail (outfit, colors, features) to ensure consistency. Must be in ${illustrationStyle} style. You can use up to 800 characters."
     },
     ...
   ]
@@ -86,7 +114,7 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
             {
               role: 'system',
               content:
-                'You are an award-winning expert children\'s book author with decades of experience creating magical, engaging stories. You write at a professional publication-quality level. CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks, no explanations, no additional text. Just pure, valid JSON that can be parsed directly.', 
+                'You are an award-winning expert children\'s book author with decades of experience creating magical, engaging stories. You write at a professional publication-quality level. CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks, no explanations, no additional text. Just pure, valid JSON that can be parsed directly.',
             },
             { role: 'user', content: storyPrompt },
           ],
@@ -117,13 +145,13 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
     const cleanJSON = (jsonString: string): string => {
       // Remove markdown code blocks if present
       let cleaned = jsonString.replace(/```json\s*/g, '').replace(/```\s*/g, '')
-      
+
       // Extract JSON object (find first { and matching })
       const firstBrace = cleaned.indexOf('{')
       if (firstBrace === -1) {
         throw new Error('No JSON object found')
       }
-      
+
       let braceCount = 0
       let lastBrace = firstBrace
       for (let i = firstBrace; i < cleaned.length; i++) {
@@ -136,20 +164,20 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
           }
         }
       }
-      
+
       cleaned = cleaned.substring(firstBrace, lastBrace + 1)
-      
+
       // Fix common JSON issues
       // Remove trailing commas before } or ]
       cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1')
-      
+
       // Fix unescaped quotes in strings (basic fix)
       // This is a simple approach - for production, consider a proper JSON repair library
       cleaned = cleaned.replace(/([^\\])"/g, (match, p1) => {
         // Don't fix if it's already escaped or part of a key/value structure
         return match
       })
-      
+
       return cleaned
     }
 
@@ -161,7 +189,7 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
     } catch (e: any) {
       console.error('JSON parsing error:', e.message)
       console.error('Story content (first 500 chars):', storyContent.substring(0, 500))
-      
+
       // Try alternative extraction methods
       try {
         // Try to find JSON between first { and last }
@@ -190,23 +218,27 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
       status: 'generating',
       createdAt: new Date().toISOString(),
       expectedPages: storyData.pages?.length || 8,
+      prompts: {
+        story: storyPrompt,
+        images: []
+      }
     }
 
-    setBook(bookId, book)
+    await setBook(bookId, book)
 
     // Generate images for each page asynchronously with character consistency
     generateBookImages(
-      bookId, 
-      storyData.pages, 
+      bookId,
+      storyData.pages,
       illustrationStyle,
       storyData.characters
     ).catch(
-      (error) => {
+      async (error) => {
         console.error('Error generating images:', error)
-        const book = getBook(bookId)
+        const book = await getBook(bookId)
         if (book) {
           book.status = 'error'
-          setBook(bookId, book)
+          await setBook(bookId, book)
         }
       }
     )
@@ -227,7 +259,7 @@ async function generateBookImages(
   illustrationStyle: string,
   characters?: { main?: string; others?: string[] }
 ) {
-  const book = getBook(bookId)
+  const book = await getBook(bookId)
   if (!book) return
 
   // Extract character consistency information
@@ -236,108 +268,119 @@ async function generateBookImages(
     characterDescriptions.push(characters.main)
   }
   if (characters?.others && characters.others.length > 0) {
-    characterDescriptions.push(...characters.others.slice(0, 2)) // Limit to keep prompt short
+    characterDescriptions.push(...characters.others.slice(0, 3)) // Increased limit for detailed prompts
   }
-  const characterConsistency = characterDescriptions.length > 0 
-    ? `Characters: ${characterDescriptions.join(', ')}. Maintain consistent character appearance throughout. ` 
+  const characterConsistency = characterDescriptions.length > 0
+    ? `Characters: ${characterDescriptions.join(', ')}. Maintain consistent character appearance throughout. `
     : ''
 
   try {
-    // Generate title page image first using nano-banana-pro model (landscape orientation)
-    const titlePagePrompt = `A beautiful children's book cover illustration with the title "${book.title}" prominently displayed. ${illustrationStyle} style, children's book cover, colorful, whimsical, high quality, detailed, charming, inviting, magical. The title text should be part of the illustration design.`
-    
-    const titlePageResponse = await fetch(
-      'https://api.venice.ai/api/v1/image/generate',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.VENICE_API_KEY || 'lnWNeSg0pA_rQUooNpbfpPDBaj2vJnWol5WqKWrIEF'}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'nano-banana-pro',
-          prompt: titlePagePrompt,
-          width: 1280,
-          height: 720,
-          format: 'webp',
-          steps: 1,
-        }),
-      }
-    )
 
-    if (titlePageResponse.ok) {
-      const titlePageData = await titlePageResponse.json()
-      const titlePageBase64 = titlePageData.images?.[0]
-      if (titlePageBase64) {
-        book.titlePage = {
-          image: `data:image/webp;base64,${titlePageBase64}`,
+    // Collect all image prompts to save later
+    const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
+
+    // 1. Prepare Title Page Promise
+    const titlePagePromise = (async () => {
+      const titlePagePrompt = `A beautiful children's book cover illustration with the title "${book.title}" prominently displayed. ${illustrationStyle} style, children's book cover, colorful, whimsical, high quality, detailed, charming, inviting, magical. The title text should be part of the illustration design. Scene details: ${pages[0]?.imageDescription || 'A magical scene'}`
+
+      imagePrompts.push({ pageNumber: 'cover', prompt: titlePagePrompt })
+
+      const img = await generateImage(titlePagePrompt, 'nano-banana-pro', 1280, 720, 1) // Using nano-banana-pro for title (better text)
+      if (img) {
+        return {
+          image: `data:image/webp;base64,${img}`,
           title: book.title,
         }
-        setBook(bookId, book)
       }
-    }
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i]
-      // Build prompt with character consistency, keeping under 1600 characters
-      let imageDescription = page.imageDescription || page.text.substring(0, 150)
-      const basePrompt = `${imageDescription}, ${illustrationStyle} style, children's book illustration, colorful, whimsical, high quality, detailed, charming`
-      
-      // Add character consistency info if we have it
-      const fullPrompt = characterConsistency 
-        ? `${characterConsistency}${basePrompt}`.substring(0, 1500) // Ensure under 1600
-        : basePrompt.substring(0, 1500)
+      return undefined
+    })()
 
-      // Generate image using Venice API
-      const imageResponse = await fetch(
-        'https://api.venice.ai/api/v1/image/generate',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.VENICE_API_KEY || 'lnWNeSg0pA_rQUooNpbfpPDBaj2vJnWol5WqKWrIEF'}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'qwen-image',
-            prompt: fullPrompt,
-            width: 1024,
-            height: 768,
-            format: 'webp',
-            steps: 8,
-          }),
-        }
-      )
+    // 2. Prepare Pages Promises
+    const pagePromises = pages.map(async (page, i) => {
+      let imageDescription = page.imageDescription || page.text.substring(0, 300)
+      const basePrompt = `${imageDescription}, ${illustrationStyle} style, children's book illustration, colorful, whimsical, high quality, detailed, charming, masterpiece, trending on artstation, vivid colors`
 
-      if (!imageResponse.ok) {
-        throw new Error(`Image generation failed: ${imageResponse.statusText}`)
-      }
+      const fullPrompt = characterConsistency
+        ? `${characterConsistency}${basePrompt}`.substring(0, 2800) // Increased limit to 2800 for Flux Pro
+        : basePrompt.substring(0, 2800)
 
-      const imageData = await imageResponse.json()
-      const imageBase64 = imageData.images?.[0]
+      imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
 
-      if (!imageBase64) {
-        throw new Error('No image data returned')
-      }
+      const img = await generateImage(fullPrompt, 'flux-2-pro', 1024, 768, 30) // Using flux-2-pro for pages with higher steps
+      if (!img) throw new Error(`Failed to generate image for page ${i + 1}`)
 
-      // Convert base64 to data URL
-      const imageUrl = `data:image/webp;base64,${imageBase64}`
-
-      book.pages.push({
+      return {
         pageNumber: i + 1,
         text: page.text,
-        image: imageUrl,
-      })
+        image: `data:image/webp;base64,${img}`,
+      }
+    })
 
-      setBook(bookId, book)
+    // 3. Execute All in Parallel
+    const [titlePageResult, ...pageResults] = await Promise.all([
+      titlePagePromise,
+      ...pagePromises
+    ])
+
+    // 4. Update Book Object
+    if (titlePageResult) {
+      book.titlePage = titlePageResult
     }
 
-    // Mark as completed
+    // Sort pages just in case Promise.all implementation varies (it shouldn't, but good practice)
+    // Actually Promise.all preserves order of input, so pageResults[0] corresponds to pages[0].
+
+    book.pages = pageResults as any[]
     book.status = 'completed'
-    setBook(bookId, book)
+
+    // Save prompts
+    if (book.prompts) {
+      book.prompts.images = imagePrompts
+    } else {
+      book.prompts = {
+        story: '', // Should have been set in POST, but fallback just in case
+        images: imagePrompts
+      }
+    }
+
+    // 5. Save Once
+    await setBook(bookId, book)
+
   } catch (error) {
     console.error('Error in generateBookImages:', error)
     book.status = 'error'
-    setBook(bookId, book)
-    throw error
+    await setBook(bookId, book)
+    // We don't rethrow here because the main response has already been sent
   }
+}
+
+// Helper for Venice API calls
+async function generateImage(prompt: string, model: string, width: number, height: number, steps: number) {
+  const response = await fetch(
+    'https://api.venice.ai/api/v1/image/generate',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.VENICE_API_KEY || 'lnWNeSg0pA_rQUooNpbfpPDBaj2vJnWol5WqKWrIEF'}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        prompt,
+        width,
+        height,
+        format: 'webp',
+        steps,
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    console.error(`Image generation failed: ${response.statusText}`)
+    return null
+  }
+
+  const data = await response.json()
+  return data.images?.[0]
 }
 

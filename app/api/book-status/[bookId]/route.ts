@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: { bookId: string } }
 ) {
   try {
-    const book = getBook(params.bookId)
+    const book = await getBook(params.bookId)
 
     if (!book) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 })

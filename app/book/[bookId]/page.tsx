@@ -87,7 +87,7 @@ export default function BookViewerPage() {
 
   const handleDownloadPDF = async () => {
     if (!book) return
-    
+
     try {
       // Download PDF directly from server
       const response = await fetch(`/api/download-pdf/${bookId}`)
@@ -429,6 +429,20 @@ export default function BookViewerPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownloadHTML}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
+              title="Download HTML Book"
+            >
+              <Icon name="code" className="text-lg" size={24} />
+            </button>
+            <button
+              onClick={handleDownloadPDF}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
+              title="Download HTML Book"
+            >
+              <Icon name="code" className="text-lg" size={24} />
+            </button>
+            <button
               onClick={handleDownloadPDF}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
               title="Download PDF"
@@ -449,9 +463,8 @@ export default function BookViewerPage() {
 
         {/* Title Page Content */}
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 max-w-4xl mx-auto w-full">
-          <div className={`w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${
-            isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-          }`}>
+          <div className={`w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+            }`}>
             <img
               src={book.titlePage.image}
               alt="Book Cover"
@@ -466,11 +479,10 @@ export default function BookViewerPage() {
             <button
               key={index}
               onClick={() => handlePageChange(index)}
-              className={`h-2 rounded-full transition-all duration-300 hover:scale-125 ${
-                index === currentPage
-                  ? 'w-8 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 shadow-lg'
-                  : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-              }`}
+              className={`h-2 rounded-full transition-all duration-300 hover:scale-125 ${index === currentPage
+                ? 'w-8 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 shadow-lg'
+                : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+                }`}
               aria-label={`Go to page ${index + 1}`}
             />
           ))}
@@ -542,24 +554,31 @@ export default function BookViewerPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={handleDownloadHTML}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
+            title="Download HTML Book"
+          >
+            <Icon name="code" className="text-lg" size={24} />
+          </button>
+          <button
             onClick={handleDownloadPDF}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
             title="Download PDF"
           >
-              <Icon name="book" className="text-lg" size={24} />
+            <Icon name="book" className="text-lg" size={24} />
           </button>
           {book.audioUrl ? (
             <>
-            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-full px-3 py-2 border border-blue-200 dark:border-blue-800">
-              <audio 
-                ref={setAudioRef}
-                controls 
-                className="h-8 rounded-lg"
-                style={{ minWidth: '140px', maxWidth: '200px' }}
-              >
-                <source src={book.audioUrl} type="audio/mpeg" />
-              </audio>
-            </div>
+              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-full px-3 py-2 border border-blue-200 dark:border-blue-800">
+                <audio
+                  ref={setAudioRef}
+                  controls
+                  className="h-8 rounded-lg"
+                  style={{ minWidth: '140px', maxWidth: '200px' }}
+                >
+                  <source src={book.audioUrl} type="audio/mpeg" />
+                </audio>
+              </div>
               <button
                 onClick={handleDownloadAudio}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-500 hover:bg-purple-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
@@ -575,10 +594,10 @@ export default function BookViewerPage() {
               className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:scale-110 active:scale-95"
               title="Generate Audio"
             >
-              <Icon 
-                name={isGeneratingAudio ? 'hourglass_empty' : 'volume_up'} 
+              <Icon
+                name={isGeneratingAudio ? 'hourglass_empty' : 'volume_up'}
                 className={`text-lg ${isGeneratingAudio ? 'animate-spin' : ''}`}
-                size={24} 
+                size={24}
               />
             </button>
           )}
@@ -588,9 +607,8 @@ export default function BookViewerPage() {
       {/* Main Content */}
       <main className="flex flex-1 flex-col px-4 py-6 max-w-4xl mx-auto w-full">
         {/* Image with animation */}
-        <div className={`w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${
-          isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-        }`}>
+        <div className={`w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+          }`}>
           {page.image ? (
             <img
               src={page.image}
@@ -606,9 +624,8 @@ export default function BookViewerPage() {
         </div>
 
         {/* Text with animation */}
-        <div className={`bg-white/80 dark:bg-gray-800/80 rounded-2xl p-6 shadow-lg backdrop-blur-sm transition-all duration-500 ${
-          isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
-        }`}>
+        <div className={`bg-white/80 dark:bg-gray-800/80 rounded-2xl p-6 shadow-lg backdrop-blur-sm transition-all duration-500 ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
+          }`}>
           <p className="text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-medium animate-slideUp">
             {page.text}
           </p>
@@ -621,11 +638,10 @@ export default function BookViewerPage() {
           <button
             key={index}
             onClick={() => handlePageChange(index)}
-            className={`h-2 rounded-full transition-all duration-300 hover:scale-125 ${
-              index === currentPage
-                ? 'w-8 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 shadow-lg'
-                : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-            }`}
+            className={`h-2 rounded-full transition-all duration-300 hover:scale-125 ${index === currentPage
+              ? 'w-8 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 shadow-lg'
+              : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
+              }`}
             aria-label={`Go to page ${index + 1}`}
           />
         ))}

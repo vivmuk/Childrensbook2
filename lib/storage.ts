@@ -1,8 +1,6 @@
-// In-memory storage for books
-// In production, replace this with a database (PostgreSQL, MongoDB, etc.)
-
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
+import { getAdminDb } from './firebase-admin'
 
 interface BookPage {
   pageNumber: number
@@ -31,9 +29,14 @@ interface Book {
   heroType?: 'animal' | 'person' | 'fantasy'
   setting?: string
   isSample?: boolean
+  ownerId?: string // New field for user ownership
+  prompts?: {
+    story: string
+    images: Array<{ pageNumber: number | 'cover'; prompt: string }>
+  }
 }
 
-const books: Map<string, Book> = new Map()
+const sampleBooks: Map<string, Book> = new Map()
 
 // Load sample books on initialization
 function loadSampleBooks() {
@@ -41,14 +44,14 @@ function loadSampleBooks() {
     const sampleBooksPath = join(process.cwd(), 'data', 'sample-books', 'index.json')
     if (existsSync(sampleBooksPath)) {
       const sampleBooksData = readFileSync(sampleBooksPath, 'utf-8')
-      const sampleBooks: Book[] = JSON.parse(sampleBooksData)
-      
-      sampleBooks.forEach(book => {
+      const loadedBooks: Book[] = JSON.parse(sampleBooksData)
+
+      loadedBooks.forEach(book => {
         book.isSample = true
-        books.set(book.id, book)
+        sampleBooks.set(book.id, book)
       })
-      
-      console.log(`Loaded ${sampleBooks.length} sample books`)
+
+      console.log(`Loaded ${loadedBooks.length} sample books`)
     }
   } catch (error) {
     console.warn('Could not load sample books:', error)
@@ -70,26 +73,82 @@ export function ensureSampleBooksLoaded() {
   }
 }
 
-export function getBook(bookId: string): Book | undefined {
+export async function getBook(bookId: string): Promise<Book | undefined> {
   // Ensure sample books are loaded when getting a book
   ensureSampleBooksLoaded()
-  return books.get(bookId)
+
+  // Check sample books first (fast, in-memory)
+  if (sampleBooks.has(bookId)) {
+    return sampleBooks.get(bookId)
+  }
+
+  // Check Firestore
+  try {
+    const db = getAdminDb()
+    const doc = await db.collection('books').doc(bookId).get()
+
+    if (doc.exists) {
+      return doc.data() as Book
+    }
+  } catch (error) {
+    console.error(`Error fetching book ${bookId} from Firestore:`, error)
+  }
+
+  return undefined
 }
 
-export function setBook(bookId: string, book: Book): void {
-  books.set(bookId, book)
+export async function setBook(bookId: string, book: Book): Promise<void> {
+  // If it's a sample book, update in memory (shouldn't really happen for creating new books)
+  if (book.isSample) {
+    sampleBooks.set(bookId, book)
+    return
+  }
+
+  try {
+    const db = getAdminDb()
+    // Convert to plain object if needed, but Firestore handles JSON-like objects
+    // Careful with undefined values, Firestore ignores them but it's good practice to clean
+    const bookData = JSON.parse(JSON.stringify(book))
+    await db.collection('books').doc(bookId).set(bookData, { merge: true })
+  } catch (error) {
+    console.error(`Error saving book ${bookId} to Firestore:`, error)
+    throw error
+  }
 }
 
-export function hasBook(bookId: string): boolean {
-  return books.has(bookId)
+export async function hasBook(bookId: string): Promise<boolean> {
+  if (sampleBooks.has(bookId)) return true
+
+  try {
+    const db = getAdminDb()
+    const doc = await db.collection('books').doc(bookId).get()
+    return doc.exists
+  } catch (error) {
+    return false
+  }
 }
 
 export function getAllSampleBooks(): Book[] {
   // Ensure sample books are loaded before returning
   ensureSampleBooksLoaded()
-  return Array.from(books.values()).filter(book => book.isSample === true)
+  return Array.from(sampleBooks.values())
 }
 
-export { books }
-export type { Book, BookPage, TitlePage }
+// New: Get books for a specific user
+export async function getUserBooks(userId: string): Promise<Book[]> {
+  try {
+    const db = getAdminDb()
+    const snapshot = await db.collection('books')
+      .where('ownerId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .get()
 
+    return snapshot.docs.map(doc => doc.data() as Book)
+  } catch (error) {
+    console.error(`Error fetching books for user ${userId}:`, error)
+    return []
+  }
+}
+
+export { sampleBooks as books }
+export type { Book, BookPage, TitlePage }

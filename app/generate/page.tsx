@@ -45,8 +45,15 @@ const STORY_PROMPTS = [
   'A magical seed that grows into a tree of wishes',
 ]
 
+// ... imports
+import { useAuth } from '@/components/AuthContext'
+import { LoginModal } from '@/components/LoginModal'
+
+// ... 
+
 export default function GeneratePage() {
   const router = useRouter()
+  const { user, loading } = useAuth()
   const [storyIdea, setStoryIdea] = useState('')
   const [ageRange, setAgeRange] = useState('2nd')
   const [illustrationStyle, setIllustrationStyle] = useState('Japanese animation style')
@@ -54,20 +61,13 @@ export default function GeneratePage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [bookId, setBookId] = useState<string | null>(null)
   const [generationProgress, setGenerationProgress] = useState(0)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [loginMessage, setLoginMessage] = useState('')
 
-  // Map display names to actual style instructions for API
-  const getStyleInstruction = (displayName: string): string => {
-    const styleMap: Record<string, string> = {
-      'Japanese animation style': 'Studio Ghibli',
-      'Whimsical anime art style': 'Hayao Miyazaki style',
-      'Vintage American cartoon': 'Midcentury American cartoon',
-      'Indian comic book art': 'Amar Chitra Katha',
-      'Classic adventure comic style': 'Chacha Chaudhary',
-    }
-    return styleMap[displayName] || displayName
-  }
+  // ... (getStyleInstruction)
 
   useEffect(() => {
+    // ... (checkBookStatus)
     if (!bookId || !isGenerating) return
 
     const checkBookStatus = async () => {
@@ -77,9 +77,15 @@ export default function GeneratePage() {
           const statusData = await response.json()
           if (statusData.status === 'completed') {
             setIsGenerating(false)
+
+            // Track free book usage if unauthenticated
+            if (!user) {
+              localStorage.setItem('kinderquill_free_book_generated', 'true')
+            }
+
             router.push(`/book/${bookId}`)
           } else if (statusData.status === 'generating') {
-            // Estimate progress based on pages generated
+            // Estimate progress
             const totalPages = statusData.expectedPages || 8
             const completedPages = statusData.pages?.length || 0
             const progress = Math.min(95, (completedPages / totalPages) * 100)
@@ -93,7 +99,7 @@ export default function GeneratePage() {
 
     const interval = setInterval(checkBookStatus, 2000)
     return () => clearInterval(interval)
-  }, [bookId, isGenerating, router])
+  }, [bookId, isGenerating, router, user])
 
   const handleGenerate = async () => {
     if (!storyIdea.trim()) {
@@ -101,14 +107,34 @@ export default function GeneratePage() {
       return
     }
 
+    // 1. Check Auth & Limit
+    if (!user) {
+      // Check if they already used their free book
+      const hasGeneratedFree = localStorage.getItem('kinderquill_free_book_generated')
+      if (hasGeneratedFree) {
+        setLoginMessage('You have already created your free book! Please sign in to create more magical stories and save them to your library.')
+        setShowLoginModal(true)
+        return
+      }
+    }
+
+    // If user is logged in, we let the API enforce the 20 limit (we could check here too if we fetched books beforehand)
+
     setIsGenerating(true)
     setGenerationProgress(0)
 
     try {
+      // Get token if user is logged in
+      let token = ''
+      if (user) {
+        token = await user.getIdToken()
+      }
+
       const response = await fetch('/api/generate-book', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
         },
         body: JSON.stringify({
           storyIdea,
@@ -118,6 +144,13 @@ export default function GeneratePage() {
       })
 
       if (!response.ok) {
+        const errorData = await response.json()
+        // If error is 403 (Limit reached), show alert
+        if (response.status === 403) {
+          alert(errorData.error)
+          setIsGenerating(false)
+          return
+        }
         throw new Error('Failed to generate book')
       }
 
@@ -134,212 +167,164 @@ export default function GeneratePage() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-sm flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push('/')}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 transition-colors"
-            title="Home"
-          >
-            <Icon name="home" className="text-purple-700 dark:text-purple-300" size={24} />
-          </button>
-          <button
-            onClick={() => router.back()}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
-            title="Back"
-          >
-            <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
-          </button>
-        </div>
-        <div className="flex items-center gap-2 flex-1 justify-center">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-white/50 backdrop-blur-sm border-2 border-white/60 flex items-center justify-center">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuqyg_Asjsvty0tzYyB8sHQMgmo8HxFMLBQkGxQ-YWrQd1H1C1hxlO9XQItRXtU3EqZsQREdO9LJ1Ie7H7WYMP5aY0A31jbZ9fsQVUWafv3bcsJ2whAAhxcmp7zZRKazVaD0ztLi_Pa-WeiXQeu9dpTFGKAvYwQLkCSfGZsKpVYIV2_LJnapPvyM_ynHNh5ZLTEyFXmqQ7qiPO0r69pIRPgGl0Hvol7tSFTSihOnxUAMj6kg-mJc-LWCdbo2kREVe5bROQ3mGCNA"
-              alt="KinderQuill"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">
-            Create Your Story
-          </h2>
-        </div>
-        <div className="w-10" />
-      </div>
+      <Header title="Create Your Story" />
+      {/* ... rest of the UI ... */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        message={loginMessage}
+      />
+
 
       <main className="flex grow flex-col items-center justify-start px-4 py-2 text-center max-w-2xl mx-auto w-full overflow-y-auto min-h-0">
         {isGenerating ? (
-          /* Generating State - Magic Screen */
-          <div className="flex flex-col items-center w-full h-full min-h-[600px]">
-            {/* Progress Bar at Top */}
-            <div className="w-full max-w-md rounded-2xl bg-white/80 dark:bg-gray-800/80 p-4 shadow-xl backdrop-blur-md mb-6 mt-4">
-              <div className="flex flex-col gap-3">
-                <div className="flex justify-between items-center">
-                  <p className="text-base font-semibold text-gray-700 dark:text-gray-200">
-                    Stirring up your story...
-                  </p>
-                  <Icon name="sync" className="animate-spin text-blue-500" size={20} />
-                </div>
-                <div className="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                  <div 
-                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out" 
-                    style={{ width: `${generationProgress}%` }} 
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 w-full max-w-md text-center mb-6">
-              <h2 className="font-display text-4xl font-bold text-gray-800 dark:text-gray-100 sm:text-5xl mb-2">
-                Mixing the magic...
-              </h2>
-              <p className="text-gray-600 dark:text-gray-300 text-lg">Creating your storybook</p>
             </div>
 
             <div className="flex-1 flex items-center justify-center w-full py-8">
               <GeneratingGame />
             </div>
-          </div>
+          </div >
         ) : (
-          /* Form State */
-          <>
-            {/* Illustration - Minimized */}
-            <div className="mx-auto w-full max-w-[120px] mb-3">
-              <div
-                className="aspect-square w-full bg-contain bg-center bg-no-repeat rounded-xl shadow-md"
-                style={{
-                  backgroundImage:
-                    'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBgxAGWRCcBULUnJqgvIcpUDARPA6HA7Jb_Z7cn000bl7LhpJaR1tBxt1fQWawCmnHktpfoYxghCRPlScKpEASscjupGf2qyw7977OD8DfGtKx4x951NC9lcOP1NJCRH1Kz7bUfFD8DM83wqgdp1p6tZysZVzVx53nHdI90YRbv93DH-Zzw-M49l3Rj47z3GYwx5qB3I42dznDYBXX8tH4b_B4ki_jLaygEa7ila4gWFMlbAa-5pbPnIlpel_16bbI0MQJ7LNRHxw")',
-                }}
-              />
-            </div>
+    /* Form State */
+    <>
+      {/* Illustration - Minimized */}
+      <div className="mx-auto w-full max-w-[120px] mb-3">
+        <div
+          className="aspect-square w-full bg-contain bg-center bg-no-repeat rounded-xl shadow-md"
+          style={{
+            backgroundImage:
+              'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBgxAGWRCcBULUnJqgvIcpUDARPA6HA7Jb_Z7cn000bl7LhpJaR1tBxt1fQWawCmnHktpfoYxghCRPlScKpEASscjupGf2qyw7977OD8DfGtKx4x951NC9lcOP1NJCRH1Kz7bUfFD8DM83wqgdp1p6tZysZVzVx53nHdI90YRbv93DH-Zzw-M49l3Rj47z3GYwx5qB3I42dznDYBXX8tH4b_B4ki_jLaygEa7ila4gWFMlbAa-5pbPnIlpel_16bbI0MQJ7LNRHxw")',
+          }}
+        />
+      </div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800 dark:text-gray-100">
-              Dream Up a Story
-            </h1>
+      <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800 dark:text-gray-100">
+        Dream Up a Story
+      </h1>
 
-            {/* Story Input */}
-            <div className="w-full mb-3">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Your Story Idea
-                </label>
-                <button
-                  onClick={() => {
-                    const randomPrompt = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)]
-                    setStoryIdea(randomPrompt)
-                  }}
-                  disabled={isGenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Generate a random story idea"
-                >
-                  <Icon name="auto_awesome" size={16} />
-                  <span>Generate Idea</span>
-                </button>
-              </div>
-              <textarea
-                value={storyIdea}
-                onChange={(e) => setStoryIdea(e.target.value)}
-                className="w-full min-h-32 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
-                placeholder="A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."
-                disabled={isGenerating}
-              />
-            </div>
+      {/* Story Input */}
+      <div className="w-full mb-3">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Your Story Idea
+          </label>
+          <button
+            onClick={() => {
+              const randomPrompt = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)]
+              setStoryIdea(randomPrompt)
+            }}
+            disabled={isGenerating}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Generate a random story idea"
+          >
+            <Icon name="auto_awesome" size={16} />
+            <span>Generate Idea</span>
+          </button>
+        </div>
+        <textarea
+          value={storyIdea}
+          onChange={(e) => setStoryIdea(e.target.value)}
+          className="w-full min-h-32 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
+          placeholder="A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."
+          disabled={isGenerating}
+        />
+      </div>
 
-            {/* Advanced Options Toggle */}
-            <button
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              disabled={isGenerating}
-              className="mb-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:opacity-50"
-            >
-              {showAdvanced ? (
-                <span className="flex items-center gap-1">
-                  <Icon name="expand_less" className="text-lg" size={20} />
-                  Hide Advanced Options
-                </span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <Icon name="expand_more" className="text-lg" size={20} />
-                  Show Advanced Options
-                </span>
-              )}
-            </button>
-
-            {/* Advanced Options */}
-            {showAdvanced && (
-              <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-4 shadow-lg mb-3 backdrop-blur-sm">
-                <div className="flex flex-col gap-2">
-                  <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="child_care" className="text-lg" size={20} />
-                    Age Range
-                  </label>
-                  <select
-                    value={ageRange}
-                    onChange={(e) => setAgeRange(e.target.value)}
-                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    disabled={isGenerating}
-                  >
-                    {AGE_RANGES.map((range) => (
-                      <option key={range.value} value={range.value}>
-                        {range.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="palette" className="text-lg" size={20} />
-                    Illustration Style
-                  </label>
-                  <select
-                    value={illustrationStyle}
-                    onChange={(e) => setIllustrationStyle(e.target.value)}
-                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    disabled={isGenerating}
-                  >
-                    {ILLUSTRATION_STYLES.map((style) => (
-                      <option key={style} value={style}>
-                        {style}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Generate Button */}
-            <div className="w-full pt-3">
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating || !storyIdea.trim()}
-                className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-blue-500 disabled:hover:to-purple-600 hover:shadow-xl active:scale-98 flex items-center justify-center gap-2"
-              >
-                {isGenerating ? (
-                  <>
-                    <Icon name="sync" className="animate-spin" size={24} />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Icon name="auto_awesome" size={24} />
-                    Generate My Book!
-                    <Icon name="auto_awesome" size={24} />
-                  </>
-                )}
-              </button>
-            </div>
-          </>
+      {/* Advanced Options Toggle */}
+      <button
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        disabled={isGenerating}
+        className="mb-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:opacity-50"
+      >
+        {showAdvanced ? (
+          <span className="flex items-center gap-1">
+            <Icon name="expand_less" className="text-lg" size={20} />
+            Hide Advanced Options
+          </span>
+        ) : (
+          <span className="flex items-center gap-1">
+            <Icon name="expand_more" className="text-lg" size={20} />
+            Show Advanced Options
+          </span>
         )}
-      </main>
+      </button>
 
-      {/* Footer - Created with Venice.ai */}
-      <footer className="w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-        <p className="text-xs text-gray-600 dark:text-gray-400">
-          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
-        </p>
-      </footer>
-    </div>
+      {/* Advanced Options */}
+      {showAdvanced && (
+        <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-4 shadow-lg mb-3 backdrop-blur-sm">
+          <div className="flex flex-col gap-2">
+            <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <Icon name="child_care" className="text-lg" size={20} />
+              Age Range
+            </label>
+            <select
+              value={ageRange}
+              onChange={(e) => setAgeRange(e.target.value)}
+              className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+              disabled={isGenerating}
+            >
+              {AGE_RANGES.map((range) => (
+                <option key={range.value} value={range.value}>
+                  {range.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <Icon name="palette" className="text-lg" size={20} />
+              Illustration Style
+            </label>
+            <select
+              value={illustrationStyle}
+              onChange={(e) => setIllustrationStyle(e.target.value)}
+              className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+              disabled={isGenerating}
+            >
+              {ILLUSTRATION_STYLES.map((style) => (
+                <option key={style} value={style}>
+                  {style}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Generate Button */}
+      <div className="w-full pt-3">
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating || !storyIdea.trim()}
+          className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-blue-500 disabled:hover:to-purple-600 hover:shadow-xl active:scale-98 flex items-center justify-center gap-2"
+        >
+          {isGenerating ? (
+            <>
+              <Icon name="sync" className="animate-spin" size={24} />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Icon name="auto_awesome" size={24} />
+              Generate My Book!
+              <Icon name="auto_awesome" size={24} />
+            </>
+          )}
+        </button>
+      </div>
+    </>
+  )
+}
+      </main >
+
+  {/* Footer - Created with Venice.ai */ }
+  < footer className = "w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm" >
+    <p className="text-xs text-gray-600 dark:text-gray-400">
+      Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
+    </p>
+      </footer >
+    </div >
   )
 }
 
