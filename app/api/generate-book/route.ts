@@ -112,36 +112,62 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
     }
 
     console.log('Generating story with Venice API...')
-    const completionResponse = await fetch(
-      'https://api.venice.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are an award-winning expert children\'s book author with decades of experience creating magical, engaging stories. You write at a professional publication-quality level. CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks, no explanations, no additional text. Just pure, valid JSON that can be parsed directly.',
-            },
-            { role: 'user', content: storyPrompt },
-          ],
-          temperature: 0.9,
-          max_tokens: 4000,
-        }),
-      }
-    )
+    
+    // Retry logic for Venice API (handles 429 rate limits)
+    let completionResponse: Response | null = null
+    let lastError = ''
+    const maxRetries = 3
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      completionResponse = await fetch(
+        'https://api.venice.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b',
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You are an award-winning expert children\'s book author with decades of experience creating magical, engaging stories. You write at a professional publication-quality level. CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks, no explanations, no additional text. Just pure, valid JSON that can be parsed directly.',
+              },
+              { role: 'user', content: storyPrompt },
+            ],
+            temperature: 0.9,
+            max_tokens: 4000,
+          }),
+        }
+      )
 
-    if (!completionResponse.ok) {
-      const errorText = await completionResponse.text()
-      console.error('Venice API error:', completionResponse.status, errorText)
+      if (completionResponse.ok) {
+        break // Success!
+      }
+      
+      // Check if it's a rate limit error (429)
+      if (completionResponse.status === 429 && attempt < maxRetries) {
+        const waitTime = attempt * 5000 // 5s, 10s, 15s
+        console.log(`Venice API rate limited (attempt ${attempt}/${maxRetries}). Waiting ${waitTime/1000}s...`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+        continue
+      }
+      
+      // For other errors, capture and break
+      lastError = await completionResponse.text()
+      console.error('Venice API error:', completionResponse.status, lastError)
+      break
+    }
+
+    if (!completionResponse || !completionResponse.ok) {
+      const errorMessage = completionResponse?.status === 429 
+        ? 'AI service is busy. Please try again in a few minutes.'
+        : 'Story generation failed. Please try again.'
       return NextResponse.json(
-        { error: `Story generation failed: ${completionResponse.statusText}` },
-        { status: 502 }
+        { error: errorMessage },
+        { status: completionResponse?.status === 429 ? 503 : 502 }
       )
     }
 
