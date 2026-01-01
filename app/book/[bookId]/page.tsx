@@ -88,28 +88,9 @@ export default function BookViewerPage() {
   const handleDownloadPDF = async () => {
     if (!book) return
 
-    try {
-      // Download PDF directly from server
-      const response = await fetch(`/api/download-pdf/${bookId}`)
-      if (response.ok && response.headers.get('content-type')?.includes('application/pdf')) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
-      } else {
-        // Fallback: open print page
-        window.open(`/pdf/${bookId}`, '_blank')
-      }
-    } catch (error) {
-      console.error('Error downloading PDF:', error)
-      // Fallback: open print page
-      window.open(`/pdf/${bookId}`, '_blank')
-    }
+    // Open PDF page in new tab with download flag - browser will auto-trigger print dialog
+    // User can then choose "Save as PDF" from the print dialog
+    window.open(`/pdf/${bookId}?download=true`, '_blank')
   }
 
   const handleDownloadAudio = () => {
@@ -427,35 +408,50 @@ export default function BookViewerPage() {
               {book.title}
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Download HTML Button */}
             <button
               onClick={handleDownloadHTML}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-              title="Download HTML Book"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+              title="Download as interactive HTML file"
             >
-              <Icon name="code" className="text-lg" size={24} />
+              <Icon name="code" size={18} />
+              <span className="hidden sm:inline">HTML</span>
             </button>
+            
+            {/* Download PDF Button */}
             <button
               onClick={handleDownloadPDF}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-              title="Download HTML Book"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+              title="Download as PDF for printing"
             >
-              <Icon name="code" className="text-lg" size={24} />
+              <Icon name="picture_as_pdf" size={18} />
+              <span className="hidden sm:inline">PDF</span>
             </button>
-            <button
-              onClick={handleDownloadPDF}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-              title="Download PDF"
-            >
-              <Icon name="book" className="text-lg" size={24} />
-            </button>
-            {book.audioUrl && (
+            
+            {/* Audio Section on Title Page */}
+            {book.audioUrl ? (
               <button
                 onClick={handleDownloadAudio}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-500 hover:bg-purple-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-                title="Download Audio"
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+                title="Download audiobook as MP3"
               >
-                <Icon name="download" className="text-lg" size={24} />
+                <Icon name="download" size={18} />
+                <span className="hidden sm:inline">MP3</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleGenerateAudio}
+                disabled={isGeneratingAudio}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:scale-105 active:scale-95"
+                title="Generate audiobook narration"
+              >
+                <Icon
+                  name={isGeneratingAudio ? 'hourglass_empty' : 'record_voice_over'}
+                  className={isGeneratingAudio ? 'animate-spin' : ''}
+                  size={18}
+                />
+                <span>{isGeneratingAudio ? 'Generating...' : 'Generate Audiobook'}</span>
               </button>
             )}
           </div>
@@ -552,53 +548,65 @@ export default function BookViewerPage() {
             {book.title}
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Download HTML Button */}
           <button
             onClick={handleDownloadHTML}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-            title="Download HTML Book"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+            title="Download as interactive HTML file"
           >
-            <Icon name="code" className="text-lg" size={24} />
+            <Icon name="code" size={18} />
+            <span className="hidden sm:inline">HTML</span>
           </button>
+          
+          {/* Download PDF Button */}
           <button
             onClick={handleDownloadPDF}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500 hover:bg-red-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-            title="Download PDF"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+            title="Download as PDF for printing"
           >
-            <Icon name="book" className="text-lg" size={24} />
+            <Icon name="picture_as_pdf" size={18} />
+            <span className="hidden sm:inline">PDF</span>
           </button>
+          
+          {/* Audio Section */}
           {book.audioUrl ? (
-            <>
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-full px-3 py-2 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-center gap-2">
+              {/* Audio Player */}
+              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-full px-3 py-1.5 border border-blue-200 dark:border-blue-800">
+                <Icon name="headphones" size={18} className="text-blue-500" />
                 <audio
                   ref={setAudioRef}
                   controls
-                  className="h-8 rounded-lg"
-                  style={{ minWidth: '140px', maxWidth: '200px' }}
+                  className="h-8"
+                  style={{ minWidth: '120px', maxWidth: '180px' }}
                 >
                   <source src={book.audioUrl} type="audio/mpeg" />
                 </audio>
               </div>
+              {/* Download Audio Button */}
               <button
                 onClick={handleDownloadAudio}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-500 hover:bg-purple-600 text-white transition-all shadow-md hover:scale-110 active:scale-95"
-                title="Download Audio"
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+                title="Download audiobook as MP3"
               >
-                <Icon name="download" className="text-lg" size={24} />
+                <Icon name="download" size={18} />
+                <span className="hidden sm:inline">MP3</span>
               </button>
-            </>
+            </div>
           ) : (
             <button
               onClick={handleGenerateAudio}
               disabled={isGeneratingAudio}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:scale-110 active:scale-95"
-              title="Generate Audio"
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:scale-105 active:scale-95"
+              title="Generate audiobook narration"
             >
               <Icon
-                name={isGeneratingAudio ? 'hourglass_empty' : 'volume_up'}
-                className={`text-lg ${isGeneratingAudio ? 'animate-spin' : ''}`}
-                size={24}
+                name={isGeneratingAudio ? 'hourglass_empty' : 'record_voice_over'}
+                className={isGeneratingAudio ? 'animate-spin' : ''}
+                size={18}
               />
+              <span>{isGeneratingAudio ? 'Generating...' : 'Generate Audiobook'}</span>
             </button>
           )}
         </div>

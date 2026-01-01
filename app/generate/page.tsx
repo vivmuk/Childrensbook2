@@ -15,11 +15,12 @@ const AGE_RANGES = [
 ]
 
 const ILLUSTRATION_STYLES = [
-  'Japanese animation style',
-  'Whimsical anime art style',
-  'Vintage American cartoon',
-  'Indian comic book art',
-  'Classic adventure comic style',
+  { value: 'ghibli', label: 'Studio Ghibli Style', prompt: 'Studio Ghibli anime style, soft watercolor backgrounds, detailed hand-drawn characters, warm lighting, magical realism, Hayao Miyazaki inspired, whimsical and dreamy atmosphere' },
+  { value: 'american-classic', label: 'Classic American Cartoon', prompt: 'Classic 1950s American cartoon style, bold outlines, bright primary colors, expressive characters, vintage Disney/Hanna-Barbera inspired, cheerful and nostalgic' },
+  { value: 'watercolor', label: 'Whimsical Watercolor', prompt: 'Soft whimsical watercolor illustration, gentle pastel colors, flowing brushstrokes, dreamy and ethereal, delicate details, storybook illustration style' },
+  { value: 'amar-chitra', label: 'Amar Chitra Katha Style', prompt: 'Amar Chitra Katha Indian comic style, bold black outlines, vibrant colors, detailed traditional Indian art elements, expressive faces, classic Indian illustration' },
+  { value: 'chacha-chaudhary', label: 'Chacha Chaudhary Style', prompt: 'Chacha Chaudhary Indian comic style, simple bold lines, flat bright colors, exaggerated expressions, humorous cartoon style, Pran Kumar Sharma inspired' },
+  { value: 'tintin', label: 'Tintin Adventure Style', prompt: 'Hergé Tintin clear line style (ligne claire), clean precise outlines, flat colors, detailed backgrounds, European comic book style, adventure illustration' },
 ]
 
 const STORY_PROMPTS = [
@@ -54,7 +55,7 @@ export default function GeneratePage() {
   const { user, loading } = useAuth()
   const [storyIdea, setStoryIdea] = useState('')
   const [ageRange, setAgeRange] = useState('2nd')
-  const [illustrationStyle, setIllustrationStyle] = useState('Japanese animation style')
+  const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [bookId, setBookId] = useState<string | null>(null)
@@ -81,11 +82,9 @@ export default function GeneratePage() {
 
             router.push(`/book/${bookId}`)
           } else if (statusData.status === 'generating') {
-            // Estimate progress
-            const totalPages = statusData.expectedPages || 8
-            const completedPages = statusData.pages?.length || 0
-            const progress = Math.min(95, (completedPages / totalPages) * 100)
-            setGenerationProgress(progress)
+            // Use server-reported progress, or estimate from pages
+            const serverProgress = statusData.progress || 0
+            setGenerationProgress(Math.min(95, serverProgress))
           }
         }
       } catch (error) {
@@ -135,7 +134,7 @@ export default function GeneratePage() {
         body: JSON.stringify({
           storyIdea,
           ageRange,
-          illustrationStyle,
+          illustrationStyle: ILLUSTRATION_STYLES.find(s => s.value === illustrationStyle)?.prompt || illustrationStyle,
         }),
       })
 
@@ -275,8 +274,8 @@ export default function GeneratePage() {
                     disabled={isGenerating}
                   >
                     {ILLUSTRATION_STYLES.map((style) => (
-                      <option key={style} value={style}>
-                        {style}
+                      <option key={style.value} value={style.value}>
+                        {style.label}
                       </option>
                     ))}
                   </select>

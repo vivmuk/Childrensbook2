@@ -24,6 +24,7 @@ interface Book {
   audioUrl?: string
   createdAt: string
   expectedPages?: number
+  generationProgress?: number // 0-100 percentage of image generation
   description?: string
   category?: string
   heroType?: 'animal' | 'person' | 'fantasy'

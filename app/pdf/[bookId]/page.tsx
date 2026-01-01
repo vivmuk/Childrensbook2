@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 
 interface BookPage {
@@ -25,9 +25,11 @@ interface Book {
 
 export default function PDFViewPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const bookId = params.bookId as string
   const [book, setBook] = useState<Book | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [downloadTriggered, setDownloadTriggered] = useState(false)
 
   useEffect(() => {
     const fetchBook = async () => {
@@ -47,6 +49,17 @@ export default function PDFViewPage() {
 
     fetchBook()
   }, [bookId])
+
+  // Auto-trigger print dialog for download
+  useEffect(() => {
+    if (!isLoading && book && searchParams.get('download') === 'true' && !downloadTriggered) {
+      setDownloadTriggered(true)
+      // Wait for images to load, then trigger print
+      setTimeout(() => {
+        window.print()
+      }, 1000)
+    }
+  }, [isLoading, book, searchParams, downloadTriggered])
 
   if (isLoading) {
     return (
@@ -141,18 +154,30 @@ export default function PDFViewPage() {
       <div className="pdf-container">
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <style jsx global>{`
+        /* Common styles */
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
+        /* Print styles - optimized for single page per spread */
         @media print {
-          * {
+          @page {
+            size: A4 portrait;
             margin: 0;
-            padding: 0;
-            box-sizing: border-box;
           }
           
-          body {
+          html, body {
+            width: 210mm;
+            height: 297mm;
             margin: 0;
             padding: 0;
             background: white;
-            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           }
           
           .pdf-container {
@@ -162,149 +187,189 @@ export default function PDFViewPage() {
           }
           
           .page {
+            width: 210mm;
+            height: 297mm;
             page-break-after: always;
             page-break-inside: avoid;
-            width: 100%;
-            min-height: 100vh;
-            margin: 0;
-            padding: 0;
+            overflow: hidden;
+            position: relative;
             display: flex;
             flex-direction: column;
             background: white;
-            position: relative;
           }
           
+          .page:last-child {
+            page-break-after: auto;
+          }
+          
+          /* Title Page - Full bleed cover */
           .title-page {
+            width: 210mm;
+            height: 297mm;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
-            height: 100vh;
-            margin: 0;
             padding: 0;
-            background: white;
           }
           
           .title-page img {
             width: 100%;
             height: 100%;
-            object-fit: contain;
-            display: block;
+            object-fit: cover;
           }
           
+          /* Content Pages - Image on top, text below */
           .content-page {
+            width: 210mm;
+            height: 297mm;
+            padding: 10mm 12mm 10mm 12mm;
             display: flex;
             flex-direction: column;
-            width: 100%;
-            min-height: 100vh;
-            padding: 50px 60px;
-            box-sizing: border-box;
-            background: white;
+            overflow: hidden;
             justify-content: space-between;
           }
           
-          .page-image {
+          .image-container {
             width: 100%;
-            max-height: 65vh;
+            height: 190mm;
+            max-height: 190mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #f8f9fa;
+            flex-shrink: 0;
+            margin-bottom: 6mm;
+          }
+          
+          .page-image {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
             object-fit: contain;
-            margin-bottom: 30px;
-            display: block;
+          }
+          
+          .text-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0;
+            min-height: 75mm;
+            max-height: 80mm;
+            overflow: hidden;
           }
           
           .page-text {
-            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 20px;
+            font-size: 12pt;
             font-weight: 400;
-            line-height: 1.8;
+            line-height: 1.4;
             color: #1a1a1a;
-            flex: 1;
-            text-align: left;
-            padding: 0;
-            margin: 0;
+            text-align: center;
+            overflow: hidden;
+            word-wrap: break-word;
           }
           
           .page-number {
             position: absolute;
-            bottom: 30px;
-            right: 60px;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 14px;
+            bottom: 8mm;
+            right: 15mm;
+            font-size: 10pt;
             font-weight: 500;
             color: #999;
           }
-          
-          @page {
-            size: A4;
-            margin: 0;
-          }
         }
         
+        /* Screen preview styles */
         @media screen {
           body {
-            background: #f5f5f5;
-            padding: 20px;
-            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            min-height: 100vh;
           }
           
           .pdf-container {
-            max-width: 800px;
+            max-width: 650px;
             margin: 0 auto;
-            background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
           }
           
           .page {
-            margin-bottom: 20px;
             background: white;
-            min-height: 100vh;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+            aspect-ratio: 210 / 297;
             display: flex;
             flex-direction: column;
           }
           
+          /* Title Page Preview */
           .title-page {
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            padding: 0;
+            height: 100%;
           }
           
           .title-page img {
-            max-width: 100%;
-            max-height: 100vh;
-            object-fit: contain;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
           }
           
+          /* Content Page Preview */
           .content-page {
+            padding: 5% 6% 6% 6%;
             display: flex;
             flex-direction: column;
-            padding: 50px 60px;
-            min-height: 100vh;
+            height: 100%;
             position: relative;
           }
           
-          .page-image {
+          .image-container {
             width: 100%;
-            max-height: 65vh;
+            height: 65%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #f8f9fa;
+            flex-shrink: 0;
+          }
+          
+          .page-image {
+            max-width: 100%;
+            max-height: 100%;
             object-fit: contain;
-            margin-bottom: 30px;
+          }
+          
+          .text-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 16px 10px 0 10px;
+            min-height: 0;
           }
           
           .page-text {
-            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 20px;
+            font-size: clamp(12px, 2vw, 16px);
             font-weight: 400;
-            line-height: 1.8;
+            line-height: 1.5;
             color: #1a1a1a;
-            flex: 1;
+            text-align: center;
+            overflow: hidden;
           }
           
           .page-number {
             position: absolute;
-            bottom: 30px;
-            right: 60px;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 14px;
+            bottom: 12px;
+            right: 20px;
+            font-size: 12px;
             font-weight: 500;
             color: #999;
           }
@@ -321,8 +386,12 @@ export default function PDFViewPage() {
       {/* Content Pages */}
       {book.pages.map((page, index) => (
         <div key={index} className="page content-page">
-          <img src={page.image} alt={`Page ${index + 1}`} className="page-image" />
-          <div className="page-text">{page.text}</div>
+          <div className="image-container">
+            <img src={page.image} alt={`Page ${index + 1}`} className="page-image" />
+          </div>
+          <div className="text-container">
+            <div className="page-text">{page.text}</div>
+          </div>
           <div className="page-number">Page {index + 1}</div>
         </div>
       ))}

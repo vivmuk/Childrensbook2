@@ -331,75 +331,79 @@ async function generateBookImages(
     : ''
 
   try {
-
     // Collect all image prompts to save later
     const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
+    
+    // Total steps: 1 for story (already done), 1 for cover, N for pages
+    const totalSteps = 1 + pages.length // cover + pages
+    let completedSteps = 0
+    
+    // Helper to update progress
+    const updateProgress = async () => {
+      book.generationProgress = Math.round((completedSteps / totalSteps) * 100)
+      await setBook(bookId, book)
+    }
 
-    // 1. Prepare Title Page Promise
-    const titlePagePromise = (async () => {
-      const titlePagePrompt = `A beautiful children's book cover illustration with the title "${book.title}" prominently displayed. ${illustrationStyle} style, children's book cover, colorful, whimsical, high quality, detailed, charming, inviting, magical. The title text should be part of the illustration design. Scene details: ${pages[0]?.imageDescription || 'A magical scene'}`
+    // 1. Generate Title Page FIRST (sequential for progress tracking)
+    console.log(`Generating cover image...`)
+    const titlePagePrompt = `A beautiful children's book cover illustration with the title "${book.title}" prominently displayed. ${illustrationStyle} style, children's book cover, colorful, whimsical, high quality, detailed, charming, inviting, magical. The title text should be part of the illustration design. Scene details: ${pages[0]?.imageDescription || 'A magical scene'}`
+    imagePrompts.push({ pageNumber: 'cover', prompt: titlePagePrompt })
 
-      imagePrompts.push({ pageNumber: 'cover', prompt: titlePagePrompt })
-
-      const img = await generateImage(titlePagePrompt, 'nano-banana-pro', 1280, 720, 1) // Using nano-banana-pro for title (better text)
-      if (img) {
-        return {
-          image: `data:image/webp;base64,${img}`,
-          title: book.title,
-        }
+    const coverImg = await generateImage(titlePagePrompt, 'nano-banana-pro', 1280, 720, 1)
+    if (coverImg) {
+      book.titlePage = {
+        image: `data:image/webp;base64,${coverImg}`,
+        title: book.title,
       }
-      return undefined
-    })()
+    }
+    completedSteps++
+    await updateProgress()
 
-    // 2. Prepare Pages Promises
-    const pagePromises = pages.map(async (page, i) => {
+    // 2. Generate Pages SEQUENTIALLY for accurate progress tracking
+    book.pages = [] // Initialize empty array
+    
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i]
+      console.log(`Generating page ${i + 1}/${pages.length} image...`)
+      
       let imageDescription = page.imageDescription || page.text.substring(0, 300)
       const basePrompt = `${imageDescription}, ${illustrationStyle} style, children's book illustration, colorful, whimsical, high quality, detailed, charming, masterpiece, trending on artstation, vivid colors`
 
       const fullPrompt = characterConsistency
-        ? `${characterConsistency}${basePrompt}`.substring(0, 2800) // Increased limit to 2800 for Flux Pro
+        ? `${characterConsistency}${basePrompt}`.substring(0, 2800)
         : basePrompt.substring(0, 2800)
 
       imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
 
-      const img = await generateImage(fullPrompt, 'flux-2-pro', 1024, 768, 30) // Using flux-2-pro for pages with higher steps
+      const img = await generateImage(fullPrompt, 'flux-2-pro', 1024, 768, 30)
       if (!img) throw new Error(`Failed to generate image for page ${i + 1}`)
 
-      return {
+      // Add page to book and save progress
+      book.pages.push({
         pageNumber: i + 1,
         text: page.text,
         image: `data:image/webp;base64,${img}`,
-      }
-    })
-
-    // 3. Execute All in Parallel
-    const [titlePageResult, ...pageResults] = await Promise.all([
-      titlePagePromise,
-      ...pagePromises
-    ])
-
-    // 4. Update Book Object
-    if (titlePageResult) {
-      book.titlePage = titlePageResult
+      })
+      
+      completedSteps++
+      await updateProgress()
     }
 
-    // Sort pages just in case Promise.all implementation varies (it shouldn't, but good practice)
-    // Actually Promise.all preserves order of input, so pageResults[0] corresponds to pages[0].
-
-    book.pages = pageResults as any[]
+    // 3. Mark as completed
     book.status = 'completed'
+    book.generationProgress = 100
 
     // Save prompts
     if (book.prompts) {
       book.prompts.images = imagePrompts
     } else {
       book.prompts = {
-        story: '', // Should have been set in POST, but fallback just in case
+        story: '',
         images: imagePrompts
       }
     }
 
-    // 5. Save Once
+    // 4. Final save
     await setBook(bookId, book)
 
   } catch (error) {

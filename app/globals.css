@@ -196,3 +196,37 @@ body {
   animation: shimmer 2s ease-in-out infinite;
 }
 
+/* Star Catching Game Animations */
+@keyframes twinkle-star {
+  0%, 100% { 
+    opacity: 0.2; 
+    transform: scale(0.8); 
+  }
+  50% { 
+    opacity: 1; 
+    transform: scale(1.3); 
+  }
+}
+
+@keyframes pop-score {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -80%) scale(1.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -120%) scale(0.8);
+  }
+}
+
+.animate-twinkle {
+  animation: twinkle-star 2s ease-in-out infinite;
+}
+
+.animate-pop {
+  animation: pop-score 0.5s ease-out forwards;
+}
+

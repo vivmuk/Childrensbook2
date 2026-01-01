@@ -19,11 +19,10 @@ export async function GET(
       )
     }
 
-    // Redirect to the print-friendly page where users can use browser's Print to PDF
-    // This is more reliable than server-side PDF generation
-    return NextResponse.redirect(new URL(`/pdf/${params.bookId}`, request.url))
+    // Redirect to PDF view page with download flag - browser will handle print-to-PDF
+    return NextResponse.redirect(new URL(`/pdf/${params.bookId}?download=true`, request.url))
   } catch (error: any) {
-    console.error('Error with PDF redirect:', error)
+    console.error('Error with PDF download:', error)
     return NextResponse.redirect(new URL(`/pdf/${params.bookId}`, request.url))
   }
 }

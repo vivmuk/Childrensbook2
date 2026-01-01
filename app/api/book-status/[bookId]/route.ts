@@ -12,9 +12,15 @@ export async function GET(
       return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     }
 
+    // Calculate progress: if generationProgress is set, use it; otherwise estimate from pages
+    const estimatedProgress = book.generationProgress ?? 
+      (book.status === 'completed' ? 100 : 
+        Math.round(((book.pages?.length || 0) / (book.expectedPages || 8)) * 100))
+    
     return NextResponse.json({
       status: book.status,
-      progress: book.pages?.length || 0,
+      progress: estimatedProgress,
+      pagesCompleted: book.pages?.length || 0,
       totalPages: book.expectedPages || 8,
       expectedPages: book.expectedPages || 8,
       pages: book.pages || [],
