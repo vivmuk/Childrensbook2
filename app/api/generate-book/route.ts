@@ -128,7 +128,7 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3-flash-preview',
             messages: [
               {
                 role: 'system',
