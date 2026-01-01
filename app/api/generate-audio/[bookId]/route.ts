@@ -7,15 +7,17 @@ export async function POST(
 ) {
   try {
     // Check API key
-    const apiKey = process.env.VENICE_API_KEY || 'lnWNeSg0pA_rQUooNpbfpPDBaj2vJnWol5WqKWrIEF'
+    const apiKey = process.env.VENICE_API_KEY
     
     if (!apiKey) {
       console.error('VENICE_API_KEY is not set')
       return NextResponse.json(
-        { error: 'API key not configured' },
+        { error: 'Audio generation requires API key configuration' },
         { status: 500 }
       )
     }
+    
+    console.log('Starting audio generation...')
 
     const book = await getBook(params.bookId)
 
