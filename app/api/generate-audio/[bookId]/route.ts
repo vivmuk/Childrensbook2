@@ -52,6 +52,19 @@ export async function POST(
 
     console.log(`Generating audio for book ${params.bookId}, text length: ${textToUse.length}`)
 
+    // Map narrator voice to Venice voice
+    const voiceMap: Record<string, string> = {
+      'default': 'af_sky',
+      'nova': 'af_sky',
+      'alloy': 'am_onyx',
+      'echo': 'af_bella',
+      'fable': 'am_echo',
+      'onyx': 'am_onyx',
+      'shimmer': 'af_bella',
+    }
+    
+    const voice = voiceMap[book.narratorVoice || 'default'] || 'af_sky'
+
     // Generate audio using Venice API
     const audioResponse = await fetch(
       'https://api.venice.ai/api/v1/audio/speech',
@@ -64,7 +77,7 @@ export async function POST(
         body: JSON.stringify({
           input: textToUse,
           model: 'tts-kokoro',
-          voice: 'af_sky', // Child-friendly voice
+          voice: voice,
           response_format: 'mp3',
           speed: 1.0,
           streaming: false,

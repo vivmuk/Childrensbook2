@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { storyIdea, ageRange, illustrationStyle, storyLength = 8 } = await request.json()
+    const { storyIdea, ageRange, illustrationStyle, storyLength = 8, narratorVoice = 'default', character } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
       return NextResponse.json(
@@ -306,6 +306,8 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
       createdAt: new Date().toISOString(),
       expectedPages: storyData.pages?.length || 8,
       generationProgress: 10, // Story generation complete (10% of total)
+      narratorVoice,
+      character,
       prompts: {
         story: storyPrompt,
         images: []

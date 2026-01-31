@@ -29,6 +29,29 @@ const STORY_LENGTHS = [
   { value: '12', label: 'Epic Adventure (12 pages)', pages: 12, description: 'For the ultimate adventure' },
 ]
 
+const CHARACTER_TYPES = [
+  { value: 'animal', label: '🐾 Animal', description: 'A furry or feathered friend' },
+  { value: 'person', label: '👤 Person', description: 'A boy, girl, or adult' },
+  { value: 'fantasy', label: '🦄 Fantasy Creature', description: 'Dragons, unicorns, fairies' },
+  { value: 'robot', label: '🤖 Robot', description: 'A mechanical friend' },
+  { value: 'alien', label: '👽 Alien', description: 'From another world' },
+]
+
+const CHARACTER_TRAITS = [
+  'brave', 'curious', 'kind', 'funny', 'shy', 'clever', 
+  'adventurous', 'gentle', 'mischievous', 'loyal', 'creative', 'determined'
+]
+
+const NARRATOR_VOICES = [
+  { value: 'default', label: 'Default Voice', description: 'Warm and friendly' },
+  { value: 'nova', label: 'Nova', description: 'Warm, slightly British accent' },
+  { value: 'alloy', label: 'Alloy', description: 'Versatile, balanced tone' },
+  { value: 'echo', label: 'Echo', description: 'Soft, gentle narration' },
+  { value: 'fable', label: 'Fable', description: 'Perfect for storytelling' },
+  { value: 'onyx', label: 'Onyx', description: 'Deep, calming voice' },
+  { value: 'shimmer', label: 'Shimmer', description: 'Bright and cheerful' },
+]
+
 const STORY_TEMPLATES = [
   {
     id: 'bedtime',
@@ -115,6 +138,15 @@ export default function GeneratePage() {
   const [generationProgress, setGenerationProgress] = useState(0)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginMessage, setLoginMessage] = useState('')
+  
+  // Character Builder
+  const [characterName, setCharacterName] = useState('')
+  const [characterType, setCharacterType] = useState('animal')
+  const [selectedTraits, setSelectedTraits] = useState<string[]>(['brave', 'curious'])
+  const [showCharacterBuilder, setShowCharacterBuilder] = useState(false)
+  
+  // Voice Selection
+  const [narratorVoice, setNarratorVoice] = useState('default')
 
 
   useEffect(() => {
@@ -178,11 +210,17 @@ export default function GeneratePage() {
         token = await user.getIdToken()
       }
 
-      // Build full story prompt with template if selected
+      // Build full story prompt with template and character if provided
       const template = STORY_TEMPLATES.find(t => t.id === selectedTemplate)
-      const fullStoryIdea = template && template.id !== 'custom' 
+      let fullStoryIdea = template && template.id !== 'custom' 
         ? `${template.prompt}\n\nStory idea: ${storyIdea}`
         : storyIdea
+      
+      // Add character details if character builder is used
+      if (showCharacterBuilder && characterName) {
+        const characterDescription = `The main character is ${characterName}, a ${characterType} who is ${selectedTraits.join(', ')}.`
+        fullStoryIdea = `${characterDescription}\n\n${fullStoryIdea}`
+      }
 
       const response = await fetch('/api/generate-book', {
         method: 'POST',
@@ -195,6 +233,12 @@ export default function GeneratePage() {
           ageRange,
           illustrationStyle: ILLUSTRATION_STYLES.find(s => s.value === illustrationStyle)?.prompt || illustrationStyle,
           storyLength: parseInt(storyLength),
+          narratorVoice,
+          character: showCharacterBuilder ? {
+            name: characterName,
+            type: characterType,
+            traits: selectedTraits
+          } : undefined,
         }),
       })
 
@@ -340,6 +384,94 @@ export default function GeneratePage() {
             {/* Advanced Options */}
             {showAdvanced && (
               <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-4 shadow-lg mb-3 backdrop-blur-sm">
+                {/* Character Builder Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Icon name="person" className="text-lg" size={20} />
+                    Character Builder
+                  </label>
+                  <button
+                    onClick={() => setShowCharacterBuilder(!showCharacterBuilder)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      showCharacterBuilder
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {showCharacterBuilder ? 'On' : 'Off'}
+                  </button>
+                </div>
+
+                {/* Character Builder Panel */}
+                {showCharacterBuilder && (
+                  <div className="space-y-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">
+                        Character Name
+                      </label>
+                      <input
+                        type="text"
+                        value={characterName}
+                        onChange={(e) => setCharacterName(e.target.value)}
+                        placeholder="e.g., Luna, Max, Sparky"
+                        className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2.5 text-sm text-gray-800 dark:text-gray-200 focus:border-purple-500 focus:outline-none"
+                        disabled={isGenerating}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">
+                        Character Type
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {CHARACTER_TYPES.map((type) => (
+                          <button
+                            key={type.value}
+                            onClick={() => setCharacterType(type.value)}
+                            disabled={isGenerating}
+                            className={`p-2 rounded-lg border-2 text-left transition-all ${
+                              characterType === type.value
+                                ? 'border-purple-500 bg-purple-100 dark:bg-purple-800'
+                                : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700'
+                            }`}
+                          >
+                            <div className="text-sm font-medium">{type.label}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{type.description}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">
+                        Character Traits (select 2-4)
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {CHARACTER_TRAITS.map((trait) => (
+                          <button
+                            key={trait}
+                            onClick={() => {
+                              if (selectedTraits.includes(trait)) {
+                                setSelectedTraits(selectedTraits.filter(t => t !== trait))
+                              } else if (selectedTraits.length < 4) {
+                                setSelectedTraits([...selectedTraits, trait])
+                              }
+                            }}
+                            disabled={isGenerating}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                              selectedTraits.includes(trait)
+                                ? 'bg-purple-500 text-white'
+                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300'
+                            }`}
+                          >
+                            {trait}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     <Icon name="menu_book" className="text-lg" size={20} />
@@ -395,6 +527,31 @@ export default function GeneratePage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Narrator Voice Selection */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Icon name="record_voice_over" className="text-lg" size={20} />
+                    Narrator Voice
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {NARRATOR_VOICES.map((voice) => (
+                      <button
+                        key={voice.value}
+                        onClick={() => setNarratorVoice(voice.value)}
+                        disabled={isGenerating}
+                        className={`p-2 rounded-lg border-2 text-left transition-all ${
+                          narratorVoice === voice.value
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300'
+                        }`}
+                      >
+                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{voice.label}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{voice.description}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

@@ -1,10 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
+import { FeaturedBooksCarousel } from '@/components/FeaturedBooksCarousel'
+import { HowItWorksModal } from '@/components/HowItWorksModal'
 
 export default function WelcomePage() {
   const router = useRouter()
+  const [showHowItWorks, setShowHowItWorks] = useState(false)
   
   const handleViewGallery = () => {
     router.push('/gallery')
@@ -41,6 +45,11 @@ export default function WelcomePage() {
             Create magical, personalized storybooks for your little ones.
           </p>
         </div>
+        {/* Featured Books Carousel */}
+        <div className="w-full px-4 mb-6">
+          <FeaturedBooksCarousel />
+        </div>
+
         <div className="flex w-full max-w-md flex-shrink-0 flex-col items-center justify-center gap-4">
           <button
             onClick={() => router.push('/generate')}
@@ -57,10 +66,19 @@ export default function WelcomePage() {
             <Icon name="menu_book" className="text-white" size={24} />
             <span>Browse Gallery</span>
           </button>
-          <p className="mt-2 cursor-pointer text-center font-display text-sm font-medium text-white/80 underline hover:text-white transition-colors">
+          <button
+            onClick={() => setShowHowItWorks(true)}
+            className="mt-2 text-center font-display text-sm font-medium text-white/80 underline hover:text-white transition-colors"
+          >
             How does it work?
-          </p>
+          </button>
         </div>
+
+        {/* How It Works Modal */}
+        <HowItWorksModal 
+          isOpen={showHowItWorks} 
+          onClose={() => setShowHowItWorks(false)} 
+        />
       </div>
 
       {/* Footer - Created with Venice.ai */}

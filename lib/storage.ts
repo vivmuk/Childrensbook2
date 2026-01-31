@@ -13,6 +13,12 @@ interface TitlePage {
   title: string
 }
 
+interface Character {
+  name: string
+  type: string
+  traits: string[]
+}
+
 interface Book {
   id: string
   title: string
@@ -31,6 +37,8 @@ interface Book {
   setting?: string
   isSample?: boolean
   ownerId?: string // New field for user ownership
+  narratorVoice?: string
+  character?: Character
   prompts?: {
     story: string
     images: Array<{ pageNumber: number | 'cover'; prompt: string }>
