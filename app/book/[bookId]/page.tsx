@@ -88,14 +88,61 @@ export default function BookViewerPage() {
   const handleDownloadPDF = async () => {
     if (!book) return
 
-    // Open PDF page in new tab with download flag - browser will auto-trigger print dialog
-    // User can then choose "Save as PDF" from the print dialog
-    window.open(`/pdf/${bookId}?download=true`, '_blank')
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/pdf/${bookId}`)
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Error downloading PDF:', error)
+      alert('Failed to generate PDF. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleDownloadAudio = () => {
     if (!book || !book.audioUrl) return
     window.open(`/api/download-audio/${bookId}`, '_blank')
+  }
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/share/${bookId}`
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: book?.title || 'My KinderQuill Story',
+          text: `Check out this story: ${book?.title}`,
+          url: shareUrl,
+        })
+      } catch (err) {
+        // User cancelled or share failed, fallback to clipboard
+        copyToClipboard(shareUrl)
+      }
+    } else {
+      copyToClipboard(shareUrl)
+    }
+  }
+
+  const copyToClipboard = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      alert('Link copied to clipboard! Share it with friends and family.')
+    } catch (err) {
+      alert(`Share this link: ${url}`)
+    }
   }
 
   const handleDownloadHTML = () => {
@@ -408,7 +455,17 @@ export default function BookViewerPage() {
               {book.title}
             </h2>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Share Button */}
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
+              title="Share this story"
+            >
+              <Icon name="share" size={18} />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+            
             {/* Download HTML Button */}
             <button
               onClick={handleDownloadHTML}

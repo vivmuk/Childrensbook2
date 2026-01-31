@@ -23,7 +23,58 @@ const ILLUSTRATION_STYLES = [
   { value: 'tintin', label: 'Tintin Adventure Style', prompt: 'Hergé Tintin clear line style (ligne claire), clean precise outlines, flat colors, detailed backgrounds, European comic book style, adventure illustration' },
 ]
 
-const STORY_PROMPTS = [
+const STORY_LENGTHS = [
+  { value: '5', label: 'Quick Story (5 pages)', pages: 5, description: 'Perfect for bedtime' },
+  { value: '8', label: 'Standard Story (8 pages)', pages: 8, description: 'Our most popular choice' },
+  { value: '12', label: 'Epic Adventure (12 pages)', pages: 12, description: 'For the ultimate adventure' },
+]
+
+const STORY_TEMPLATES = [
+  {
+    id: 'bedtime',
+    name: '🌙 Bedtime Story',
+    description: 'Calm, soothing tales perfect for winding down',
+    prompt: 'A gentle bedtime story with a calm, soothing tone. Include soft imagery, peaceful settings, and a comforting ending that helps children relax and feel safe. The story should have a sleepy, dreamlike quality.',
+    example: 'A little cloud who helps the moon put the stars to sleep',
+  },
+  {
+    id: 'adventure',
+    name: '🗺️ Adventure Quest',
+    description: 'Exciting journeys and thrilling discoveries',
+    prompt: 'An exciting adventure story with brave characters, mysterious places to explore, and a quest or mission. Include moments of wonder, discovery, and triumph over challenges.',
+    example: 'A young explorer who discovers a map to a hidden treasure',
+  },
+  {
+    id: 'friendship',
+    name: '🤝 Friendship Tale',
+    description: 'Stories about making friends and kindness',
+    prompt: 'A heartwarming story about friendship, kindness, and connection. Show characters learning to understand each other, helping one another, and the joy of true friendship.',
+    example: 'Two unlikely animals who become best friends',
+  },
+  {
+    id: 'learning',
+    name: '📚 Learning Journey',
+    description: 'Educational stories that teach while entertaining',
+    prompt: 'An educational story that teaches a valuable lesson or introduces interesting facts about nature, science, or the world. Make learning fun through engaging characters and situations.',
+    example: 'A curious caterpillar who learns about metamorphosis',
+  },
+  {
+    id: 'birthday',
+    name: '🎂 Birthday Special',
+    description: 'Perfect for birthday celebrations',
+    prompt: 'A festive birthday story full of joy, celebration, and special surprises. Include party elements, gifts, cake, and the magic of birthday wishes coming true.',
+    example: 'A magical birthday party where balloons come to life',
+  },
+  {
+    id: 'custom',
+    name: '✨ Custom Story',
+    description: 'Create your own unique tale',
+    prompt: '',
+    example: 'Write your own story idea below',
+  },
+]
+
+const RANDOM_PROMPTS = [
   'A brave little mouse who dreams of becoming a space explorer',
   'A magical garden where plants tell stories and flowers sing',
   'A young knight who is afraid of the dark but must save the kingdom',
@@ -56,6 +107,8 @@ export default function GeneratePage() {
   const [storyIdea, setStoryIdea] = useState('')
   const [ageRange, setAgeRange] = useState('2nd')
   const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
+  const [storyLength, setStoryLength] = useState('8')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [bookId, setBookId] = useState<string | null>(null)
@@ -125,6 +178,12 @@ export default function GeneratePage() {
         token = await user.getIdToken()
       }
 
+      // Build full story prompt with template if selected
+      const template = STORY_TEMPLATES.find(t => t.id === selectedTemplate)
+      const fullStoryIdea = template && template.id !== 'custom' 
+        ? `${template.prompt}\n\nStory idea: ${storyIdea}`
+        : storyIdea
+
       const response = await fetch('/api/generate-book', {
         method: 'POST',
         headers: {
@@ -132,9 +191,10 @@ export default function GeneratePage() {
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
         body: JSON.stringify({
-          storyIdea,
+          storyIdea: fullStoryIdea,
           ageRange,
           illustrationStyle: ILLUSTRATION_STYLES.find(s => s.value === illustrationStyle)?.prompt || illustrationStyle,
+          storyLength: parseInt(storyLength),
         }),
       })
 
@@ -190,9 +250,45 @@ export default function GeneratePage() {
               />
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold mb-4 text-gray-800 dark:text-gray-100">
+            <h1 className="text-3xl sm:text-4xl font-bold mb-2 text-gray-800 dark:text-gray-100">
               Dream Up a Story
             </h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Choose a template or create your own magical tale
+            </p>
+
+            {/* Story Templates */}
+            <div className="w-full mb-4">
+              <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
+                Story Type
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {STORY_TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => {
+                      setSelectedTemplate(template.id)
+                      if (template.id !== 'custom' && !storyIdea) {
+                        setStoryIdea(template.example)
+                      }
+                    }}
+                    disabled={isGenerating}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                      selectedTemplate === template.id
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-purple-300'
+                    } disabled:opacity-50`}
+                  >
+                    <div className="font-semibold text-sm text-gray-800 dark:text-gray-200">
+                      {template.name}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {template.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Story Input */}
             <div className="w-full mb-3">
@@ -202,7 +298,7 @@ export default function GeneratePage() {
                 </label>
                 <button
                   onClick={() => {
-                    const randomPrompt = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)]
+                    const randomPrompt = RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)]
                     setStoryIdea(randomPrompt)
                   }}
                   disabled={isGenerating}
@@ -216,8 +312,8 @@ export default function GeneratePage() {
               <textarea
                 value={storyIdea}
                 onChange={(e) => setStoryIdea(e.target.value)}
-                className="w-full min-h-32 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
-                placeholder="A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."
+                className="w-full min-h-28 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
+                placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || "A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."}
                 disabled={isGenerating}
               />
             </div>
@@ -244,6 +340,25 @@ export default function GeneratePage() {
             {/* Advanced Options */}
             {showAdvanced && (
               <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-4 shadow-lg mb-3 backdrop-blur-sm">
+                <div className="flex flex-col gap-2">
+                  <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Icon name="menu_book" className="text-lg" size={20} />
+                    Story Length
+                  </label>
+                  <select
+                    value={storyLength}
+                    onChange={(e) => setStoryLength(e.target.value)}
+                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    disabled={isGenerating}
+                  >
+                    {STORY_LENGTHS.map((length) => (
+                      <option key={length.value} value={length.value}>
+                        {length.label} — {length.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     <Icon name="child_care" className="text-lg" size={20} />

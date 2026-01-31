@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { storyIdea, ageRange, illustrationStyle } = await request.json()
+    const { storyIdea, ageRange, illustrationStyle, storyLength = 8 } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
       return NextResponse.json(
@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Validate story length
+    const pageCount = Math.min(Math.max(parseInt(storyLength) || 8, 5), 12)
 
     const bookId = `book_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const complexity = AGE_TO_COMPLEXITY[ageRange] || AGE_TO_COMPLEXITY['2nd']
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
 
 CRITICAL REQUIREMENTS:
 - Age range: ${ageRange} grade (${complexity})
-- Create a story with 6-8 pages
+- Create a story with exactly ${pageCount} pages
 - Each page MUST have 6-8 complete, well-crafted sentences (not just 2-4)
 - Write at an expert professional level - this should be publication-quality children's literature
 - Use rich, age-appropriate vocabulary that expands young minds
