@@ -1,10 +1,30 @@
-import Database from 'better-sqlite3'
 import { join } from 'path'
 import { ensureDataDirectory } from './ensure-data-dir'
 
-let db: Database.Database | null = null
+// SQLite is optional - app works without it using fallback storage
+let Database: any = null
+let db: any = null
+let sqliteAvailable = false
 
-export function getDatabase(): Database.Database {
+// Try to load better-sqlite3
+try {
+  Database = require('better-sqlite3')
+  sqliteAvailable = true
+  console.log('SQLite database available')
+} catch (error) {
+  console.log('SQLite not available, using fallback storage')
+  sqliteAvailable = false
+}
+
+export function isSQLiteAvailable(): boolean {
+  return sqliteAvailable
+}
+
+export function getDatabase(): any {
+  if (!sqliteAvailable) {
+    return null
+  }
+  
   if (!db) {
     ensureDataDirectory()
     const dbPath = join(process.cwd(), 'data', 'kinderquill.db')
@@ -16,7 +36,7 @@ export function getDatabase(): Database.Database {
 }
 
 function initDatabase() {
-  if (!db) return
+  if (!db || !sqliteAvailable) return
 
   // Books table
   db.exec(`

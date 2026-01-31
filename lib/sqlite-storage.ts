@@ -1,5 +1,14 @@
-import { getDatabase } from './sqlite'
+import { getDatabase, isSQLiteAvailable } from './sqlite'
 import type { Book, BookPage, TitlePage } from './storage'
+
+// In-memory fallback storage when SQLite isn't available
+const memoryStorage = {
+  books: new Map<string, any>(),
+  pages: new Map<string, any[]>(),
+  userLibrary: new Map<string, Map<string, any>>(),
+  parentSettings: new Map<string, any>(),
+  readingStats: [] as any[],
+}
 
 export interface SQLiteBook {
   id: string
@@ -60,7 +69,18 @@ function dbBookToBook(dbBook: SQLiteBook): Book {
 }
 
 export async function getBookFromSQLite(bookId: string): Promise<Book | undefined> {
+  if (!isSQLiteAvailable()) {
+    // Use in-memory fallback
+    const memBook = memoryStorage.books.get(bookId)
+    if (!memBook) return undefined
+    
+    const book = dbBookToBook(memBook)
+    book.pages = memoryStorage.pages.get(bookId) || []
+    return book
+  }
+  
   const db = getDatabase()
+  if (!db) return undefined
   
   const bookRow = db.prepare('SELECT * FROM books WHERE id = ?').get(bookId) as SQLiteBook | undefined
   
@@ -80,7 +100,34 @@ export async function getBookFromSQLite(bookId: string): Promise<Book | undefine
 }
 
 export async function setBookInSQLite(book: Book): Promise<void> {
+  if (!isSQLiteAvailable()) {
+    // Use in-memory fallback
+    memoryStorage.books.set(book.id, {
+      id: book.id,
+      title: book.title,
+      title_page_image: book.titlePage?.image || null,
+      age_range: book.ageRange,
+      illustration_style: book.illustrationStyle,
+      status: book.status,
+      audio_url: book.audioUrl || null,
+      created_at: book.createdAt,
+      expected_pages: book.expectedPages || 8,
+      generation_progress: book.generationProgress || 0,
+      narrator_voice: book.narratorVoice || 'default',
+      character_name: book.character?.name || null,
+      character_type: book.character?.type || null,
+      character_traits: book.character?.traits ? JSON.stringify(book.character.traits) : null,
+      owner_id: book.ownerId || null,
+    })
+    
+    if (book.pages && book.pages.length > 0) {
+      memoryStorage.pages.set(book.id, book.pages)
+    }
+    return
+  }
+
   const db = getDatabase()
+  if (!db) return
 
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO books (
@@ -125,7 +172,20 @@ export async function setBookInSQLite(book: Book): Promise<void> {
 }
 
 export async function getUserBooksFromSQLite(userId: string): Promise<Book[]> {
+  if (!isSQLiteAvailable()) {
+    // Use in-memory fallback
+    const books: Book[] = []
+    for (const [id, memBook] of memoryStorage.books.entries()) {
+      if (memBook.owner_id === userId) {
+        const book = await getBookFromSQLite(id)
+        if (book) books.push(book)
+      }
+    }
+    return books.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }
+  
   const db = getDatabase()
+  if (!db) return []
   
   const books = db.prepare('SELECT * FROM books WHERE owner_id = ? ORDER BY created_at DESC').all(userId) as SQLiteBook[]
   
@@ -139,12 +199,29 @@ export async function getUserBooksFromSQLite(userId: string): Promise<Book[]> {
 }
 
 export async function deleteBookFromSQLite(bookId: string): Promise<void> {
+  if (!isSQLiteAvailable()) {
+    memoryStorage.books.delete(bookId)
+    memoryStorage.pages.delete(bookId)
+    return
+  }
+  
   const db = getDatabase()
+  if (!db) return
   db.prepare('DELETE FROM books WHERE id = ?').run(bookId)
 }
 
 export async function toggleFavoriteInSQLite(userId: string, bookId: string): Promise<boolean> {
+  if (!isSQLiteAvailable()) {
+    const userLib = memoryStorage.userLibrary.get(userId) || new Map()
+    const existing = userLib.get(bookId)
+    const newValue = existing?.is_favorite ? 0 : 1
+    userLib.set(bookId, { ...existing, is_favorite: newValue, book_id: bookId })
+    memoryStorage.userLibrary.set(userId, userLib)
+    return newValue === 1
+  }
+  
   const db = getDatabase()
+  if (!db) return false
   
   const existing = db.prepare('SELECT * FROM user_library WHERE user_id = ? AND book_id = ?').get(userId, bookId) as any
   
@@ -159,14 +236,51 @@ export async function toggleFavoriteInSQLite(userId: string, bookId: string): Pr
 }
 
 export async function getFavoritesFromSQLite(userId: string): Promise<string[]> {
+  if (!isSQLiteAvailable()) {
+    const userLib = memoryStorage.userLibrary.get(userId)
+    if (!userLib) return []
+    return Array.from(userLib.entries())
+      .filter(([_, data]) => data.is_favorite === 1)
+      .map(([bookId, _]) => bookId)
+  }
+  
   const db = getDatabase()
+  if (!db) return []
   
   const rows = db.prepare('SELECT book_id FROM user_library WHERE user_id = ? AND is_favorite = 1').all(userId) as any[]
   return rows.map(r => r.book_id)
 }
 
 export async function recordReadingInSQLite(userId: string, bookId: string, durationSeconds: number, completed: boolean): Promise<void> {
+  if (!isSQLiteAvailable()) {
+    // Update book read count
+    const book = memoryStorage.books.get(bookId)
+    if (book) {
+      book.read_count = (book.read_count || 0) + 1
+      book.last_read_at = new Date().toISOString()
+    }
+    
+    // Record in user library
+    const userLib = memoryStorage.userLibrary.get(userId) || new Map()
+    const existing = userLib.get(bookId) || { book_id: bookId }
+    existing.read_count = (existing.read_count || 0) + 1
+    existing.last_read_at = new Date().toISOString()
+    userLib.set(bookId, existing)
+    memoryStorage.userLibrary.set(userId, userLib)
+    
+    // Record stats
+    memoryStorage.readingStats.push({
+      user_id: userId,
+      book_id: bookId,
+      read_duration_seconds: durationSeconds,
+      completed: completed ? 1 : 0,
+      read_at: new Date().toISOString(),
+    })
+    return
+  }
+  
   const db = getDatabase()
+  if (!db) return
   
   // Update book read count
   db.prepare(`
@@ -204,7 +318,40 @@ export async function getReadingStatsFromSQLite(userId: string): Promise<{
   favoriteBooks: string[]
   recentBooks: Book[]
 }> {
+  if (!isSQLiteAvailable()) {
+    // Calculate from memory
+    const userStats = memoryStorage.readingStats.filter(s => s.user_id === userId)
+    const totalBooks = new Set(userStats.map(s => s.book_id)).size
+    const totalTime = userStats.reduce((sum, s) => sum + (s.read_duration_seconds || 0), 0)
+    const favorites = await getFavoritesFromSQLite(userId)
+    
+    // Get recent books
+    const recent: Book[] = []
+    const userLib = memoryStorage.userLibrary.get(userId)
+    if (userLib) {
+      const sorted = Array.from(userLib.entries())
+        .filter(([_, data]) => data.last_read_at)
+        .sort((a, b) => new Date(b[1].last_read_at).getTime() - new Date(a[1].last_read_at).getTime())
+        .slice(0, 5)
+      
+      for (const [bookId, _] of sorted) {
+        const book = await getBookFromSQLite(bookId)
+        if (book) recent.push(book)
+      }
+    }
+    
+    return {
+      totalBooksRead: totalBooks,
+      totalReadingTime: totalTime,
+      favoriteBooks: favorites,
+      recentBooks: recent,
+    }
+  }
+  
   const db = getDatabase()
+  if (!db) {
+    return { totalBooksRead: 0, totalReadingTime: 0, favoriteBooks: [], recentBooks: [] }
+  }
   
   // Get reading stats
   const stats = db.prepare(`
@@ -247,7 +394,12 @@ export async function getParentSettingsFromSQLite(userId: string): Promise<{
   allowSharing: boolean
   requireApproval: boolean
 } | undefined> {
+  if (!isSQLiteAvailable()) {
+    return memoryStorage.parentSettings.get(userId)
+  }
+  
   const db = getDatabase()
+  if (!db) return undefined
   
   const settings = db.prepare('SELECT * FROM parent_settings WHERE user_id = ?').get(userId) as any
   
@@ -270,7 +422,19 @@ export async function setParentSettingsInSQLite(
     requireApproval?: boolean
   }
 ): Promise<void> {
+  if (!isSQLiteAvailable()) {
+    const existing = memoryStorage.parentSettings.get(userId) || {
+      contentFilterEnabled: true,
+      maxBooksPerDay: 10,
+      allowSharing: true,
+      requireApproval: false,
+    }
+    memoryStorage.parentSettings.set(userId, { ...existing, ...settings })
+    return
+  }
+  
   const db = getDatabase()
+  if (!db) return
   
   const existing = db.prepare('SELECT * FROM parent_settings WHERE user_id = ?').get(userId) as any
   
