@@ -1,10 +1,12 @@
 import Database from 'better-sqlite3'
 import { join } from 'path'
+import { ensureDataDirectory } from './ensure-data-dir'
 
 let db: Database.Database | null = null
 
 export function getDatabase(): Database.Database {
   if (!db) {
+    ensureDataDirectory()
     const dbPath = join(process.cwd(), 'data', 'kinderquill.db')
     db = new Database(dbPath)
     db.pragma('journal_mode = WAL')
