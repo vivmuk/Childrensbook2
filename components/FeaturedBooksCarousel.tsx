@@ -64,9 +64,9 @@ export function FeaturedBooksCarousel() {
         Featured Stories
       </h3>
       
-      <div className="relative">
+      <div className="relative max-w-md mx-auto">
         {/* Main Book Display */}
-        <div className="relative aspect-[16/9] max-h-64 rounded-2xl overflow-hidden shadow-2xl border-4 border-white/30">
+        <div className="relative aspect-[16/9] rounded-2xl overflow-hidden shadow-2xl border-4 border-white/30">
           {currentBook.titlePage ? (
             <img
               src={currentBook.titlePage.image}

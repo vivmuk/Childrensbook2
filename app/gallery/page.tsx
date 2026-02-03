@@ -33,7 +33,7 @@ export default function GalleryPage() {
         const response = await fetch('/api/sample-books')
         if (response.ok) {
           const data = await response.json()
-          setBooks(data)
+          setBooks(data.books || [])
         }
       } catch (error) {
         console.error('Error fetching books:', error)
