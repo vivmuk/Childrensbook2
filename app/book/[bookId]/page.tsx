@@ -306,15 +306,25 @@ export default function BookViewerPage() {
       <div class="header">
         <h1>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1>
       </div>
+      ${book.titlePage ? `
+      <div class="page active" id="page-title">
+        <img src="${book.titlePage.image}" alt="${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}" class="page-image" />
+        <div class="page-text" style="text-align: center; font-size: 24px; font-weight: bold;">
+          ${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+          <div style="font-size: 14px; font-weight: normal; margin-top: 10px; color: #6b7280;">A KinderQuill Story</div>
+        </div>
+      </div>
+      ` : ''}
       ${book.pages.map((page, index) => `
-      <div class="page ${index === 0 ? 'active' : ''}" id="page-${index}">
+      <div class="page ${!book.titlePage && index === 0 ? 'active' : ''}" id="page-${index}">
         <img src="${page.image}" alt="Page ${index + 1}" class="page-image" />
         <div class="page-text">${page.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
       </div>
     `).join('')}
     <div class="page-indicators">
+      ${book.titlePage ? '<div class="indicator active" onclick="goToPage(0)"></div>' : ''}
       ${book.pages.map((_, index) => `
-        <div class="indicator ${index === 0 ? 'active' : ''}" onclick="goToPage(${index})"></div>
+        <div class="indicator ${!book.titlePage && index === 0 ? 'active' : ''}" onclick="goToPage(${book.titlePage ? index + 1 : index})"></div>
       `).join('')}
     </div>
     <div class="navigation">
@@ -328,8 +338,9 @@ export default function BookViewerPage() {
   </div>
   <script>
     let currentPage = 0;
-    const totalPages = ${book.pages.length};
-    
+    const hasTitlePage = ${book.titlePage ? 'true' : 'false'};
+    const totalPages = ${book.pages.length} + (hasTitlePage ? 1 : 0);
+
     function showPage(index) {
       document.querySelectorAll('.page').forEach((page, i) => {
         page.classList.toggle('active', i === index);

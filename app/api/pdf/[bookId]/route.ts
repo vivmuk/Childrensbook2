@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBook } from '@/lib/storage'
 import puppeteer from 'puppeteer-core'
+import chromium from '@sparticuz/chromium'
 
 export async function GET(
   request: NextRequest,
@@ -8,7 +9,7 @@ export async function GET(
 ) {
   try {
     const book = await getBook(params.bookId)
-    
+
     if (!book) {
       return NextResponse.json(
         { error: 'Book not found' },
@@ -26,10 +27,12 @@ export async function GET(
     // Generate HTML content for PDF
     const htmlContent = generatePDFHTML(book)
 
-    // Launch puppeteer
+    // Launch puppeteer with @sparticuz/chromium for serverless environments
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     })
 
     try {
