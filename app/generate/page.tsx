@@ -260,7 +260,7 @@ export default function GeneratePage() {
           setIsGenerating(false)
           return
         }
-        throw new Error('Failed to generate book')
+        throw new Error(errorData.error || 'Failed to generate book')
       }
 
       const data = await response.json()
