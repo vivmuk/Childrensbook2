@@ -116,8 +116,8 @@ Remember: Each page's text should be 6-8 sentences of expert-quality children's 
 
     console.log('Generating story with Venice API...')
     
-    // Model fallback strategy: try llama-3.3-70b first, then mistral-31-24b
-    const models = ['llama-3.3-70b', 'mistral-31-24b']
+    // Model fallback strategy: try gemini-3-flash-preview first, then nvidia-nemotron-3-nano-30b-a3b
+    const models = ['gemini-3-flash-preview', 'nvidia-nemotron-3-nano-30b-a3b']
     let completionResponse: Response | null = null
     let lastError = ''
     let modelUsed = ''
