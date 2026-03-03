@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
 
@@ -126,11 +126,10 @@ import { Header } from '@/components/Header'
 
 export default function GeneratePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, loading } = useAuth()
-  const [storyIdea, setStoryIdea] = useState(() => searchParams.get('idea') || '')
-  const [ageRange, setAgeRange] = useState(() => searchParams.get('ageRange') || '2nd')
-  const [illustrationStyle, setIllustrationStyle] = useState(() => searchParams.get('illustrationStyle') || 'ghibli')
+  const [storyIdea, setStoryIdea] = useState('')
+  const [ageRange, setAgeRange] = useState('2nd')
+  const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
   const [storyLength, setStoryLength] = useState('8')
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -139,16 +138,26 @@ export default function GeneratePage() {
   const [generationProgress, setGenerationProgress] = useState(0)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginMessage, setLoginMessage] = useState('')
-  
+
   // Character Builder
   const [characterName, setCharacterName] = useState('')
   const [characterType, setCharacterType] = useState('animal')
   const [selectedTraits, setSelectedTraits] = useState<string[]>(['brave', 'curious'])
   const [showCharacterBuilder, setShowCharacterBuilder] = useState(false)
-  
+
   // Voice Selection
   const [narratorVoice, setNarratorVoice] = useState('default')
 
+  // Read URL params on the client side (avoids useSearchParams prerender issues)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const idea = params.get('idea')
+    const age = params.get('ageRange')
+    const style = params.get('illustrationStyle')
+    if (idea) setStoryIdea(idea)
+    if (age) setAgeRange(age)
+    if (style) setIllustrationStyle(style)
+  }, [])
 
   useEffect(() => {
     if (!bookId || !isGenerating) return
@@ -591,4 +600,5 @@ export default function GeneratePage() {
     </div >
   )
 }
+
 
