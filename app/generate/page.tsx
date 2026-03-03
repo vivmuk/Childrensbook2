@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
@@ -124,7 +124,7 @@ import { useAuth } from '@/components/AuthContext'
 import { LoginModal } from '@/components/LoginModal'
 import { Header } from '@/components/Header'
 
-export default function GeneratePage() {
+function GeneratePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, loading } = useAuth()
@@ -589,6 +589,14 @@ export default function GeneratePage() {
         </p>
       </footer>
     </div >
+  )
+}
+
+export default function GeneratePage() {
+  return (
+    <Suspense>
+      <GeneratePageContent />
+    </Suspense>
   )
 }
 
