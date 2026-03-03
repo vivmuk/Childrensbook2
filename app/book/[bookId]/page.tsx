@@ -85,31 +85,8 @@ export default function BookViewerPage() {
     }, 150)
   }
 
-  const handleDownloadPDF = async () => {
-    if (!book) return
-
-    setIsLoading(true)
-    try {
-      const response = await fetch(`/api/pdf/${bookId}`)
-      if (!response.ok) {
-        throw new Error('Failed to generate PDF')
-      }
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (error) {
-      console.error('Error downloading PDF:', error)
-      alert('Failed to generate PDF. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
+  const handleDownloadPDF = () => {
+    window.open(`/pdf/${bookId}?download=true`, '_blank')
   }
 
   const handleDownloadAudio = () => {
