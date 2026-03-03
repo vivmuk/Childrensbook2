@@ -77,26 +77,8 @@ export default function PDFViewPage() {
     )
   }
 
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(`/api/generate-pdf/${bookId}`)
-      if (response.ok && response.headers.get('content-type')?.includes('application/pdf')) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
-      } else {
-        window.print()
-      }
-    } catch (error) {
-      console.error('Error downloading PDF:', error)
-      window.print()
-    }
+  const handleDownload = () => {
+    window.print()
   }
 
   return (

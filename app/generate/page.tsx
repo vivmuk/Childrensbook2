@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
 
@@ -126,10 +126,11 @@ import { Header } from '@/components/Header'
 
 export default function GeneratePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, loading } = useAuth()
-  const [storyIdea, setStoryIdea] = useState('')
-  const [ageRange, setAgeRange] = useState('2nd')
-  const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
+  const [storyIdea, setStoryIdea] = useState(() => searchParams.get('idea') || '')
+  const [ageRange, setAgeRange] = useState(() => searchParams.get('ageRange') || '2nd')
+  const [illustrationStyle, setIllustrationStyle] = useState(() => searchParams.get('illustrationStyle') || 'ghibli')
   const [storyLength, setStoryLength] = useState('8')
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
