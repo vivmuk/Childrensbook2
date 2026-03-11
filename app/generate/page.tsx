@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
-import { useAuth } from '@/components/AuthContext'
-import { LoginModal } from '@/components/LoginModal'
 import { Header } from '@/components/Header'
 
 // ── Static data ─────────────────────────────────────────────────────────────
+
+const FREE_BOOK_LIMIT = 3
 
 const AGE_RANGES = [
   { value: 'kindergarten', label: 'Kindergarten (age 5–6)' },
@@ -132,14 +132,42 @@ const RANDOM_PROMPTS = [
   'A magical seed that grows into a tree of wishes',
 ]
 
-// ── Venice API Key Instructions Modal ───────────────────────────────────────
+// ── LocalStorage helpers ─────────────────────────────────────────────────────
+
+const LS_BOOK_COUNT = 'kinderquill_free_book_count'
+const LS_API_KEY = 'kinderquill_venice_api_key'
+const LS_MY_BOOKS = 'kinderquill_my_books'
+
+function getFreeBookCount(): number {
+  try { return parseInt(localStorage.getItem(LS_BOOK_COUNT) || '0', 10) || 0 } catch { return 0 }
+}
+
+function incrementFreeBookCount() {
+  try { localStorage.setItem(LS_BOOK_COUNT, String(getFreeBookCount() + 1)) } catch {}
+}
+
+function saveBookToLibrary(meta: {
+  id: string; title: string; ageRange: string; illustrationStyle: string;
+  createdAt: string; titlePageImage?: string | null
+}) {
+  try {
+    const existing = JSON.parse(localStorage.getItem(LS_MY_BOOKS) || '[]')
+    // Avoid duplicates
+    const filtered = existing.filter((b: { id: string }) => b.id !== meta.id)
+    filtered.unshift(meta)
+    localStorage.setItem(LS_MY_BOOKS, JSON.stringify(filtered.slice(0, 50)))
+  } catch {}
+}
+
+// ── Venice API Key Modal ─────────────────────────────────────────────────────
 
 interface ApiKeyModalProps {
   onClose: () => void
   onSave: (key: string) => void
+  booksUsed: number
 }
 
-function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
+function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
   const [keyInput, setKeyInput] = useState('')
 
   return (
@@ -149,17 +177,30 @@ function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
         {/* Header */}
         <div className="text-center mb-4">
           <div className="text-5xl mb-2">🎉</div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your First Book Was Free!</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            {booksUsed >= FREE_BOOK_LIMIT ? `You've used all ${FREE_BOOK_LIMIT} free books!` : 'Add Your Venice API Key'}
+          </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-            To create more magical stories, you'll need your own free Venice AI API key.
+            To create more magical stories, add your own free Venice AI API key — it takes 2 minutes!
           </p>
         </div>
 
         {/* What is Venice */}
         <div className="bg-purple-50 dark:bg-purple-900/30 rounded-xl p-3 mb-4 border border-purple-200 dark:border-purple-700">
           <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
-            <span className="font-bold">Venice AI</span> is the AI service that powers your story and illustrations.
-            Venice offers a <span className="font-bold text-green-600 dark:text-green-400">free tier</span> that&apos;s perfect for creating children&apos;s books — you only need a few credits per book!
+            <span className="font-bold">Venice AI</span> is the AI service that powers your story and
+            illustrations. It offers a{' '}
+            <span className="font-bold text-green-600 dark:text-green-400">free tier</span> that&apos;s
+            perfect for children&apos;s books — you only need a few credits per book!
+          </p>
+        </div>
+
+        {/* AI education callout */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 mb-4 border border-blue-200 dark:border-blue-700">
+          <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+            🤖 <span className="font-semibold">Did you know?</span> By using your own API key you are
+            connecting directly to the same AI models that professionals use every day. You&apos;re
+            learning real AI technology!
           </p>
         </div>
 
@@ -173,7 +214,7 @@ function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
               { step: '1', text: 'Visit ', link: 'venice.ai', href: 'https://venice.ai', after: ' and create a free account' },
               { step: '2', text: 'Click your profile icon in the top-right corner', link: '', href: '', after: '' },
               { step: '3', text: 'Choose ', link: '"API Keys"', href: 'https://venice.ai/settings/api-keys', after: ' from the menu' },
-              { step: '4', text: 'Click ', link: '"Create API Key"', href: '', after: ' and give it a name' },
+              { step: '4', text: 'Click ', link: '"Create API Key"', href: '', after: ' and give it any name' },
               { step: '5', text: 'Copy your new key and paste it below!', link: '', href: '', after: '' },
             ].map(({ step, text, link, href, after }) => (
               <li key={step} className="flex gap-2.5 items-start">
@@ -197,7 +238,7 @@ function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
             href="https://venice.ai"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold rounded-xl shadow-md"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all"
           >
             <span>🌐</span> Open Venice.ai
           </a>
@@ -216,7 +257,7 @@ function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
             className="w-full rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-sm text-gray-800 dark:text-gray-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-            🔒 Stored only in your browser — never saved on our servers.
+            🔒 Stored only in your browser — never sent to our servers.
           </p>
         </div>
 
@@ -240,14 +281,68 @@ function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
             Save &amp; Generate ✨
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
 
-        {/* AI education note */}
-        <div className="mt-3 p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-          <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
-            🤖 <span className="font-semibold">Did you know?</span> You&apos;re using the same type of AI technology that powers tools used by professionals worldwide!
-          </p>
+// ── Free books counter badge ─────────────────────────────────────────────────
+
+function FreeBooksBadge({ used, hasApiKey }: { used: number; hasApiKey: boolean }) {
+  const remaining = Math.max(0, FREE_BOOK_LIMIT - used)
+
+  if (hasApiKey) {
+    return (
+      <div className="w-full mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🔑</span>
+          <p className="text-xs text-blue-800 dark:text-blue-300 font-medium">Venice API key active — unlimited books!</p>
         </div>
       </div>
+    )
+  }
+
+  if (remaining === 0) {
+    return (
+      <div className="w-full mb-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-xl px-3 py-2 flex items-center gap-2">
+        <span className="text-lg">⚠️</span>
+        <p className="text-xs text-orange-800 dark:text-orange-300 text-left">
+          <span className="font-bold">All {FREE_BOOK_LIMIT} free books used.</span>{' '}
+          Add your Venice API key below to continue creating!
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full mb-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🎁</span>
+          <p className="text-xs text-green-800 dark:text-green-300 font-bold">
+            {remaining} free {remaining === 1 ? 'book' : 'books'} remaining
+          </p>
+        </div>
+        <span className="text-xs text-green-600 dark:text-green-400 font-semibold">{used}/{FREE_BOOK_LIMIT} used</span>
+      </div>
+      {/* Progress dots */}
+      <div className="flex gap-1.5">
+        {Array.from({ length: FREE_BOOK_LIMIT }).map((_, i) => (
+          <div
+            key={i}
+            className={`h-2 flex-1 rounded-full transition-all ${
+              i < used
+                ? 'bg-green-400 dark:bg-green-500'
+                : 'bg-green-200 dark:bg-green-800'
+            }`}
+          />
+        ))}
+      </div>
+      {used > 0 && remaining > 0 && (
+        <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+          After {FREE_BOOK_LIMIT} free books, add a free Venice AI API key to keep creating.
+        </p>
+      )}
     </div>
   )
 }
@@ -256,7 +351,6 @@ function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
 
 export default function GeneratePage() {
   const router = useRouter()
-  const { user } = useAuth()
 
   // Form state
   const [storyIdea, setStoryIdea] = useState('')
@@ -278,14 +372,13 @@ export default function GeneratePage() {
   const [bookId, setBookId] = useState<string | null>(null)
   const [generationProgress, setGenerationProgress] = useState(0)
 
-  // Auth / modals
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const [loginMessage, setLoginMessage] = useState('')
-
   // Venice API key
   const [userApiKey, setUserApiKey] = useState<string>('')
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
-  const [freeBookUsed, setFreeBookUsed] = useState(false)
+  const [freeBookCount, setFreeBookCount] = useState(0)
+
+  // Ref to capture generation metadata for localStorage saving
+  const pendingMetaRef = useRef<{ ageRange: string; illustrationStyle: string } | null>(null)
 
   // Read URL params and saved API key on mount (client-side only)
   useEffect(() => {
@@ -297,10 +390,10 @@ export default function GeneratePage() {
     if (age) setAgeRange(age)
     if (style) setIllustrationStyle(style)
 
-    const savedKey = localStorage.getItem('kinderquill_venice_api_key')
+    const savedKey = localStorage.getItem(LS_API_KEY)
     if (savedKey) setUserApiKey(savedKey)
 
-    setFreeBookUsed(!!localStorage.getItem('kinderquill_free_book_used'))
+    setFreeBookCount(getFreeBookCount())
   }, [])
 
   // Poll for book completion
@@ -314,11 +407,22 @@ export default function GeneratePage() {
           const data = await res.json()
           if (data.status === 'completed') {
             setIsGenerating(false)
-            // Mark free book as used (after confirmed completed)
-            if (!freeBookUsed) {
-              localStorage.setItem('kinderquill_free_book_used', 'true')
-              setFreeBookUsed(true)
-            }
+
+            // Increment free book count and save metadata to library
+            incrementFreeBookCount()
+            const newCount = getFreeBookCount()
+            setFreeBookCount(newCount)
+
+            const meta = pendingMetaRef.current
+            saveBookToLibrary({
+              id: bookId,
+              title: data.title || 'My Story',
+              ageRange: meta?.ageRange || ageRange,
+              illustrationStyle: meta?.illustrationStyle || illustrationStyle,
+              createdAt: data.createdAt || new Date().toISOString(),
+              titlePageImage: data.titlePageImage ?? null,
+            })
+
             router.push(`/book/${bookId}`)
           } else if (data.status === 'generating') {
             setGenerationProgress(Math.min(95, data.progress || 0))
@@ -334,17 +438,17 @@ export default function GeneratePage() {
 
     const interval = setInterval(checkStatus, 2000)
     return () => clearInterval(interval)
-  }, [bookId, isGenerating, router, freeBookUsed])
+  }, [bookId, isGenerating, router, ageRange, illustrationStyle])
 
-  // Core generation function (accepts an optional key override for when user just saved a new key)
+  // Core generation function
   const doGenerate = async (overrideApiKey?: string) => {
     setIsGenerating(true)
     setGenerationProgress(0)
 
-    try {
-      let token = ''
-      if (user) token = await user.getIdToken()
+    // Capture metadata for library saving
+    pendingMetaRef.current = { ageRange, illustrationStyle }
 
+    try {
       const template = STORY_TEMPLATES.find(t => t.id === selectedTemplate)
       let fullStoryIdea =
         template && template.id !== 'custom'
@@ -359,10 +463,7 @@ export default function GeneratePage() {
 
       const res = await fetch('/api/generate-book', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyIdea: fullStoryIdea,
           ageRange,
@@ -403,15 +504,8 @@ export default function GeneratePage() {
       return
     }
 
-    // Check login / free-book limit for unauthenticated users
-    if (!user && freeBookUsed) {
-      setLoginMessage('You have already created your free book! Please sign in to create more magical stories and save them to your library.')
-      setShowLoginModal(true)
-      return
-    }
-
-    // After first book, require a Venice API key
-    if (freeBookUsed && !userApiKey) {
+    // After free limit, require a Venice API key
+    if (freeBookCount >= FREE_BOOK_LIMIT && !userApiKey) {
       setShowApiKeyModal(true)
       return
     }
@@ -420,26 +514,23 @@ export default function GeneratePage() {
   }
 
   const handleApiKeySave = (key: string) => {
-    localStorage.setItem('kinderquill_venice_api_key', key)
+    localStorage.setItem(LS_API_KEY, key)
     setUserApiKey(key)
     setShowApiKeyModal(false)
     doGenerate(key)
   }
 
+  const timeEstimate = storyLength === '5' ? '~1 min' : storyLength === '8' ? '~2 min' : '~3–4 min'
+
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       <Header title="Create Your Story" />
-
-      <LoginModal
-        isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        message={loginMessage}
-      />
 
       {showApiKeyModal && (
         <VeniceApiKeyModal
           onClose={() => setShowApiKeyModal(false)}
           onSave={handleApiKeySave}
+          booksUsed={freeBookCount}
         />
       )}
 
@@ -451,7 +542,7 @@ export default function GeneratePage() {
         ) : (
           <>
             {/* Logo */}
-            <div className="mx-auto w-full max-w-[110px] mb-3 mt-1">
+            <div className="mx-auto w-full max-w-[90px] mb-3 mt-1">
               <div
                 className="aspect-square w-full bg-contain bg-center bg-no-repeat rounded-xl shadow-md"
                 style={{
@@ -468,17 +559,10 @@ export default function GeneratePage() {
               Powered by AI — choose a template or invent your own magical tale
             </p>
 
-            {/* Free-book notice */}
-            {!freeBookUsed && (
-              <div className="w-full mb-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2 flex items-center gap-2">
-                <span className="text-lg">🎁</span>
-                <p className="text-xs text-green-800 dark:text-green-300 text-left">
-                  <span className="font-bold">Your first book is FREE!</span> No account needed. After that, use your free Venice AI API key.
-                </p>
-              </div>
-            )}
+            {/* Free books counter */}
+            <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
 
-            {/* API key status */}
+            {/* API key management */}
             {userApiKey && (
               <div className="w-full mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -487,7 +571,7 @@ export default function GeneratePage() {
                 </div>
                 <button
                   onClick={() => {
-                    localStorage.removeItem('kinderquill_venice_api_key')
+                    localStorage.removeItem(LS_API_KEY)
                     setUserApiKey('')
                   }}
                   className="text-xs text-red-500 dark:text-red-400 hover:underline"
@@ -532,7 +616,9 @@ export default function GeneratePage() {
               {selectedTemplate === 'ai-adventure' && (
                 <div className="mt-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
-                    🤖 <span className="font-semibold">AI Adventure</span> — This special template teaches kids about Artificial Intelligence through a magical story, weaving in real AI concepts in a fun, age-appropriate way!
+                    🤖 <span className="font-semibold">AI Adventure</span> — This special template
+                    teaches kids about Artificial Intelligence through a magical story, weaving in
+                    real AI concepts in a fun, age-appropriate way!
                   </p>
                 </div>
               )}
@@ -746,9 +832,14 @@ export default function GeneratePage() {
                 <Icon name="auto_awesome" size={22} />
               </button>
 
-              {/* Time estimate */}
+              {/* Time + API key prompt */}
               <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
-                ⏱ Takes about {storyLength === '5' ? '1 min' : storyLength === '8' ? '2 min' : '3 min'} to create your book
+                ⏱ Takes {timeEstimate} to create your book
+                {freeBookCount >= FREE_BOOK_LIMIT && !userApiKey && (
+                  <span className="block text-orange-500 dark:text-orange-400 font-semibold mt-1">
+                    Add your Venice API key to generate more books
+                  </span>
+                )}
               </p>
             </div>
           </>

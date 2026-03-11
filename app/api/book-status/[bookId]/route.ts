@@ -24,6 +24,12 @@ export async function GET(
       totalPages: book.expectedPages || 8,
       expectedPages: book.expectedPages || 8,
       pages: book.pages || [],
+      // Include metadata for client-side localStorage saving
+      title: book.title,
+      ageRange: book.ageRange,
+      illustrationStyle: book.illustrationStyle,
+      createdAt: book.createdAt,
+      titlePageImage: book.titlePage?.image ?? null,
     })
   } catch (error: any) {
     console.error('Error getting book status:', error)
