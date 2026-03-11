@@ -4,14 +4,19 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
+import { useAuth } from '@/components/AuthContext'
+import { LoginModal } from '@/components/LoginModal'
+import { Header } from '@/components/Header'
+
+// ── Static data ─────────────────────────────────────────────────────────────
 
 const AGE_RANGES = [
-  { value: 'kindergarten', label: 'Kindergarten' },
-  { value: '1st', label: '1st Grade' },
-  { value: '2nd', label: '2nd Grade' },
-  { value: '3rd', label: '3rd Grade' },
-  { value: '4th', label: '4th Grade' },
-  { value: '5th', label: '5th Grade' },
+  { value: 'kindergarten', label: 'Kindergarten (age 5–6)' },
+  { value: '1st', label: '1st Grade (age 6–7)' },
+  { value: '2nd', label: '2nd Grade (age 7–8)' },
+  { value: '3rd', label: '3rd Grade (age 8–9)' },
+  { value: '4th', label: '4th Grade (age 9–10)' },
+  { value: '5th', label: '5th Grade (age 10–11)' },
 ]
 
 const ILLUSTRATION_STYLES = [
@@ -24,9 +29,9 @@ const ILLUSTRATION_STYLES = [
 ]
 
 const STORY_LENGTHS = [
-  { value: '5', label: 'Quick Story (5 pages)', pages: 5, description: 'Perfect for bedtime' },
-  { value: '8', label: 'Standard Story (8 pages)', pages: 8, description: 'Our most popular choice' },
-  { value: '12', label: 'Epic Adventure (12 pages)', pages: 12, description: 'For the ultimate adventure' },
+  { value: '5', label: 'Quick Story (5 pages)', pages: 5, description: 'Perfect for bedtime · ~1 min' },
+  { value: '8', label: 'Standard Story (8 pages)', pages: 8, description: 'Most popular · ~2 min' },
+  { value: '12', label: 'Epic Adventure (12 pages)', pages: 12, description: 'Ultimate adventure · ~3 min' },
 ]
 
 const CHARACTER_TYPES = [
@@ -38,8 +43,8 @@ const CHARACTER_TYPES = [
 ]
 
 const CHARACTER_TRAITS = [
-  'brave', 'curious', 'kind', 'funny', 'shy', 'clever', 
-  'adventurous', 'gentle', 'mischievous', 'loyal', 'creative', 'determined'
+  'brave', 'curious', 'kind', 'funny', 'shy', 'clever',
+  'adventurous', 'gentle', 'mischievous', 'loyal', 'creative', 'determined',
 ]
 
 const NARRATOR_VOICES = [
@@ -82,6 +87,13 @@ const STORY_TEMPLATES = [
     example: 'A curious caterpillar who learns about metamorphosis',
   },
   {
+    id: 'ai-adventure',
+    name: '🤖 AI Adventure',
+    description: 'Learn about AI through a magical story',
+    prompt: 'An educational and imaginative story that introduces children to Artificial Intelligence. Include a friendly AI or robot character who learns from examples, sometimes makes mistakes and improves, and helps people with kindness and creativity. Weave in age-appropriate concepts: AI learns from lots of data, AI can help with creative tasks, and humans and AI work best as partners. Make it magical, inspiring, and show that technology should be used responsibly and with heart. Include a gentle lesson about curiosity, learning from mistakes, and the wonder of discovery.',
+    example: 'A curious little robot named Pixel who learns to paint by studying millions of beautiful pictures',
+  },
+  {
     id: 'birthday',
     name: '🎂 Birthday Special',
     description: 'Perfect for birthday celebrations',
@@ -101,43 +113,159 @@ const RANDOM_PROMPTS = [
   'A brave little mouse who dreams of becoming a space explorer',
   'A magical garden where plants tell stories and flowers sing',
   'A young knight who is afraid of the dark but must save the kingdom',
-  'A shy robot who learns to make friends by sharing its inventions',
-  'A curious rabbit who discovers a secret door in the forest',
+  'A curious little robot named Pixel who learns to paint by studying millions of beautiful pictures',
+  'A friendly AI who lives inside a library and helps children find the perfect book',
   'A tiny dragon who cannot breathe fire but has a special hidden talent',
   'A young girl who finds a talking compass that leads to lost toys',
   'A brave squirrel who must save the forest from a mysterious silence',
-  'A friendly monster who lives under a child\'s bed and protects them from bad dreams',
+  'A robot who learns that the best way to help people is to listen first',
   'A magical paintbrush that brings drawings to life',
   'A little penguin who loves to dance but lives where everyone waddles',
   'A wise old tree that teaches children about nature through stories',
   'A brave little star who falls from the sky and must find its way home',
   'A young explorer who discovers a hidden underwater city',
   'A magical library where books choose their readers',
-  'A little fox who learns that being different makes you special',
+  'An AI assistant who helps a child write their very first poem',
   'A cloud who cannot make rain and must find its purpose',
   'A brave butterfly who embarks on a journey across the seasons',
   'A young inventor who creates a machine that makes everyone smile',
   'A magical seed that grows into a tree of wishes',
 ]
 
-import { useAuth } from '@/components/AuthContext'
-import { LoginModal } from '@/components/LoginModal'
-import { Header } from '@/components/Header'
+// ── Venice API Key Instructions Modal ───────────────────────────────────────
+
+interface ApiKeyModalProps {
+  onClose: () => void
+  onSave: (key: string) => void
+}
+
+function VeniceApiKeyModal({ onClose, onSave }: ApiKeyModalProps) {
+  const [keyInput, setKeyInput] = useState('')
+
+  return (
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-3xl p-5 max-w-sm w-full shadow-2xl border-2 border-purple-300 dark:border-purple-600 max-h-[92vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="text-center mb-4">
+          <div className="text-5xl mb-2">🎉</div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your First Book Was Free!</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
+            To create more magical stories, you'll need your own free Venice AI API key.
+          </p>
+        </div>
+
+        {/* What is Venice */}
+        <div className="bg-purple-50 dark:bg-purple-900/30 rounded-xl p-3 mb-4 border border-purple-200 dark:border-purple-700">
+          <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+            <span className="font-bold">Venice AI</span> is the AI service that powers your story and illustrations.
+            Venice offers a <span className="font-bold text-green-600 dark:text-green-400">free tier</span> that&apos;s perfect for creating children&apos;s books — you only need a few credits per book!
+          </p>
+        </div>
+
+        {/* Step-by-step instructions */}
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-1">
+            <span>🗝️</span> How to get your free API key:
+          </h3>
+          <ol className="space-y-2.5">
+            {[
+              { step: '1', text: 'Visit ', link: 'venice.ai', href: 'https://venice.ai', after: ' and create a free account' },
+              { step: '2', text: 'Click your profile icon in the top-right corner', link: '', href: '', after: '' },
+              { step: '3', text: 'Choose ', link: '"API Keys"', href: 'https://venice.ai/settings/api-keys', after: ' from the menu' },
+              { step: '4', text: 'Click ', link: '"Create API Key"', href: '', after: ' and give it a name' },
+              { step: '5', text: 'Copy your new key and paste it below!', link: '', href: '', after: '' },
+            ].map(({ step, text, link, href, after }) => (
+              <li key={step} className="flex gap-2.5 items-start">
+                <span className="w-5 h-5 rounded-full bg-purple-500 text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{step}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {text}
+                  {link && href && (
+                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-600 dark:text-purple-400 underline font-medium">{link}</a>
+                  )}
+                  {link && !href && <span className="font-medium text-gray-800 dark:text-gray-200">{link}</span>}
+                  {after}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Quick link */}
+        <div className="flex justify-center mb-4">
+          <a
+            href="https://venice.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold rounded-xl shadow-md"
+          >
+            <span>🌐</span> Open Venice.ai
+          </a>
+        </div>
+
+        {/* API Key Input */}
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            Paste Your Venice API Key
+          </label>
+          <input
+            type="password"
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            placeholder="venice-api-..."
+            className="w-full rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-sm text-gray-800 dark:text-gray-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            🔒 Stored only in your browser — never saved on our servers.
+          </p>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border-2 border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              const trimmed = keyInput.trim()
+              if (!trimmed) { alert('Please enter your Venice API key'); return }
+              onSave(trimmed)
+            }}
+            disabled={!keyInput.trim()}
+            className="flex-[2] py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
+          >
+            Save &amp; Generate ✨
+          </button>
+        </div>
+
+        {/* AI education note */}
+        <div className="mt-3 p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+          <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
+            🤖 <span className="font-semibold">Did you know?</span> You&apos;re using the same type of AI technology that powers tools used by professionals worldwide!
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page component ──────────────────────────────────────────────────────
 
 export default function GeneratePage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
+
+  // Form state
   const [storyIdea, setStoryIdea] = useState('')
   const [ageRange, setAgeRange] = useState('2nd')
   const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
   const [storyLength, setStoryLength] = useState('8')
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [bookId, setBookId] = useState<string | null>(null)
-  const [generationProgress, setGenerationProgress] = useState(0)
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const [loginMessage, setLoginMessage] = useState('')
+  const [narratorVoice, setNarratorVoice] = useState('default')
 
   // Character Builder
   const [characterName, setCharacterName] = useState('')
@@ -145,10 +273,21 @@ export default function GeneratePage() {
   const [selectedTraits, setSelectedTraits] = useState<string[]>(['brave', 'curious'])
   const [showCharacterBuilder, setShowCharacterBuilder] = useState(false)
 
-  // Voice Selection
-  const [narratorVoice, setNarratorVoice] = useState('default')
+  // Generation state
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [bookId, setBookId] = useState<string | null>(null)
+  const [generationProgress, setGenerationProgress] = useState(0)
 
-  // Read URL params on the client side (avoids useSearchParams prerender issues)
+  // Auth / modals
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [loginMessage, setLoginMessage] = useState('')
+
+  // Venice API key
+  const [userApiKey, setUserApiKey] = useState<string>('')
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
+  const [freeBookUsed, setFreeBookUsed] = useState(false)
+
+  // Read URL params and saved API key on mount (client-side only)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const idea = params.get('idea')
@@ -157,86 +296,72 @@ export default function GeneratePage() {
     if (idea) setStoryIdea(idea)
     if (age) setAgeRange(age)
     if (style) setIllustrationStyle(style)
+
+    const savedKey = localStorage.getItem('kinderquill_venice_api_key')
+    if (savedKey) setUserApiKey(savedKey)
+
+    setFreeBookUsed(!!localStorage.getItem('kinderquill_free_book_used'))
   }, [])
 
+  // Poll for book completion
   useEffect(() => {
     if (!bookId || !isGenerating) return
 
-    const checkBookStatus = async () => {
+    const checkStatus = async () => {
       try {
-        const response = await fetch(`/api/book-status/${bookId}`)
-        if (response.ok) {
-          const statusData = await response.json()
-          if (statusData.status === 'completed') {
+        const res = await fetch(`/api/book-status/${bookId}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.status === 'completed') {
             setIsGenerating(false)
-
-            // Track free book usage if unauthenticated
-            if (!user) {
-              localStorage.setItem('kinderquill_free_book_generated', 'true')
+            // Mark free book as used (after confirmed completed)
+            if (!freeBookUsed) {
+              localStorage.setItem('kinderquill_free_book_used', 'true')
+              setFreeBookUsed(true)
             }
-
             router.push(`/book/${bookId}`)
-          } else if (statusData.status === 'generating') {
-            // Use server-reported progress, or estimate from pages
-            const serverProgress = statusData.progress || 0
-            setGenerationProgress(Math.min(95, serverProgress))
+          } else if (data.status === 'generating') {
+            setGenerationProgress(Math.min(95, data.progress || 0))
+          } else if (data.status === 'error') {
+            setIsGenerating(false)
+            alert('Something went wrong while generating your book. Please try again.')
           }
         }
-      } catch (error) {
-        console.error('Error checking book status:', error)
+      } catch {
+        // ignore transient network errors while polling
       }
     }
 
-    const interval = setInterval(checkBookStatus, 2000)
+    const interval = setInterval(checkStatus, 2000)
     return () => clearInterval(interval)
-  }, [bookId, isGenerating, router, user])
+  }, [bookId, isGenerating, router, freeBookUsed])
 
-  const handleGenerate = async () => {
-    if (!storyIdea.trim()) {
-      alert('Please enter a story idea!')
-      return
-    }
-
-    // 1. Check Auth & Limit
-    if (!user) {
-      // Check if they already used their free book
-      const hasGeneratedFree = localStorage.getItem('kinderquill_free_book_generated')
-      if (hasGeneratedFree) {
-        setLoginMessage('You have already created your free book! Please sign in to create more magical stories and save them to your library.')
-        setShowLoginModal(true)
-        return
-      }
-    }
-
-    // If user is logged in, we let the API enforce the 20 limit (we could check here too if we fetched books beforehand)
-
+  // Core generation function (accepts an optional key override for when user just saved a new key)
+  const doGenerate = async (overrideApiKey?: string) => {
     setIsGenerating(true)
     setGenerationProgress(0)
 
     try {
-      // Get token if user is logged in
       let token = ''
-      if (user) {
-        token = await user.getIdToken()
-      }
+      if (user) token = await user.getIdToken()
 
-      // Build full story prompt with template and character if provided
       const template = STORY_TEMPLATES.find(t => t.id === selectedTemplate)
-      let fullStoryIdea = template && template.id !== 'custom' 
-        ? `${template.prompt}\n\nStory idea: ${storyIdea}`
-        : storyIdea
-      
-      // Add character details if character builder is used
+      let fullStoryIdea =
+        template && template.id !== 'custom'
+          ? `${template.prompt}\n\nStory idea: ${storyIdea}`
+          : storyIdea
+
       if (showCharacterBuilder && characterName) {
-        const characterDescription = `The main character is ${characterName}, a ${characterType} who is ${selectedTraits.join(', ')}.`
-        fullStoryIdea = `${characterDescription}\n\n${fullStoryIdea}`
+        fullStoryIdea = `The main character is ${characterName}, a ${characterType} who is ${selectedTraits.join(', ')}.\n\n${fullStoryIdea}`
       }
 
-      const response = await fetch('/api/generate-book', {
+      const effectiveApiKey = overrideApiKey || userApiKey
+
+      const res = await fetch('/api/generate-book', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
         body: JSON.stringify({
           storyIdea: fullStoryIdea,
@@ -244,57 +369,89 @@ export default function GeneratePage() {
           illustrationStyle: ILLUSTRATION_STYLES.find(s => s.value === illustrationStyle)?.prompt || illustrationStyle,
           storyLength: parseInt(storyLength),
           narratorVoice,
-          character: showCharacterBuilder ? {
-            name: characterName,
-            type: characterType,
-            traits: selectedTraits
-          } : undefined,
+          userVeniceApiKey: effectiveApiKey || undefined,
+          character: showCharacterBuilder
+            ? { name: characterName, type: characterType, traits: selectedTraits }
+            : undefined,
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        // If error is 403 (Limit reached), show alert
-        if (response.status === 403) {
-          alert(errorData.error)
+      if (!res.ok) {
+        const err = await res.json()
+        if (res.status === 403) {
+          alert(err.error)
           setIsGenerating(false)
           return
         }
-        throw new Error(errorData.error || 'Failed to generate book')
+        throw new Error(err.error || 'Failed to generate book')
       }
 
-      const data = await response.json()
+      const data = await res.json()
       setBookId(data.bookId)
-      // Story generation starts immediately, show initial progress
       setGenerationProgress(5)
-    } catch (error) {
-      console.error('Error generating book:', error)
-      alert('Failed to generate book. Please try again.')
+    } catch (err: any) {
+      console.error('Generation error:', err)
+      alert(err.message || 'Failed to generate book. Please try again.')
       setIsGenerating(false)
       setGenerationProgress(0)
     }
   }
 
+  const handleGenerate = async () => {
+    if (!storyIdea.trim()) {
+      alert('Please enter a story idea!')
+      return
+    }
+
+    // Check login / free-book limit for unauthenticated users
+    if (!user && freeBookUsed) {
+      setLoginMessage('You have already created your free book! Please sign in to create more magical stories and save them to your library.')
+      setShowLoginModal(true)
+      return
+    }
+
+    // After first book, require a Venice API key
+    if (freeBookUsed && !userApiKey) {
+      setShowApiKeyModal(true)
+      return
+    }
+
+    await doGenerate()
+  }
+
+  const handleApiKeySave = (key: string) => {
+    localStorage.setItem('kinderquill_venice_api_key', key)
+    setUserApiKey(key)
+    setShowApiKeyModal(false)
+    doGenerate(key)
+  }
+
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
       <Header title="Create Your Story" />
+
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
         message={loginMessage}
       />
 
+      {showApiKeyModal && (
+        <VeniceApiKeyModal
+          onClose={() => setShowApiKeyModal(false)}
+          onSave={handleApiKeySave}
+        />
+      )}
 
-      <main className="flex grow flex-col items-center justify-start px-4 py-2 text-center max-w-2xl mx-auto w-full overflow-y-auto min-h-0">
+      <main className="flex grow flex-col items-center justify-start px-4 py-2 text-center max-w-2xl mx-auto w-full">
         {isGenerating ? (
           <div className="flex-1 flex flex-col items-center justify-center w-full py-8">
             <GeneratingGame progress={generationProgress} />
           </div>
         ) : (
-          /* Form State */
           <>
-            {/* Illustration - Minimized */}
-            <div className="mx-auto w-full max-w-[120px] mb-3">
+            {/* Logo */}
+            <div className="mx-auto w-full max-w-[110px] mb-3 mt-1">
               <div
                 className="aspect-square w-full bg-contain bg-center bg-no-repeat rounded-xl shadow-md"
                 style={{
@@ -304,20 +461,49 @@ export default function GeneratePage() {
               />
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-bold mb-2 text-gray-800 dark:text-gray-100">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-1 text-gray-800 dark:text-gray-100">
               Dream Up a Story
             </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Choose a template or create your own magical tale
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-3">
+              Powered by AI — choose a template or invent your own magical tale
             </p>
+
+            {/* Free-book notice */}
+            {!freeBookUsed && (
+              <div className="w-full mb-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2 flex items-center gap-2">
+                <span className="text-lg">🎁</span>
+                <p className="text-xs text-green-800 dark:text-green-300 text-left">
+                  <span className="font-bold">Your first book is FREE!</span> No account needed. After that, use your free Venice AI API key.
+                </p>
+              </div>
+            )}
+
+            {/* API key status */}
+            {userApiKey && (
+              <div className="w-full mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔑</span>
+                  <p className="text-xs text-blue-800 dark:text-blue-300">Venice API key saved</p>
+                </div>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('kinderquill_venice_api_key')
+                    setUserApiKey('')
+                  }}
+                  className="text-xs text-red-500 dark:text-red-400 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
 
             {/* Story Templates */}
             <div className="w-full mb-4">
               <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
                 Story Type
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {STORY_TEMPLATES.map((template) => (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {STORY_TEMPLATES.map(template => (
                   <button
                     key={template.id}
                     onClick={() => {
@@ -326,22 +512,30 @@ export default function GeneratePage() {
                         setStoryIdea(template.example)
                       }
                     }}
-                    disabled={isGenerating}
-                    className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    className={`p-2.5 rounded-xl border-2 text-left transition-all ${
                       selectedTemplate === template.id
-                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 shadow-sm'
                         : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-purple-300'
-                    } disabled:opacity-50`}
+                    }`}
                   >
-                    <div className="font-semibold text-sm text-gray-800 dark:text-gray-200">
+                    <div className="font-semibold text-xs text-gray-800 dark:text-gray-200 leading-tight">
                       {template.name}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight hidden sm:block">
                       {template.description}
                     </div>
                   </button>
                 ))}
               </div>
+
+              {/* AI Adventure callout */}
+              {selectedTemplate === 'ai-adventure' && (
+                <div className="mt-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl">
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    🤖 <span className="font-semibold">AI Adventure</span> — This special template teaches kids about Artificial Intelligence through a magical story, weaving in real AI concepts in a fun, age-appropriate way!
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Story Input */}
@@ -351,53 +545,41 @@ export default function GeneratePage() {
                   Your Story Idea
                 </label>
                 <button
-                  onClick={() => {
-                    const randomPrompt = RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)]
-                    setStoryIdea(randomPrompt)
-                  }}
-                  disabled={isGenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Generate a random story idea"
+                  onClick={() => setStoryIdea(RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)])}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-200 rounded-lg transition-colors"
                 >
-                  <Icon name="auto_awesome" size={16} />
-                  <span>Generate Idea</span>
+                  <Icon name="auto_awesome" size={14} />
+                  Random Idea
                 </button>
               </div>
               <textarea
                 value={storyIdea}
-                onChange={(e) => setStoryIdea(e.target.value)}
-                className="w-full min-h-28 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-base text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-md transition-all resize-none"
-                placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || "A brave knight who is afraid of spiders, or a magical treehouse that travels through time..."}
-                disabled={isGenerating}
+                onChange={e => setStoryIdea(e.target.value)}
+                className="w-full min-h-24 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 text-sm text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 shadow-sm resize-none transition-all"
+                placeholder={
+                  STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example ||
+                  'A brave knight who is afraid of spiders, or a magical treehouse that travels through time...'
+                }
               />
             </div>
 
             {/* Advanced Options Toggle */}
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
-              disabled={isGenerating}
-              className="mb-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:opacity-50"
+              className="mb-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
             >
-              {showAdvanced ? (
-                <span className="flex items-center gap-1">
-                  <Icon name="expand_less" className="text-lg" size={20} />
-                  Hide Advanced Options
-                </span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <Icon name="expand_more" className="text-lg" size={20} />
-                  Show Advanced Options
-                </span>
-              )}
+              <Icon name={showAdvanced ? 'expand_less' : 'expand_more'} size={20} />
+              {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
             </button>
 
             {/* Advanced Options */}
             {showAdvanced && (
               <div className="w-full space-y-4 rounded-xl bg-white/90 dark:bg-gray-800/90 p-4 shadow-lg mb-3 backdrop-blur-sm">
-                {/* Character Builder Toggle */}
+
+                {/* Character Builder */}
                 <div className="flex items-center justify-between">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="person" className="text-lg" size={20} />
+                    <Icon name="person" size={18} />
                     Character Builder
                   </label>
                   <button
@@ -412,40 +594,33 @@ export default function GeneratePage() {
                   </button>
                 </div>
 
-                {/* Character Builder Panel */}
                 {showCharacterBuilder && (
                   <div className="space-y-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
                     <div className="flex flex-col gap-2">
-                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">
-                        Character Name
-                      </label>
+                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">Character Name</label>
                       <input
                         type="text"
                         value={characterName}
-                        onChange={(e) => setCharacterName(e.target.value)}
-                        placeholder="e.g., Luna, Max, Sparky"
+                        onChange={e => setCharacterName(e.target.value)}
+                        placeholder="e.g., Luna, Max, Pixel"
                         className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2.5 text-sm text-gray-800 dark:text-gray-200 focus:border-purple-500 focus:outline-none"
-                        disabled={isGenerating}
                       />
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">
-                        Character Type
-                      </label>
+                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">Character Type</label>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {CHARACTER_TYPES.map((type) => (
+                        {CHARACTER_TYPES.map(type => (
                           <button
                             key={type.value}
                             onClick={() => setCharacterType(type.value)}
-                            disabled={isGenerating}
                             className={`p-2 rounded-lg border-2 text-left transition-all ${
                               characterType === type.value
                                 ? 'border-purple-500 bg-purple-100 dark:bg-purple-800'
                                 : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700'
                             }`}
                           >
-                            <div className="text-sm font-medium">{type.label}</div>
+                            <div className="text-xs font-medium">{type.label}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">{type.description}</div>
                           </button>
                         ))}
@@ -453,11 +628,9 @@ export default function GeneratePage() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">
-                        Character Traits (select 2-4)
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {CHARACTER_TRAITS.map((trait) => (
+                      <label className="text-left text-xs font-semibold text-gray-600 dark:text-gray-400">Character Traits (select 2–4)</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CHARACTER_TRAITS.map(trait => (
                           <button
                             key={trait}
                             onClick={() => {
@@ -467,8 +640,7 @@ export default function GeneratePage() {
                                 setSelectedTraits([...selectedTraits, trait])
                               }
                             }}
-                            disabled={isGenerating}
-                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
                               selectedTraits.includes(trait)
                                 ? 'bg-purple-500 text-white'
                                 : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300'
@@ -482,83 +654,79 @@ export default function GeneratePage() {
                   </div>
                 )}
 
+                {/* Story Length */}
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="menu_book" className="text-lg" size={20} />
-                    Story Length
+                    <Icon name="menu_book" size={18} /> Story Length
                   </label>
-                  <select
-                    value={storyLength}
-                    onChange={(e) => setStoryLength(e.target.value)}
-                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    disabled={isGenerating}
-                  >
-                    {STORY_LENGTHS.map((length) => (
-                      <option key={length.value} value={length.value}>
-                        {length.label} — {length.description}
-                      </option>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {STORY_LENGTHS.map(len => (
+                      <button
+                        key={len.value}
+                        onClick={() => setStoryLength(len.value)}
+                        className={`p-2.5 rounded-lg border-2 text-left transition-all ${
+                          storyLength === len.value
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                            : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-gray-800 dark:text-gray-200">{len.label}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{len.description}</div>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
+                {/* Age Range */}
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="child_care" className="text-lg" size={20} />
-                    Age Range
+                    <Icon name="child_care" size={18} /> Age Range
                   </label>
                   <select
                     value={ageRange}
-                    onChange={(e) => setAgeRange(e.target.value)}
-                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    disabled={isGenerating}
+                    onChange={e => setAgeRange(e.target.value)}
+                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-sm text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none transition-all"
                   >
-                    {AGE_RANGES.map((range) => (
-                      <option key={range.value} value={range.value}>
-                        {range.label}
-                      </option>
+                    {AGE_RANGES.map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
                 </div>
 
+                {/* Illustration Style */}
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="palette" className="text-lg" size={20} />
-                    Illustration Style
+                    <Icon name="palette" size={18} /> Illustration Style
                   </label>
                   <select
                     value={illustrationStyle}
-                    onChange={(e) => setIllustrationStyle(e.target.value)}
-                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-base text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    disabled={isGenerating}
+                    onChange={e => setIllustrationStyle(e.target.value)}
+                    className="rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-sm text-gray-800 dark:text-gray-200 focus:border-blue-500 focus:outline-none transition-all"
                   >
-                    {ILLUSTRATION_STYLES.map((style) => (
-                      <option key={style.value} value={style.value}>
-                        {style.label}
-                      </option>
+                    {ILLUSTRATION_STYLES.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Narrator Voice Selection */}
+                {/* Narrator Voice */}
                 <div className="flex flex-col gap-2">
                   <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                    <Icon name="record_voice_over" className="text-lg" size={20} />
-                    Narrator Voice
+                    <Icon name="record_voice_over" size={18} /> Narrator Voice
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {NARRATOR_VOICES.map((voice) => (
+                    {NARRATOR_VOICES.map(v => (
                       <button
-                        key={voice.value}
-                        onClick={() => setNarratorVoice(voice.value)}
-                        disabled={isGenerating}
+                        key={v.value}
+                        onClick={() => setNarratorVoice(v.value)}
                         className={`p-2 rounded-lg border-2 text-left transition-all ${
-                          narratorVoice === voice.value
+                          narratorVoice === v.value
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
                             : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300'
                         }`}
                       >
-                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{voice.label}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">{voice.description}</div>
+                        <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{v.label}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{v.description}</div>
                       </button>
                     ))}
                   </div>
@@ -567,29 +735,24 @@ export default function GeneratePage() {
             )}
 
             {/* Generate Button */}
-            <div className="w-full pt-3">
+            <div className="w-full pt-2 pb-2">
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating || !storyIdea.trim()}
-                className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-blue-500 disabled:hover:to-purple-600 hover:shadow-xl active:scale-98 flex items-center justify-center gap-2"
+                disabled={!storyIdea.trim()}
+                className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 px-8 py-4 text-base sm:text-lg font-bold text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-xl active:scale-[0.98] flex items-center justify-center gap-2"
               >
-                {isGenerating ? (
-                  <>
-                    <Icon name="sync" className="animate-spin" size={24} />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Icon name="auto_awesome" size={24} />
-                    Generate My Book!
-                    <Icon name="auto_awesome" size={24} />
-                  </>
-                )}
+                <Icon name="auto_awesome" size={22} />
+                Generate My Book!
+                <Icon name="auto_awesome" size={22} />
               </button>
+
+              {/* Time estimate */}
+              <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+                ⏱ Takes about {storyLength === '5' ? '1 min' : storyLength === '8' ? '2 min' : '3 min'} to create your book
+              </p>
             </div>
           </>
-        )
-        }
+        )}
       </main>
 
       <footer className="w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
@@ -597,8 +760,6 @@ export default function GeneratePage() {
           Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
         </p>
       </footer>
-    </div >
+    </div>
   )
 }
-
-
