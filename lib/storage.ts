@@ -1,9 +1,8 @@
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
-import { getAdminDb } from './firebase-admin'
-import { 
-  getBookFromSQLite, 
-  setBookInSQLite, 
+import {
+  getBookFromSQLite,
+  setBookInSQLite,
   getUserBooksFromSQLite,
   deleteBookFromSQLite,
   toggleFavoriteInSQLite,
@@ -42,13 +41,13 @@ interface Book {
   audioUrl?: string
   createdAt: string
   expectedPages?: number
-  generationProgress?: number // 0-100 percentage of image generation
+  generationProgress?: number
   description?: string
   category?: string
   heroType?: 'animal' | 'person' | 'fantasy'
   setting?: string
   isSample?: boolean
-  ownerId?: string // New field for user ownership
+  ownerId?: string
   narratorVoice?: string
   character?: Character
   prompts?: {
@@ -59,7 +58,6 @@ interface Book {
 
 const sampleBooks: Map<string, Book> = new Map()
 
-// Load sample books on initialization
 function loadSampleBooks() {
   try {
     const sampleBooksPath = join(process.cwd(), 'data', 'sample-books', 'index.json')
@@ -79,10 +77,8 @@ function loadSampleBooks() {
   }
 }
 
-// Initialize sample books (server-side only)
 let sampleBooksLoaded = false
 
-// Ensure sample books are loaded (call this from API routes)
 export function ensureSampleBooksLoaded() {
   if (typeof window === 'undefined' && !sampleBooksLoaded) {
     try {
@@ -94,81 +90,39 @@ export function ensureSampleBooksLoaded() {
   }
 }
 
+// In-memory fallback when SQLite is unavailable
+const inMemoryBooks: Map<string, Book> = new Map()
+
 export async function getBook(bookId: string): Promise<Book | undefined> {
-  // Ensure sample books are loaded when getting a book
   ensureSampleBooksLoaded()
 
-  // Check sample books first (fast, in-memory)
-  if (sampleBooks.has(bookId)) {
-    return sampleBooks.get(bookId)
-  }
+  if (sampleBooks.has(bookId)) return sampleBooks.get(bookId)
+  if (inMemoryBooks.has(bookId)) return inMemoryBooks.get(bookId)
 
-  // Check in-memory books (for when Firebase is not configured)
-  if (inMemoryBooks.has(bookId)) {
-    return inMemoryBooks.get(bookId)
-  }
-
-  // Try SQLite first (persistent local storage)
   try {
     const sqliteBook = await getBookFromSQLite(bookId)
     if (sqliteBook) return sqliteBook
   } catch (error) {
-    console.log('SQLite not available, trying Firestore...')
-  }
-
-  // Check Firestore (if configured)
-  try {
-    const db = getAdminDb()
-    if (!db) {
-      // Firebase not configured, only sample/in-memory books available
-      return undefined
-    }
-    const doc = await db.collection('books').doc(bookId).get()
-
-    if (doc.exists) {
-      return doc.data() as Book
-    }
-  } catch (error) {
-    console.error(`Error fetching book ${bookId} from Firestore:`, error)
+    console.log('SQLite not available, checking in-memory...')
   }
 
   return undefined
 }
 
-// In-memory storage for books when Firestore is not configured
-const inMemoryBooks: Map<string, Book> = new Map()
-
 export async function setBook(bookId: string, book: Book): Promise<void> {
-  // If it's a sample book, update in memory (shouldn't really happen for creating new books)
   if (book.isSample) {
     sampleBooks.set(bookId, book)
     return
   }
 
-  // Try SQLite first (persistent local storage)
   try {
     await setBookInSQLite(book)
     console.log(`Stored book ${bookId} in SQLite`)
     return
   } catch (error) {
-    console.log('SQLite storage failed, trying Firestore...')
-  }
-
-  try {
-    const db = getAdminDb()
-    if (!db) {
-      // Firebase not configured, store in memory (will be lost on restart)
-      inMemoryBooks.set(bookId, book)
-      console.log(`Stored book ${bookId} in memory (Firebase not configured)`)
-      return
-    }
-    // Convert to plain object if needed, but Firestore handles JSON-like objects
-    // Careful with undefined values, Firestore ignores them but it's good practice to clean
-    const bookData = JSON.parse(JSON.stringify(book))
-    await db.collection('books').doc(bookId).set(bookData, { merge: true })
-  } catch (error) {
-    console.error(`Error saving book ${bookId} to Firestore:`, error)
-    throw error
+    console.log('SQLite storage failed, using in-memory fallback')
+    inMemoryBooks.set(bookId, book)
+    console.log(`Stored book ${bookId} in memory`)
   }
 }
 
@@ -177,52 +131,28 @@ export async function hasBook(bookId: string): Promise<boolean> {
   if (inMemoryBooks.has(bookId)) return true
 
   try {
-    const db = getAdminDb()
-    if (!db) {
-      return false
-    }
-    const doc = await db.collection('books').doc(bookId).get()
-    return doc.exists
-  } catch (error) {
+    const book = await getBookFromSQLite(bookId)
+    return !!book
+  } catch {
     return false
   }
 }
 
 export function getAllSampleBooks(): Book[] {
-  // Ensure sample books are loaded before returning
   ensureSampleBooksLoaded()
   return Array.from(sampleBooks.values())
 }
 
-// New: Get books for a specific user
 export async function getUserBooks(userId: string): Promise<Book[]> {
-  // Try SQLite first
   try {
     const sqliteBooks = await getUserBooksFromSQLite(userId)
     if (sqliteBooks.length > 0) return sqliteBooks
   } catch (error) {
-    console.log('SQLite query failed, trying Firestore...')
+    console.log('SQLite query failed, returning in-memory books')
   }
-
-  try {
-    const db = getAdminDb()
-    if (!db) {
-      // Firebase not configured, return in-memory books for this user
-      return Array.from(inMemoryBooks.values()).filter(book => book.ownerId === userId)
-    }
-    const snapshot = await db.collection('books')
-      .where('ownerId', '==', userId)
-      .orderBy('createdAt', 'desc')
-      .get()
-
-    return snapshot.docs.map(doc => doc.data() as Book)
-  } catch (error) {
-    console.error(`Error fetching books for user ${userId}:`, error)
-    return []
-  }
+  return Array.from(inMemoryBooks.values()).filter(book => book.ownerId === userId)
 }
 
-// New: Library/Favorites functions
 export async function toggleFavorite(userId: string, bookId: string): Promise<boolean> {
   try {
     return await toggleFavoriteInSQLite(userId, bookId)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setBook, getBook, type Book, getUserBooks } from '@/lib/storage'
-import { getAuth } from 'firebase-admin/auth'
-import { getAdminApp } from '@/lib/firebase-admin'
+
+const LOCAL_USER_ID = 'local-user'
 
 const AGE_TO_COMPLEXITY: Record<string, string> = {
   kindergarten: 'very simple, with short sentences (3–5 words each) and basic vocabulary — think Dr. Seuss level',
@@ -77,32 +77,15 @@ Respond with ONLY valid JSON — no markdown, no code blocks, no extra text:
 
 export async function POST(request: NextRequest) {
   try {
-    let userId: string | undefined
+    const userId = LOCAL_USER_ID
 
-    // Verify Firebase auth token if provided
-    const authHeader = request.headers.get('Authorization')
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.split('Bearer ')[1]
-      try {
-        const app = getAdminApp()
-        if (app) {
-          const decoded = await getAuth(app).verifyIdToken(token)
-          userId = decoded.uid
-        }
-      } catch (e) {
-        console.warn('Invalid auth token', e)
-      }
-    }
-
-    // Enforce per-user book limit for authenticated users
-    if (userId) {
-      const userBooks = await getUserBooks(userId)
-      if (userBooks.length >= 100) {
-        return NextResponse.json(
-          { error: 'You have reached the limit of 100 books. Please delete some old books or contact support.' },
-          { status: 403 },
-        )
-      }
+    // Enforce per-user book limit
+    const userBooks = await getUserBooks(userId)
+    if (userBooks.length >= 100) {
+      return NextResponse.json(
+        { error: 'You have reached the limit of 100 books. Please delete some old books.' },
+        { status: 403 },
+      )
     }
 
     const {
