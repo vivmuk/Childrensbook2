@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { AuthProvider } from '@/components/AuthContext'
 
 export const metadata: Metadata = {
   title: 'KinderQuill - Create Magical Storybooks',
@@ -26,7 +25,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="font-display">
-        <AuthProvider>{children}</AuthProvider>
+        {children}
       </body>
     </html>
   )

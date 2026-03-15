@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
-import { useAuth } from '@/components/AuthContext'
 import { Header } from '@/components/Header'
-import { LoginModal } from '@/components/LoginModal'
 
 interface ReadingStats {
   totalBooksRead: number
@@ -23,7 +21,6 @@ interface ParentSettings {
 
 export default function ParentDashboardPage() {
   const router = useRouter()
-  const { user, loading } = useAuth()
   const [stats, setStats] = useState<ReadingStats | null>(null)
   const [settings, setSettings] = useState<ParentSettings>({
     contentFilterEnabled: true,
@@ -32,36 +29,20 @@ export default function ParentDashboardPage() {
     requireApproval: false,
   })
   const [isLoading, setIsLoading] = useState(true)
-  const [showLoginModal, setShowLoginModal] = useState(false)
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview')
 
   useEffect(() => {
-    if (!loading && !user) {
-      setShowLoginModal(true)
-      return
-    }
-
-    if (user) {
-      fetchData()
-    }
-  }, [user, loading])
+    fetchData()
+  }, [])
 
   const fetchData = async () => {
     try {
-      const token = await user?.getIdToken()
-      
-      // Fetch reading stats
-      const statsResponse = await fetch('/api/reading', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      const statsResponse = await fetch('/api/reading')
       if (statsResponse.ok) {
         setStats(await statsResponse.json())
       }
 
-      // Fetch parent settings
-      const settingsResponse = await fetch('/api/parent/settings', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      const settingsResponse = await fetch('/api/parent/settings')
       if (settingsResponse.ok) {
         const data = await settingsResponse.json()
         if (data.settings) {
@@ -77,14 +58,10 @@ export default function ParentDashboardPage() {
 
   const saveSettings = async () => {
     try {
-      const token = await user?.getIdToken()
       await fetch('/api/parent/settings', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(settings)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
       })
       alert('Settings saved!')
     } catch (error) {
@@ -110,11 +87,6 @@ export default function ParentDashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50">
       <Header title="Parent Dashboard" />
-      <LoginModal 
-        isOpen={showLoginModal} 
-        onClose={() => router.push('/')} 
-        message="Sign in to access the Parent Dashboard and track your child's reading!"
-      />
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {/* Tabs */}
@@ -178,8 +150,8 @@ export default function ParentDashboardPage() {
               {stats?.recentBooks && stats.recentBooks.length > 0 ? (
                 <div className="space-y-3">
                   {stats.recentBooks.slice(0, 5).map((book: any) => (
-                    <div 
-                      key={book.id} 
+                    <div
+                      key={book.id}
                       className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-all"
                       onClick={() => router.push(`/book/${book.id}`)}
                     >
@@ -209,7 +181,7 @@ export default function ParentDashboardPage() {
           /* Settings Tab */
           <div className="bg-white rounded-2xl shadow-lg p-6 max-w-2xl">
             <h2 className="text-xl font-bold text-gray-800 mb-6">Parent Settings</h2>
-            
+
             <div className="space-y-6">
               {/* Content Filter */}
               <div className="flex items-center justify-between">
@@ -268,7 +240,7 @@ export default function ParentDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-gray-800">Require Approval</h3>
-                  <p className="text-sm text-gray-500">Approve books before they're created</p>
+                  <p className="text-sm text-gray-500">Approve books before they&apos;re created</p>
                 </div>
                 <button
                   onClick={() => setSettings({ ...settings, requireApproval: !settings.requireApproval })}
