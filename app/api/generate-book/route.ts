@@ -146,7 +146,8 @@ export async function POST(request: NextRequest) {
               { role: 'user', content: storyPrompt },
             ],
             temperature: 0.85,
-            max_tokens: 5000,
+            max_tokens: 16000,
+            response_format: { type: 'json_object' },
           }),
         })
 
@@ -202,6 +203,30 @@ export async function POST(request: NextRequest) {
       }
       s = s.substring(first, last + 1)
       s = s.replace(/,(\s*[}\]])/g, '$1') // remove trailing commas
+      // If JSON is truncated (depth never reached 0), close open structures
+      if (depth !== 0) {
+        s = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '')
+        s = s.substring(first)
+        // Remove incomplete last entry and close all open braces/brackets
+        const stack: string[] = []
+        let inStr = false, escape = false
+        for (const ch of s) {
+          if (escape) { escape = false; continue }
+          if (ch === '\\' && inStr) { escape = true; continue }
+          if (ch === '"') { inStr = !inStr; continue }
+          if (!inStr) {
+            if (ch === '{' || ch === '[') stack.push(ch)
+            else if (ch === '}' || ch === ']') stack.pop()
+          }
+        }
+        // Close remaining open structures
+        let closing = ''
+        for (let i = stack.length - 1; i >= 0; i--) {
+          closing += stack[i] === '{' ? '}' : ']'
+        }
+        s = s.replace(/,\s*$/, '').replace(/,(\s*[}\]])$/g, '$1') + closing
+      }
+      s = s.replace(/,(\s*[}\]])/g, '$1')
       return s
     }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icons'
 
 interface AITopic {
@@ -13,6 +14,7 @@ interface AITopic {
   illustrationStyle: string
   color: string
   badgeColor: string
+  badgeTextColor: string
   concept: string
 }
 
@@ -26,7 +28,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '2nd',
     illustrationStyle: 'ghibli',
     color: 'from-blue-400 to-cyan-500',
-    badgeColor: 'bg-blue-100 text-blue-700',
+    badgeColor: 'bg-blue-100',
+    badgeTextColor: 'text-blue-700',
     concept: 'Artificial Intelligence',
   },
   {
@@ -38,7 +41,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '3rd',
     illustrationStyle: 'watercolor',
     color: 'from-purple-400 to-violet-500',
-    badgeColor: 'bg-purple-100 text-purple-700',
+    badgeColor: 'bg-purple-100',
+    badgeTextColor: 'text-purple-700',
     concept: 'Machine Learning',
   },
   {
@@ -50,7 +54,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '4th',
     illustrationStyle: 'ghibli',
     color: 'from-pink-400 to-rose-500',
-    badgeColor: 'bg-pink-100 text-pink-700',
+    badgeColor: 'bg-pink-100',
+    badgeTextColor: 'text-pink-700',
     concept: 'Neural Networks',
   },
   {
@@ -62,7 +67,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '2nd',
     illustrationStyle: 'watercolor',
     color: 'from-orange-400 to-amber-500',
-    badgeColor: 'bg-orange-100 text-orange-700',
+    badgeColor: 'bg-orange-100',
+    badgeTextColor: 'text-orange-700',
     concept: 'Generative AI',
   },
   {
@@ -74,7 +80,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '4th',
     illustrationStyle: 'american-classic',
     color: 'from-emerald-400 to-teal-500',
-    badgeColor: 'bg-emerald-100 text-emerald-700',
+    badgeColor: 'bg-emerald-100',
+    badgeTextColor: 'text-emerald-700',
     concept: 'Large Language Models',
   },
   {
@@ -86,7 +93,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '3rd',
     illustrationStyle: 'american-classic',
     color: 'from-sky-400 to-blue-500',
-    badgeColor: 'bg-sky-100 text-sky-700',
+    badgeColor: 'bg-sky-100',
+    badgeTextColor: 'text-sky-700',
     concept: 'Computer Vision',
   },
   {
@@ -98,7 +106,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '2nd',
     illustrationStyle: 'watercolor',
     color: 'from-violet-400 to-purple-600',
-    badgeColor: 'bg-violet-100 text-violet-700',
+    badgeColor: 'bg-violet-100',
+    badgeTextColor: 'text-violet-700',
     concept: 'AI & Creativity',
   },
   {
@@ -110,7 +119,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '3rd',
     illustrationStyle: 'ghibli',
     color: 'from-green-400 to-emerald-500',
-    badgeColor: 'bg-green-100 text-green-700',
+    badgeColor: 'bg-green-100',
+    badgeTextColor: 'text-green-700',
     concept: 'AI Safety',
   },
   {
@@ -122,7 +132,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '4th',
     illustrationStyle: 'tintin',
     color: 'from-yellow-400 to-orange-400',
-    badgeColor: 'bg-yellow-100 text-yellow-700',
+    badgeColor: 'bg-yellow-100',
+    badgeTextColor: 'text-yellow-700',
     concept: 'Data & Privacy',
   },
   {
@@ -134,7 +145,8 @@ const AI_TOPICS: AITopic[] = [
     ageRange: '3rd',
     illustrationStyle: 'ghibli',
     color: 'from-indigo-400 to-blue-600',
-    badgeColor: 'bg-indigo-100 text-indigo-700',
+    badgeColor: 'bg-indigo-100',
+    badgeTextColor: 'text-indigo-700',
     concept: 'Future of AI',
   },
 ]
@@ -152,80 +164,66 @@ export default function AIStoriesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-900 font-display">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/10 backdrop-blur-md border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
-          <button
-            onClick={() => router.push('/')}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors"
-            title="Home"
-          >
-            <Icon name="home" className="text-white" size={24} />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-white">AI Stories for Kids</h1>
-            <p className="text-white/60 text-sm">Learn about AI & GenAI through magical storybooks</p>
+    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
+      <Header title="AI Stories for Kids" />
+
+      <main className="flex grow flex-col items-center px-4 py-6 max-w-5xl mx-auto w-full">
+
+        {/* Hero */}
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🤖✨</div>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-gray-800 dark:text-gray-100">
+            Explore AI &amp; GenAI Through Stories
+          </h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 max-w-xl mx-auto mb-4">
+            Each book explains a real AI concept — machine learning, neural networks, generative AI, and more —
+            using fun characters that kids ages 5–12 will love.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2 text-xs">
+            {['Artificial Intelligence', 'Machine Learning', 'Neural Networks', 'Generative AI', 'AI Safety'].map(tag => (
+              <span
+                key={tag}
+                className="px-3 py-1 rounded-full bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-700 text-gray-700 dark:text-gray-300 font-medium shadow-sm"
+              >
+                {tag}
+              </span>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* Hero */}
-      <div className="max-w-4xl mx-auto px-4 py-12 text-center">
-        <div className="text-6xl mb-4">🤖✨</div>
-        <h2 className="text-4xl sm:text-5xl font-bold text-white mb-4 leading-tight">
-          Explore AI &amp; GenAI<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
-            Through Stories
-          </span>
-        </h2>
-        <p className="text-lg text-white/70 max-w-2xl mx-auto mb-6">
-          Each book below explains a real AI concept — machine learning, neural networks, generative AI, and more —
-          using fun characters and adventures that kids ages 5–12 will love.
-        </p>
-        <div className="flex flex-wrap justify-center gap-3 text-sm">
-          {['Artificial Intelligence', 'Machine Learning', 'Neural Networks', 'Generative AI', 'AI Safety'].map(tag => (
-            <span key={tag} className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white/80">
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Topic Cards Grid */}
-      <div className="max-w-7xl mx-auto px-4 pb-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Topic Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
           {AI_TOPICS.map((topic) => (
             <div
               key={topic.id}
-              className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:bg-white/10 transition-all hover:scale-[1.02] hover:shadow-2xl hover:border-white/20 flex flex-col"
+              className="bg-white dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl overflow-hidden hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-lg transition-all hover:scale-[1.02] flex flex-col shadow-sm"
             >
               {/* Card Header */}
-              <div className={`h-28 bg-gradient-to-br ${topic.color} flex items-center justify-center relative overflow-hidden`}>
+              <div className={`h-24 bg-gradient-to-br ${topic.color} flex items-center justify-center relative overflow-hidden`}>
                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_white_0%,_transparent_70%)]" />
-                <span className="text-6xl drop-shadow-lg">{topic.emoji}</span>
+                <span className="text-5xl drop-shadow-lg">{topic.emoji}</span>
               </div>
 
               {/* Card Body */}
-              <div className="p-5 flex flex-col flex-1">
+              <div className="p-4 flex flex-col flex-1">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="text-lg font-bold text-white leading-tight">{topic.title}</h3>
-                  <span className={`shrink-0 text-xs font-semibold px-2 py-1 rounded-full ${topic.badgeColor}`}>
+                  <h3 className="text-base font-bold text-gray-800 dark:text-gray-100 leading-tight">{topic.title}</h3>
+                  <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${topic.badgeColor} ${topic.badgeTextColor}`}>
                     {topic.concept}
                   </span>
                 </div>
-                <p className="text-white/60 text-sm leading-relaxed mb-4 flex-1">
+                <p className="text-gray-600 dark:text-gray-400 text-xs leading-relaxed mb-4 flex-1">
                   {topic.description}
                 </p>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-white/40">
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
                     Best for: {topic.ageRange === 'kindergarten' ? 'Kindergarten' : `${topic.ageRange} Grade`}
                   </span>
                   <button
                     onClick={() => handleGenerate(topic)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r ${topic.color} text-white text-sm font-semibold shadow-lg hover:shadow-xl hover:opacity-90 active:scale-95 transition-all`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white text-xs font-semibold shadow-md hover:shadow-lg active:scale-95 transition-all"
                   >
-                    <Icon name="auto_awesome" size={16} />
+                    <Icon name="auto_awesome" size={14} />
                     Generate Story
                   </button>
                 </div>
@@ -235,23 +233,22 @@ export default function AIStoriesPage() {
         </div>
 
         {/* Bottom CTA */}
-        <div className="mt-12 text-center">
-          <p className="text-white/50 text-sm mb-4">
+        <div className="mt-10 text-center">
+          <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
             Want a different AI topic? Create your own custom story!
           </p>
           <button
             onClick={() => router.push('/generate')}
-            className="px-8 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold transition-all hover:scale-105"
+            className="px-8 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] transition-all"
           >
             Create Custom AI Story
           </button>
         </div>
-      </div>
+      </main>
 
-      {/* Footer */}
-      <footer className="w-full py-3 text-center border-t border-white/10">
-        <p className="text-xs text-white/40">
-          Created with <span className="font-semibold text-white/60">Venice.ai</span>
+      <footer className="w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
+        <p className="text-xs text-gray-600 dark:text-gray-400">
+          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
         </p>
       </footer>
     </div>

@@ -121,20 +121,8 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
       const ry = seg.y * CELL_H + pad
       const rw = CELL_W - pad * 2
       const rh = CELL_H - pad * 2
-      const r = 3
 
-      ctx.beginPath()
-      ctx.moveTo(rx + r, ry)
-      ctx.lineTo(rx + rw - r, ry)
-      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + r)
-      ctx.lineTo(rx + rw, ry + rh - r)
-      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - r, ry + rh)
-      ctx.lineTo(rx + r, ry + rh)
-      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - r)
-      ctx.lineTo(rx, ry + r)
-      ctx.quadraticCurveTo(rx, ry, rx + r, ry)
-      ctx.closePath()
-      ctx.fill()
+      ctx.fillRect(rx, ry, rw, rh)
     })
 
     // Draw food (star)
