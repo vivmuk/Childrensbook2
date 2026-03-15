@@ -385,7 +385,7 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
               ref={canvasRef}
               width={CANVAS_W}
               height={CANVAS_H}
-              className="w-full rounded-xl mb-1 cursor-pointer select-none block"
+              className="w-full rounded-none mb-1 cursor-pointer select-none block"
               style={{ touchAction: 'none' }}
               onClick={() => { if (phaseRef.current !== 'play') startGame() }}
             />
