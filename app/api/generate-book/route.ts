@@ -146,7 +146,8 @@ export async function POST(request: NextRequest) {
               { role: 'user', content: storyPrompt },
             ],
             temperature: 0.85,
-            max_tokens: 5000,
+            max_tokens: 8000,
+            response_format: { type: 'json_object' },
           }),
         })
 
