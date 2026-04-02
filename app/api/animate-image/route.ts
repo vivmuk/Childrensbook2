@@ -19,20 +19,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     }
 
-    // pageIndex === -1 means title page, 0+ means content pages
-    let imageDataUrl: string
+    // Verify the image actually exists before sending to Venice
     if (pageIndex === -1) {
       if (!book.titlePage?.image) {
         return NextResponse.json({ error: 'No title page image found' }, { status: 400 })
       }
-      imageDataUrl = book.titlePage.image
     } else {
-      const page = book.pages[pageIndex]
-      if (!page?.image) {
+      if (!book.pages?.[pageIndex]?.image) {
         return NextResponse.json({ error: 'No image found for this page' }, { status: 400 })
       }
-      imageDataUrl = page.image
     }
+
+    // Construct a publicly accessible URL for this image so Venice can fetch it.
+    // Venice's video API requires a real HTTP URL — it cannot accept base64 data URLs.
+    const host = request.headers.get('host') || ''
+    const proto = request.headers.get('x-forwarded-proto') || 'https'
+    const pageParam = pageIndex === -1 ? 'title' : String(pageIndex)
+    const imageUrl = `${proto}://${host}/api/book-image/${bookId}/${pageParam}`
 
     // Build a gentle animation prompt suited for children's book illustrations
     const pageLabel = pageIndex === -1 ? 'book cover' : `page ${pageIndex + 1}`
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'grok-imagine-image-to-video',
         prompt: animatePrompt,
-        image_url: imageDataUrl,
+        image_url: imageUrl,
         duration: 5,
         resolution: '480p',
       }),
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     if (!queueRes.ok) {
       const errText = await queueRes.text()
-      console.error('Venice video queue error:', errText)
+      console.error('Venice video queue error:', queueRes.status, errText)
       return NextResponse.json(
         { error: `Failed to start animation: ${queueRes.statusText}` },
         { status: queueRes.status },
