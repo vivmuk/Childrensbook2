@@ -210,7 +210,7 @@ function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
             <span>🗝️</span> How to get your free API key:
           </h3>
           <ol className="space-y-2.5">
-            [
+            {[
               { step: '1', text: 'Visit ', link: 'venice.ai/chat?ref=yN8qqI', href: 'https://venice.ai/chat?ref=yN8qqI', after: ' — get $10 in free credits!' },
               { step: '2', text: 'Create a free account and sign in', link: '', href: '', after: '' },
               { step: '3', text: 'Click your profile icon and choose ', link: '"API Keys"', href: 'https://venice.ai/chat?ref=yN8qqI', after: ' from the menu' },

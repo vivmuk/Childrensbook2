@@ -35,6 +35,19 @@ export default function BookViewerPage() {
   const [isPageTransitioning, setIsPageTransitioning] = useState(false)
   const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null)
 
+  // Animation state
+  const [userApiKey, setUserApiKey] = useState<string>('')
+  // pageVideos: maps pageKey (string "-1" or "0","1",...) to generated video data URL
+  const [pageVideos, setPageVideos] = useState<Record<string, string>>({})
+  // animatingPageKey: which page is currently being animated (null = none)
+  const [animatingPageKey, setAnimatingPageKey] = useState<string | null>(null)
+  const [animateQueueId, setAnimateQueueId] = useState<string | null>(null)
+  const [animateElapsed, setAnimateElapsed] = useState<number>(0)
+  const [animateAvgTime, setAnimateAvgTime] = useState<number>(120000)
+  // Video modal
+  const [showVideoModal, setShowVideoModal] = useState(false)
+  const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null)
+
   useEffect(() => {
     const fetchBook = async () => {
       try {
@@ -52,7 +65,48 @@ export default function BookViewerPage() {
     }
 
     fetchBook()
+
+    // Load Venice API key from localStorage (same key as generate page)
+    const savedKey = localStorage.getItem('kinderquill_venice_api_key')
+    if (savedKey) setUserApiKey(savedKey)
   }, [bookId])
+
+  // Poll Venice for animation completion
+  useEffect(() => {
+    if (!animateQueueId || !animatingPageKey) return
+
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/animate-retrieve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queueId: animateQueueId, userApiKey }),
+        })
+        const data = await res.json()
+
+        if (data.status === 'complete' && data.videoUrl) {
+          setPageVideos(prev => ({ ...prev, [animatingPageKey]: data.videoUrl }))
+          setModalVideoUrl(data.videoUrl)
+          setShowVideoModal(true)
+          setAnimatingPageKey(null)
+          setAnimateQueueId(null)
+        } else if (data.status === 'processing') {
+          setAnimateElapsed(data.elapsed ?? 0)
+          setAnimateAvgTime(data.averageTime ?? 120000)
+        } else if (data.error) {
+          console.error('Animation error:', data.error)
+          alert('Animation failed: ' + data.error)
+          setAnimatingPageKey(null)
+          setAnimateQueueId(null)
+        }
+      } catch (err) {
+        console.error('Animation poll error:', err)
+      }
+    }
+
+    const interval = setInterval(poll, 10000)
+    return () => clearInterval(interval)
+  }, [animateQueueId, animatingPageKey, userApiKey])
 
   const handleGenerateAudio = async () => {
     if (!book) return
@@ -119,6 +173,31 @@ export default function BookViewerPage() {
       alert('Link copied to clipboard! Share it with friends and family.')
     } catch (err) {
       alert(`Share this link: ${url}`)
+    }
+  }
+
+  const handleAnimate = async (pageKey: string, pageIndex: number) => {
+    if (animatingPageKey) return // already animating something
+    setAnimatingPageKey(pageKey)
+    setAnimateElapsed(0)
+    setAnimateAvgTime(120000)
+
+    try {
+      const res = await fetch('/api/animate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId, pageIndex, userApiKey }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        alert(data.error || 'Failed to start animation')
+        setAnimatingPageKey(null)
+        return
+      }
+      setAnimateQueueId(data.queueId)
+    } catch (err: any) {
+      alert(err.message || 'Failed to start animation')
+      setAnimatingPageKey(null)
     }
   }
 
@@ -416,10 +495,103 @@ export default function BookViewerPage() {
   const contentPageIndex = hasTitlePage ? currentPage - 1 : currentPage
   const page = isTitlePage ? null : book.pages[contentPageIndex]
 
+  // Shared: video modal
+  const VideoModal = () => {
+    if (!showVideoModal || !modalVideoUrl) return null
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+        onClick={() => setShowVideoModal(false)}
+      >
+        <div
+          className="relative w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl bg-gray-900"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-violet-600 to-pink-600">
+            <div className="flex items-center gap-2 text-white font-bold text-sm">
+              <span>✨</span> Animated Illustration
+            </div>
+            <button
+              onClick={() => setShowVideoModal(false)}
+              className="text-white/80 hover:text-white text-xl leading-none transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+          {/* Video player */}
+          <video
+            src={modalVideoUrl}
+            autoPlay
+            loop
+            controls
+            playsInline
+            className="w-full"
+            style={{ maxHeight: '70vh', objectFit: 'contain', background: '#000' }}
+          />
+          {/* Download button */}
+          <div className="flex justify-center gap-3 px-4 py-3 bg-gray-900">
+            <a
+              href={modalVideoUrl}
+              download="animation.mp4"
+              className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold rounded-xl transition-colors"
+            >
+              <span>⬇</span> Download MP4
+            </a>
+            <button
+              onClick={() => setShowVideoModal(false)}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Shared: animate button component
+  const AnimateButton = ({ pageKey, pageIndex }: { pageKey: string; pageIndex: number }) => {
+    const video = pageVideos[pageKey]
+    const isAnimating = animatingPageKey === pageKey
+    const progressPct = animateAvgTime > 0 ? Math.min(99, Math.round((animateElapsed / animateAvgTime) * 100)) : 0
+
+    if (video) {
+      return (
+        <button
+          onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white text-xs font-bold rounded-xl shadow-lg transition-all hover:scale-105"
+        >
+          <span>▶</span> Watch Animation
+        </button>
+      )
+    }
+
+    if (isAnimating) {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-black/60 text-white text-xs font-medium rounded-xl backdrop-blur-sm">
+          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          <span>Animating… {animateQueueId ? `${progressPct}%` : 'starting'}</span>
+        </div>
+      )
+    }
+
+    return (
+      <button
+        onClick={() => handleAnimate(pageKey, pageIndex)}
+        disabled={!!animatingPageKey}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-black/50 hover:bg-black/70 text-white text-xs font-bold rounded-xl backdrop-blur-sm shadow-lg transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <span>✨</span> Animate
+      </button>
+    )
+  }
+
   // Handle title page display
   if (isTitlePage && book.titlePage) {
     return (
       <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
+        <VideoModal />
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 dark:bg-gray-900/90 p-4 shadow-sm backdrop-blur-md">
           <div className="flex items-center gap-2">
@@ -504,13 +676,16 @@ export default function BookViewerPage() {
 
         {/* Title Page Content */}
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 max-w-4xl mx-auto w-full">
-          <div className={`w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+          <div className={`relative w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
             }`}>
             <img
               src={book.titlePage.image}
               alt="Book Cover"
               className="w-full h-auto object-cover"
             />
+            <div className="absolute bottom-3 right-3">
+              <AnimateButton pageKey="-1" pageIndex={-1} />
+            </div>
           </div>
         </main>
 
@@ -563,6 +738,7 @@ export default function BookViewerPage() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
+      <VideoModal />
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 dark:bg-gray-900/90 p-4 shadow-sm backdrop-blur-md">
         <div className="flex items-center gap-2">
@@ -660,7 +836,7 @@ export default function BookViewerPage() {
       {/* Main Content */}
       <main className="flex flex-1 flex-col px-4 py-6 max-w-4xl mx-auto w-full">
         {/* Image with animation */}
-        <div className={`w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+        <div className={`relative w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
           }`}>
           {page.image ? (
             <img
@@ -672,6 +848,12 @@ export default function BookViewerPage() {
           ) : (
             <div className="w-full h-64 bg-gradient-to-br from-purple-200 to-pink-200 dark:from-purple-800 dark:to-pink-800 flex items-center justify-center">
               <Icon name="image" className="text-white/50 animate-pulse" size={64} />
+            </div>
+          )}
+          {/* Animate button overlay */}
+          {page.image && (
+            <div className="absolute bottom-3 right-3">
+              <AnimateButton pageKey={String(contentPageIndex)} pageIndex={contentPageIndex} />
             </div>
           )}
         </div>
