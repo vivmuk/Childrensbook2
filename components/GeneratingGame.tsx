@@ -13,7 +13,7 @@ const CANVAS_W = 400
 const CANVAS_H = 240
 const CELL_W = CANVAS_W / COLS  // 20
 const CELL_H = CANVAS_H / ROWS  // 20
-const BASE_SPEED = 155 // ms per tick
+const BASE_SPEED = 250 // ms per tick
 
 // ── AI education facts ──────────────────────────────────────────────────────
 const AI_FACTS = [
@@ -308,12 +308,39 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
   // ── Derived display values ───────────────────────────────────────────────
   const stepIdx = Math.min(Math.floor(progress / 25), STEPS.length - 1)
 
+  // Track how long we've been at a given progress level to show "still working" reassurance
+  const lastProgressRef = useRef(progress)
+  const stuckSecRef = useRef(0)
+  const [stuckSec, setStuckSec] = useState(0)
+
+  useEffect(() => {
+    if (progress !== lastProgressRef.current) {
+      lastProgressRef.current = progress
+      stuckSecRef.current = 0
+      setStuckSec(0)
+    }
+    const t = setInterval(() => {
+      stuckSecRef.current += 5
+      setStuckSec(stuckSecRef.current)
+    }, 5000)
+    return () => clearInterval(t)
+  }, [progress])
+
   const timeMsg = () => {
     if (progress < 5) return 'Starting up...'
-    if (progress < 15) return '~2–3 min remaining'
+    if (progress < 15) {
+      if (stuckSec >= 20) return '⏳ Still working — AI is crafting your story...'
+      return '~2–3 min remaining'
+    }
     if (progress < 25) return 'Story written! Now illustrating pages...'
-    if (progress < 55) return '~1–2 min remaining'
-    if (progress < 80) return 'Painting the last few pages...'
+    if (progress < 55) {
+      if (stuckSec >= 25) return '⏳ Still going — painting each illustration takes time!'
+      return '~1–2 min remaining'
+    }
+    if (progress < 80) {
+      if (stuckSec >= 20) return '⏳ Almost there — finalizing your artwork...'
+      return 'Painting the last few pages...'
+    }
     if (progress < 95) return 'Almost done! ~30 sec left'
     return 'Finishing touches...'
   }
@@ -336,17 +363,28 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
         {/* Progress bar */}
         <div className="mb-3">
           <div className="flex justify-between text-xs mb-1">
-            <span className="text-gray-500 dark:text-gray-400">{timeMsg()}</span>
+            <span className={`${stuckSec >= 20 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-500 dark:text-gray-400'} transition-colors duration-500`}>
+              {timeMsg()}
+            </span>
             <span className="font-bold text-purple-600 dark:text-purple-400">
               {Math.round(progress)}%
             </span>
           </div>
           <div className="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-amber-400 rounded-full transition-all duration-700 ease-out"
+              className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-amber-400 rounded-full transition-all duration-700 ease-out relative overflow-hidden animate-progress-pulse"
               style={{ width: `${Math.max(progress, 2)}%` }}
-            />
+            >
+              {/* Shimmer sweep so it always looks "alive" */}
+              <span className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer" />
+            </div>
           </div>
+          {/* Micro-reassurance dots when stuck */}
+          {stuckSec >= 15 && (
+            <p className="text-center text-xs text-purple-500 dark:text-purple-400 mt-1 animate-pulse">
+              Working hard in the background — keep playing! 🎮
+            </p>
+          )}
         </div>
 
         {/* Step dots */}

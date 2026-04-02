@@ -496,7 +496,17 @@ export default function GeneratePage() {
       setGenerationProgress(5)
     } catch (err: any) {
       console.error('Generation error:', err)
-      alert(err.message || 'Failed to generate book. Please try again.')
+      const msg = err.message || ''
+      const isNetworkError = msg === 'fetch failed' || msg === 'Failed to fetch' || msg.includes('network')
+      if (isNetworkError) {
+        alert(
+          'The connection timed out while the AI was thinking — this can happen with longer stories.\n\n' +
+          'Your story may still be generating in the background. ' +
+          'Please wait 30 seconds and check your Library to see if it appears there.'
+        )
+      } else {
+        alert(msg || 'Failed to generate book. Please try again.')
+      }
       setIsGenerating(false)
       setGenerationProgress(0)
     }
