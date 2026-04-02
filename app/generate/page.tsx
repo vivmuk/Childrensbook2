@@ -181,7 +181,7 @@ function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
             {booksUsed >= FREE_BOOK_LIMIT ? `You've used all ${FREE_BOOK_LIMIT} free books!` : 'Add Your Venice API Key'}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-            To create more magical stories, add your own free Venice AI API key — it takes 2 minutes!
+            Get your own Venice AI API key with <span className="font-bold text-green-600 dark:text-green-400">$10 in free credits</span> and generate unlimited books!
           </p>
         </div>
 
@@ -189,9 +189,9 @@ function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
         <div className="bg-purple-50 dark:bg-purple-900/30 rounded-xl p-3 mb-4 border border-purple-200 dark:border-purple-700">
           <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
             <span className="font-bold">Venice AI</span> is the AI service that powers your story and
-            illustrations. It offers a{' '}
-            <span className="font-bold text-green-600 dark:text-green-400">free tier</span> that&apos;s
-            perfect for children&apos;s books — you only need a few credits per book!
+            illustrations. Sign up with our link and get{' '}
+            <span className="font-bold text-green-600 dark:text-green-400">$10 in free credits</span>
+            {' '}— that&apos;s enough for many books! Your own key means <span className="font-bold">unlimited generating</span>.
           </p>
         </div>
 
@@ -211,9 +211,9 @@ function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
           </h3>
           <ol className="space-y-2.5">
             {[
-              { step: '1', text: 'Visit ', link: 'venice.ai', href: 'https://venice.ai', after: ' and create a free account' },
-              { step: '2', text: 'Click your profile icon in the top-right corner', link: '', href: '', after: '' },
-              { step: '3', text: 'Choose ', link: '"API Keys"', href: 'https://venice.ai/settings/api-keys', after: ' from the menu' },
+              { step: '1', text: 'Visit ', link: 'venice.ai/chat?ref=yN8qqI', href: 'https://venice.ai/chat?ref=yN8qqI', after: ' — get $10 in free credits!' },
+              { step: '2', text: 'Create a free account and sign in', link: '', href: '', after: '' },
+              { step: '3', text: 'Click your profile icon and choose ', link: '"API Keys"', href: 'https://venice.ai/chat?ref=yN8qqI', after: ' from the menu' },
               { step: '4', text: 'Click ', link: '"Create API Key"', href: '', after: ' and give it any name' },
               { step: '5', text: 'Copy your new key and paste it below!', link: '', href: '', after: '' },
             ].map(({ step, text, link, href, after }) => (
@@ -235,12 +235,12 @@ function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
         {/* Quick link */}
         <div className="flex justify-center mb-4">
           <a
-            href="https://venice.ai"
+            href="https://venice.ai/chat?ref=yN8qqI"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all"
           >
-            <span>🌐</span> Open Venice.ai
+            <span>🌐</span> Get $10 Free Credits on Venice.ai
           </a>
         </div>
 
@@ -308,7 +308,9 @@ function FreeBooksBadge({ used, hasApiKey }: { used: number; hasApiKey: boolean 
         <span className="text-lg">⚠️</span>
         <p className="text-xs text-orange-800 dark:text-orange-300 text-left">
           <span className="font-bold">All {FREE_BOOK_LIMIT} free books used.</span>{' '}
-          Add your Venice API key below to continue creating!
+          Get your own API key from{' '}
+          <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="underline font-bold">Venice.ai</a>
+          {' '}— includes <span className="font-bold">$10 in free credits</span>!
         </p>
       </div>
     )
@@ -338,11 +340,11 @@ function FreeBooksBadge({ used, hasApiKey }: { used: number; hasApiKey: boolean 
           />
         ))}
       </div>
-      {used > 0 && remaining > 0 && (
-        <p className="text-xs text-green-700 dark:text-green-400 mt-1">
-          After {FREE_BOOK_LIMIT} free books, add a free Venice AI API key to keep creating.
-        </p>
-      )}
+      <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+        You can generate {FREE_BOOK_LIMIT} books free, then get your own API key from{' '}
+        <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="underline font-bold">Venice.ai</a>
+        {' '}with <span className="font-bold">$10 in free credits</span> to keep creating!
+      </p>
     </div>
   )
 }
@@ -376,6 +378,8 @@ export default function GeneratePage() {
   const [userApiKey, setUserApiKey] = useState<string>('')
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [freeBookCount, setFreeBookCount] = useState(0)
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false)
+  const [apiKeyInputValue, setApiKeyInputValue] = useState('')
 
   // Ref to capture generation metadata for localStorage saving
   const pendingMetaRef = useRef<{ ageRange: string; illustrationStyle: string } | null>(null)
@@ -563,11 +567,11 @@ export default function GeneratePage() {
             <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
 
             {/* API key management */}
-            {userApiKey && (
+            {userApiKey ? (
               <div className="w-full mb-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🔑</span>
-                  <p className="text-xs text-blue-800 dark:text-blue-300">Venice API key saved</p>
+                  <p className="text-xs text-blue-800 dark:text-blue-300">Venice API key saved — unlimited books!</p>
                 </div>
                 <button
                   onClick={() => {
@@ -578,6 +582,56 @@ export default function GeneratePage() {
                 >
                   Remove
                 </button>
+              </div>
+            ) : (
+              <div className="w-full mb-3">
+                {!showApiKeyInput ? (
+                  <button
+                    onClick={() => setShowApiKeyInput(true)}
+                    className="w-full text-xs text-purple-600 dark:text-purple-400 border border-dashed border-purple-300 dark:border-purple-600 rounded-xl px-3 py-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <span>🔑</span>
+                    Have a Venice API key? Add it for unlimited books
+                  </button>
+                ) : (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl px-3 py-3">
+                    <p className="text-xs text-purple-700 dark:text-purple-300 mb-2 font-semibold">
+                      Enter your Venice AI API key for unlimited books.{' '}
+                      <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="underline">
+                        Get one free ($10 credits) →
+                      </a>
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={apiKeyInputValue}
+                        onChange={e => setApiKeyInputValue(e.target.value)}
+                        placeholder="venice-api-..."
+                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-xs text-gray-800 dark:text-gray-200 focus:border-purple-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          const trimmed = apiKeyInputValue.trim()
+                          if (!trimmed) return
+                          localStorage.setItem(LS_API_KEY, trimmed)
+                          setUserApiKey(trimmed)
+                          setApiKeyInputValue('')
+                          setShowApiKeyInput(false)
+                        }}
+                        disabled={!apiKeyInputValue.trim()}
+                        className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => { setShowApiKeyInput(false); setApiKeyInputValue('') }}
+                        className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
