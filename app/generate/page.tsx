@@ -47,6 +47,13 @@ const CHARACTER_TRAITS = [
   'adventurous', 'gentle', 'mischievous', 'loyal', 'creative', 'determined',
 ]
 
+const IMAGE_MODELS = [
+  { value: 'flux-2-pro', label: 'Flux 2 Pro', description: 'High quality, detailed (default)' },
+  { value: 'recraft-v4', label: 'Recraft v4', description: 'Sharp, stylized illustrations' },
+  { value: 'qwen-image', label: 'Qwen Image', description: 'Strong text rendering' },
+  { value: 'grok-imagine', label: 'Grok Imagine', description: 'Creative & imaginative' },
+]
+
 const NARRATOR_VOICES = [
   { value: 'default', label: 'Default Voice', description: 'Warm and friendly' },
   { value: 'nova', label: 'Nova', description: 'Warm, slightly British accent' },
@@ -362,6 +369,7 @@ export default function GeneratePage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [narratorVoice, setNarratorVoice] = useState('default')
+  const [imageModel, setImageModel] = useState('flux-2-pro')
 
   // Character Builder
   const [characterName, setCharacterName] = useState('')
@@ -474,6 +482,7 @@ export default function GeneratePage() {
           illustrationStyle: ILLUSTRATION_STYLES.find(s => s.value === illustrationStyle)?.prompt || illustrationStyle,
           storyLength: parseInt(storyLength),
           narratorVoice,
+          imageModel,
           userVeniceApiKey: effectiveApiKey || undefined,
           character: showCharacterBuilder
             ? { name: characterName, type: characterType, traits: selectedTraits }
@@ -857,6 +866,29 @@ export default function GeneratePage() {
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Image Model */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-left text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <Icon name="auto_awesome" size={18} /> Illustration AI Model
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {IMAGE_MODELS.map(m => (
+                      <button
+                        key={m.value}
+                        onClick={() => setImageModel(m.value)}
+                        className={`p-2.5 rounded-lg border-2 text-left transition-all ${
+                          imageModel === m.value
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30'
+                            : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-gray-800 dark:text-gray-200">{m.label}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{m.description}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Narrator Voice */}

@@ -42,6 +42,7 @@ export default function BookViewerPage() {
   // animatingPageKey: which page is currently being animated (null = none)
   const [animatingPageKey, setAnimatingPageKey] = useState<string | null>(null)
   const [animateQueueId, setAnimateQueueId] = useState<string | null>(null)
+  const [animateModel, setAnimateModel] = useState<string | null>(null)
   const [animateElapsed, setAnimateElapsed] = useState<number>(0)
   const [animateAvgTime, setAnimateAvgTime] = useState<number>(120000)
   // Video modal
@@ -80,7 +81,7 @@ export default function BookViewerPage() {
         const res = await fetch('/api/animate-retrieve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ queueId: animateQueueId, userApiKey }),
+          body: JSON.stringify({ queueId: animateQueueId, model: animateModel, userApiKey }),
         })
         const data = await res.json()
 
@@ -90,6 +91,7 @@ export default function BookViewerPage() {
           setShowVideoModal(true)
           setAnimatingPageKey(null)
           setAnimateQueueId(null)
+          setAnimateModel(null)
         } else if (data.status === 'processing') {
           setAnimateElapsed(data.elapsed ?? 0)
           setAnimateAvgTime(data.averageTime ?? 120000)
@@ -98,6 +100,7 @@ export default function BookViewerPage() {
           alert('Animation failed: ' + data.error)
           setAnimatingPageKey(null)
           setAnimateQueueId(null)
+          setAnimateModel(null)
         }
       } catch (err) {
         console.error('Animation poll error:', err)
@@ -106,7 +109,7 @@ export default function BookViewerPage() {
 
     const interval = setInterval(poll, 10000)
     return () => clearInterval(interval)
-  }, [animateQueueId, animatingPageKey, userApiKey])
+  }, [animateQueueId, animatingPageKey, animateModel, userApiKey])
 
   const handleGenerateAudio = async () => {
     if (!book) return
@@ -195,6 +198,7 @@ export default function BookViewerPage() {
         return
       }
       setAnimateQueueId(data.queueId)
+      if (data.model) setAnimateModel(data.model)
     } catch (err: any) {
       alert(err.message || 'Failed to start animation')
       setAnimatingPageKey(null)

@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
       illustrationStyle,
       storyLength = 8,
       narratorVoice = 'default',
+      imageModel = 'flux-2-pro',
       character,
       userVeniceApiKey,
     } = await request.json()
@@ -265,7 +266,7 @@ export async function POST(request: NextRequest) {
     await setBook(bookId, book)
 
     // Fire-and-forget image generation (pass the resolved API key)
-    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey).catch(
+    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel).catch(
       async err => {
         console.error(`[${bookId}] Image generation error:`, err)
         const b = await getBook(bookId)
@@ -291,6 +292,7 @@ async function generateBookImages(
   illustrationStyle: string,
   characters: { main?: string; others?: string[] } | undefined,
   apiKey: string,
+  imageModel: string = 'flux-2-pro',
 ) {
   const book = await getBook(bookId)
   if (!book) return
@@ -335,9 +337,9 @@ async function generateBookImages(
 
   // 1 + 2. Fire cover and all page images simultaneously
   const [coverImg, ...pageImgs] = await Promise.all([
-    generateImage(coverPrompt, 'nano-banana-pro', 1280, 720, 1, apiKey).then(img => { onImageDone(); return img }),
+    generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => { onImageDone(); return img }),
     ...pagePrompts.map((prompt: string) =>
-      generateImage(prompt, 'flux-2-pro', 1024, 768, 30, apiKey).then(img => { onImageDone(); return img })
+      generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => { onImageDone(); return img })
     ),
   ])
 

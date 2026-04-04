@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
       `with soft, magical movement. Keep the art style exactly the same. Add subtle breathing, ` +
       `gentle swaying, sparkles, or light effects appropriate for a children's story.`
 
+    const videoModel = 'wan-i2v-480p'
+
     const queueRes = await fetch('https://api.venice.ai/api/v1/video/queue', {
       method: 'POST',
       headers: {
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'grok-imagine-image-to-video',
+        model: videoModel,
         prompt: animatePrompt,
         image_url: imageUrl,
         duration: '5s',
@@ -63,13 +65,18 @@ export async function POST(request: NextRequest) {
       const errText = await queueRes.text()
       console.error('Venice video queue error:', queueRes.status, errText)
       return NextResponse.json(
-        { error: `Failed to start animation: ${queueRes.statusText}` },
+        { error: `Failed to start animation: ${errText || queueRes.statusText}` },
         { status: queueRes.status },
       )
     }
 
-    const { queue_id } = await queueRes.json()
-    return NextResponse.json({ queueId: queue_id })
+    const queueData = await queueRes.json()
+    const queue_id = queueData.queue_id || queueData.id
+    if (!queue_id) {
+      console.error('Venice video queue: no queue_id in response', queueData)
+      return NextResponse.json({ error: 'No queue ID returned from animation service' }, { status: 500 })
+    }
+    return NextResponse.json({ queueId: queue_id, model: videoModel })
   } catch (error: any) {
     console.error('animate-image error:', error)
     return NextResponse.json({ error: error.message || 'Failed to start animation' }, { status: 500 })
