@@ -303,7 +303,6 @@ async function generateBookImages(
     : ''
 
   const totalPages = pages.length
-  const progressPerPage = 78 / totalPages // 10% story + 12% cover + 78% pages = 100%
 
   const updateProgress = async (pct: number) => {
     book.generationProgress = Math.min(99, Math.round(pct))
@@ -312,34 +311,44 @@ async function generateBookImages(
 
   const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
 
-  // 1. Cover image
-  console.log(`[${bookId}] Generating cover...`)
+  // Build all prompts up front
   const coverPrompt = `Beautiful children's book cover for "${book.title}". ${illustrationStyle} style, children's book cover art, colorful, whimsical, high quality, inviting, magical, eye-catching. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}`
   imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })
 
-  const coverImg = await generateImage(coverPrompt, 'nano-banana-pro', 1280, 720, 1, apiKey)
-  if (coverImg) {
-    book.titlePage = { image: `data:image/webp;base64,${coverImg}`, title: book.title }
-  }
-  await updateProgress(22) // 10% story + 12% cover
-
-  // 2. Page images (sequential for accurate progress)
-  book.pages = []
-  for (let i = 0; i < pages.length; i++) {
-    console.log(`[${bookId}] Generating page ${i + 1}/${totalPages}...`)
-    const page = pages[i]
-
+  const pagePrompts: string[] = pages.map((page: any, i: number) => {
     const desc = page.imageDescription || page.text.substring(0, 300)
     const basePrompt = `${desc}, ${illustrationStyle} style, children's book illustration, colorful, whimsical, high quality, detailed, charming, vivid colors`
     const fullPrompt = charPrefix ? `${charPrefix}${basePrompt}`.substring(0, 2800) : basePrompt.substring(0, 2800)
     imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
+    return fullPrompt
+  })
 
-    const img = await generateImage(fullPrompt, 'flux-2-pro', 1024, 768, 30, apiKey)
-    if (!img) throw new Error(`Failed to generate image for page ${i + 1}`)
-
-    book.pages.push({ pageNumber: i + 1, text: page.text, image: `data:image/webp;base64,${img}` })
-    await updateProgress(22 + (i + 1) * progressPerPage)
+  // Track completions for live progress updates (10% story → 99% when all images done)
+  let completedCount = 0
+  const totalImages = 1 + totalPages
+  const onImageDone = async () => {
+    completedCount++
+    await updateProgress(10 + Math.round((completedCount / totalImages) * 89))
   }
+
+  console.log(`[${bookId}] Generating cover + ${totalPages} page images in parallel...`)
+
+  // 1 + 2. Fire cover and all page images simultaneously
+  const [coverImg, ...pageImgs] = await Promise.all([
+    generateImage(coverPrompt, 'nano-banana-pro', 1280, 720, 1, apiKey).then(img => { onImageDone(); return img }),
+    ...pagePrompts.map((prompt: string) =>
+      generateImage(prompt, 'flux-2-pro', 1024, 768, 30, apiKey).then(img => { onImageDone(); return img })
+    ),
+  ])
+
+  if (coverImg) {
+    book.titlePage = { image: `data:image/webp;base64,${coverImg}`, title: book.title }
+  }
+
+  book.pages = pageImgs.map((img, i) => {
+    if (!img) throw new Error(`Failed to generate image for page ${i + 1}`)
+    return { pageNumber: i + 1, text: pages[i].text, image: `data:image/webp;base64,${img}` }
+  })
 
   // 3. Complete
   book.status = 'completed'
