@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         model: 'grok-imagine-image-to-video',
         prompt: animatePrompt,
         image_url: imageUrl,
-        duration: 5,
+        duration: '5s',
         resolution: '480p',
       }),
     })
