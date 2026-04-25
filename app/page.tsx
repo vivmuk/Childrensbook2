@@ -74,6 +74,13 @@ export default function WelcomePage() {
             <span>AI Stories for Kids</span>
           </button>
           <button
+            onClick={() => router.push('/video-studio')}
+            className="w-full max-w-xs rounded-2xl bg-gradient-to-r from-indigo-500/80 to-purple-600/80 hover:from-indigo-400/90 hover:to-purple-500/90 backdrop-blur-md px-8 py-4 font-display text-lg font-bold text-white shadow-xl transition-all hover:scale-105 hover:shadow-2xl active:scale-95 flex items-center justify-center gap-2 border-2 border-white/30"
+          >
+            <span>🎬</span>
+            <span>AI Video Lab</span>
+          </button>
+          <button
             onClick={() => setShowHowItWorks(true)}
             className="mt-2 text-center font-display text-sm font-medium text-white/80 underline hover:text-white transition-colors"
           >
