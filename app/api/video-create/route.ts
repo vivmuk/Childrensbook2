@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const proto = request.headers.get('x-forwarded-proto') || 'https'
     const imageUrl = `${proto}://${host}/api/temp-image/${tempId}`
 
-    const videoModel = 'wan-i2v-480p'
+    const videoModel = 'grok-imagine-image-to-video'
 
     const queueRes = await fetch('https://api.venice.ai/api/v1/video/queue', {
       method: 'POST',
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         prompt: prompt.trim(),
         image_url: imageUrl,
         duration: '5s',
-        resolution: '480p',
+        resolution: '720p',
       }),
     })
 

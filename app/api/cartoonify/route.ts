@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'qwen-edit',
+        model: 'grok-imagine-edit',
         prompt: cartoonPrompt,
         image: base64Data,
         aspect_ratio: '1:1',

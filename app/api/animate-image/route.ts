@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       `with soft, magical movement. Keep the art style exactly the same. Add subtle breathing, ` +
       `gentle swaying, sparkles, or light effects appropriate for a children's story.`
 
-    const videoModel = 'wan-i2v-480p'
+    const videoModel = 'grok-imagine-image-to-video'
 
     const queueRes = await fetch('https://api.venice.ai/api/v1/video/queue', {
       method: 'POST',
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         prompt: animatePrompt,
         image_url: imageUrl,
         duration: '5s',
-        resolution: '480p',
+        resolution: '720p',
       }),
     })
 
