@@ -54,8 +54,16 @@ export function Header({ title, showHome = true, showBack = true }: HeaderProps)
         )}
       </div>
 
-      {/* Right: My Books */}
+      {/* Right: Video Studio + My Books */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={() => router.push('/video-studio')}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-indigo-100 hover:bg-indigo-200 dark:bg-indigo-800 dark:hover:bg-indigo-700 text-indigo-700 dark:text-indigo-300 text-sm font-semibold transition-colors"
+          title="AI Video Lab"
+        >
+          <Icon name="videocam" size={18} />
+          <span className="hidden sm:inline">Video Lab</span>
+        </button>
         <button
           onClick={() => router.push('/library')}
           className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-300 text-sm font-semibold transition-colors"

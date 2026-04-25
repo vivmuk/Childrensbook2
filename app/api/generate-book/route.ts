@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
       imageModel = 'flux-2-pro',
       character,
       userVeniceApiKey,
+      cartoonHeroImage,
     } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
@@ -266,7 +267,7 @@ export async function POST(request: NextRequest) {
     await setBook(bookId, book)
 
     // Fire-and-forget image generation (pass the resolved API key)
-    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel).catch(
+    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel, cartoonHeroImage).catch(
       async err => {
         console.error(`[${bookId}] Image generation error:`, err)
         const b = await getBook(bookId)
@@ -293,6 +294,7 @@ async function generateBookImages(
   characters: { main?: string; others?: string[] } | undefined,
   apiKey: string,
   imageModel: string = 'flux-2-pro',
+  cartoonHeroImage?: string,
 ) {
   const book = await getBook(bookId)
   if (!book) return
@@ -333,23 +335,32 @@ async function generateBookImages(
     await updateProgress(10 + Math.round((completedCount / totalImages) * 89))
   }
 
-  console.log(`[${bookId}] Generating cover + ${totalPages} page images in parallel...`)
+  console.log(`[${bookId}] Generating cover + ${totalPages} page images in parallel${cartoonHeroImage ? ' (cartoon hero mode)' : ''}...`)
+
+  // Strip data URI prefix from cartoon hero if present
+  const heroBase64 = cartoonHeroImage ? cartoonHeroImage.replace(/^data:[^;]+;base64,/, '') : undefined
 
   // 1 + 2. Fire cover and all page images simultaneously
-  const [coverImg, ...pageImgs] = await Promise.all([
-    generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => { onImageDone(); return img }),
+  const [coverResult, ...pageResults] = await Promise.all([
+    heroBase64
+      ? editImage(coverPrompt, heroBase64, '16:9', apiKey).then(r => { onImageDone(); return r })
+      : generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => { onImageDone(); return img ? { data: img, isPng: false } : null }),
     ...pagePrompts.map((prompt: string) =>
-      generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => { onImageDone(); return img })
+      heroBase64
+        ? editImage(prompt, heroBase64, '4:3', apiKey).then(r => { onImageDone(); return r })
+        : generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => { onImageDone(); return img ? { data: img, isPng: false } : null })
     ),
   ])
 
-  if (coverImg) {
-    book.titlePage = { image: `data:image/webp;base64,${coverImg}`, title: book.title }
+  if (coverResult) {
+    const prefix = coverResult.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
+    book.titlePage = { image: `${prefix}${coverResult.data}`, title: book.title }
   }
 
-  book.pages = pageImgs.map((img, i) => {
-    if (!img) throw new Error(`Failed to generate image for page ${i + 1}`)
-    return { pageNumber: i + 1, text: pages[i].text, image: `data:image/webp;base64,${img}` }
+  book.pages = pageResults.map((result, i) => {
+    if (!result) throw new Error(`Failed to generate image for page ${i + 1}`)
+    const prefix = result.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
+    return { pageNumber: i + 1, text: pages[i].text, image: `${prefix}${result.data}` }
   })
 
   // 3. Complete
@@ -360,7 +371,7 @@ async function generateBookImages(
   console.log(`[${bookId}] Book generation complete!`)
 }
 
-// ── Venice image API helper ──────────────────────────────────────────────────
+// ── Venice image API helpers ─────────────────────────────────────────────────
 
 async function generateImage(
   prompt: string,
@@ -386,6 +397,41 @@ async function generateImage(
     return data.images?.[0] ?? null
   } catch (err) {
     console.error('Image generation exception:', err)
+    return null
+  }
+}
+
+// Uses Venice /image/edit to place the cartoon hero character into each scene
+async function editImage(
+  prompt: string,
+  heroBase64: string,
+  aspectRatio: string,
+  apiKey: string,
+): Promise<{ data: string; isPng: true } | null> {
+  try {
+    const res = await fetch('https://api.venice.ai/api/v1/image/edit', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen-edit',
+        prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero in this scene.`,
+        image: heroBase64,
+        aspect_ratio: aspectRatio,
+        safe_mode: true,
+      }),
+    })
+
+    if (!res.ok) {
+      console.error(`Image edit error: ${res.status} — ${(await res.text()).slice(0, 200)}`)
+      return null
+    }
+
+    // /image/edit returns binary PNG
+    const pngBuffer = await res.arrayBuffer()
+    const base64 = Buffer.from(pngBuffer).toString('base64')
+    return { data: base64, isPng: true }
+  } catch (err) {
+    console.error('Image edit exception:', err)
     return null
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
@@ -389,6 +389,13 @@ export default function GeneratePage() {
   const [showApiKeyInput, setShowApiKeyInput] = useState(false)
   const [apiKeyInputValue, setApiKeyInputValue] = useState('')
 
+  // Cartoon hero state
+  const [heroPhotoDataUrl, setHeroPhotoDataUrl] = useState<string | null>(null)
+  const [cartoonHeroDataUrl, setCartoonHeroDataUrl] = useState<string | null>(null)
+  const [isCartoonifying, setIsCartoonifying] = useState(false)
+  const [cartoonError, setCartoonError] = useState('')
+  const heroFileInputRef = useRef<HTMLInputElement>(null)
+
   // Ref to capture generation metadata for localStorage saving
   const pendingMetaRef = useRef<{ ageRange: string; illustrationStyle: string } | null>(null)
 
@@ -452,6 +459,40 @@ export default function GeneratePage() {
     return () => clearInterval(interval)
   }, [bookId, isGenerating, router, ageRange, illustrationStyle])
 
+  const handleHeroImageLoad = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = e => {
+      setHeroPhotoDataUrl(e.target?.result as string)
+      setCartoonHeroDataUrl(null)
+      setCartoonError('')
+    }
+    reader.readAsDataURL(file)
+  }, [])
+
+  const handleCartoonify = async () => {
+    if (!heroPhotoDataUrl) return
+    setIsCartoonifying(true)
+    setCartoonError('')
+    try {
+      const res = await fetch('/api/cartoonify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: heroPhotoDataUrl, userApiKey: userApiKey || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCartoonError(data.error || 'Failed to cartoonify. Please try again.')
+      } else {
+        setCartoonHeroDataUrl(data.cartoonImage)
+      }
+    } catch (err: any) {
+      setCartoonError(err.message || 'Failed to cartoonify. Please try again.')
+    } finally {
+      setIsCartoonifying(false)
+    }
+  }
+
   // Core generation function
   const doGenerate = async (overrideApiKey?: string) => {
     setIsGenerating(true)
@@ -484,6 +525,7 @@ export default function GeneratePage() {
           narratorVoice,
           imageModel,
           userVeniceApiKey: effectiveApiKey || undefined,
+          cartoonHeroImage: cartoonHeroDataUrl || undefined,
           character: showCharacterBuilder
             ? { name: characterName, type: characterType, traits: selectedTraits }
             : undefined,
@@ -719,6 +761,127 @@ export default function GeneratePage() {
                   STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example ||
                   'A brave knight who is afraid of spiders, or a magical treehouse that travels through time...'
                 }
+              />
+            </div>
+
+            {/* Cartoon Hero Section */}
+            <div className="w-full mb-4 rounded-2xl bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-950/40 dark:to-purple-950/40 border-2 border-pink-200 dark:border-pink-800 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-pink-800 dark:text-pink-300 flex items-center gap-2">
+                    <span>🌟</span> Make Your Child the Hero!
+                  </h3>
+                  <p className="text-xs text-pink-600 dark:text-pink-400 mt-0.5">
+                    Upload a photo and AI will turn them into a cartoon book character
+                  </p>
+                </div>
+              </div>
+
+              {!heroPhotoDataUrl ? (
+                <button
+                  onClick={() => heroFileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-pink-300 dark:border-pink-700 rounded-xl py-4 px-3 flex items-center justify-center gap-3 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-colors cursor-pointer"
+                >
+                  <span className="text-3xl">📷</span>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-pink-700 dark:text-pink-300">Upload a photo of your child</p>
+                    <p className="text-xs text-pink-500 dark:text-pink-400">JPG or PNG, portrait works best</p>
+                  </div>
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    {/* Original photo */}
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 text-center">Original</p>
+                      <div className="relative">
+                        <img
+                          src={heroPhotoDataUrl}
+                          alt="Child photo"
+                          className="w-full h-36 object-cover rounded-xl border-2 border-gray-200 dark:border-gray-600"
+                        />
+                        <button
+                          onClick={() => { setHeroPhotoDataUrl(null); setCartoonHeroDataUrl(null); setCartoonError('') }}
+                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center shadow hover:bg-red-600"
+                        >✕</button>
+                      </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="flex items-center pt-5">
+                      <Icon name="arrow_forward" size={20} className="text-pink-400" />
+                    </div>
+
+                    {/* Cartoon result */}
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1 text-center">Cartoon Hero</p>
+                      {cartoonHeroDataUrl ? (
+                        <img
+                          src={cartoonHeroDataUrl}
+                          alt="Cartoon hero"
+                          className="w-full h-36 object-cover rounded-xl border-2 border-pink-300 dark:border-pink-600 shadow-md"
+                        />
+                      ) : (
+                        <div className="w-full h-36 rounded-xl border-2 border-dashed border-pink-300 dark:border-pink-700 flex items-center justify-center bg-pink-50 dark:bg-pink-900/20">
+                          {isCartoonifying ? (
+                            <div className="text-center">
+                              <div className="text-2xl animate-spin mb-1">🎨</div>
+                              <p className="text-xs text-pink-600 dark:text-pink-400">Drawing...</p>
+                            </div>
+                          ) : (
+                            <div className="text-center px-2">
+                              <div className="text-2xl mb-1">🖼️</div>
+                              <p className="text-xs text-pink-500 dark:text-pink-400">Click below to cartoon-ify</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {cartoonError && (
+                    <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{cartoonError}</p>
+                  )}
+
+                  {!cartoonHeroDataUrl ? (
+                    <button
+                      onClick={handleCartoonify}
+                      disabled={isCartoonifying}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md flex items-center justify-center gap-2"
+                    >
+                      {isCartoonifying ? (
+                        <>
+                          <span className="animate-spin">🎨</span> Creating cartoon hero...
+                        </>
+                      ) : (
+                        <>
+                          <span>✨</span> Cartoonify!
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="flex-1 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <span>✅</span>
+                        <p className="text-xs text-green-700 dark:text-green-300 font-semibold">Cartoon hero ready! They&apos;ll star in your book.</p>
+                      </div>
+                      <button
+                        onClick={() => { setCartoonHeroDataUrl(null); setCartoonError('') }}
+                        className="px-3 py-2 text-xs text-gray-500 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        Redo
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <input
+                ref={heroFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleHeroImageLoad(f) }}
               />
             </div>
 
