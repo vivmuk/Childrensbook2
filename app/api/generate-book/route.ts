@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       illustrationStyle,
       storyLength = 8,
       narratorVoice = 'default',
-      imageModel = 'flux-2-pro',
+      imageModel = 'grok-imagine-image',
       character,
       userVeniceApiKey,
       cartoonHeroImage,
@@ -293,7 +293,7 @@ async function generateBookImages(
   illustrationStyle: string,
   characters: { main?: string; others?: string[] } | undefined,
   apiKey: string,
-  imageModel: string = 'flux-2-pro',
+  imageModel: string = 'grok-imagine-image',
   cartoonHeroImage?: string,
 ) {
   const book = await getBook(bookId)
@@ -347,7 +347,7 @@ async function generateBookImages(
       : generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => { onImageDone(); return img ? { data: img, isPng: false } : null }),
     ...pagePrompts.map((prompt: string) =>
       heroBase64
-        ? editImage(prompt, heroBase64, '4:3', apiKey).then(r => { onImageDone(); return r })
+        ? editImage(prompt, heroBase64, '3:2', apiKey).then(r => { onImageDone(); return r })
         : generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => { onImageDone(); return img ? { data: img, isPng: false } : null })
     ),
   ])
@@ -413,7 +413,7 @@ async function editImage(
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen-edit',
+        model: 'grok-imagine-edit',
         prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero in this scene.`,
         image: heroBase64,
         aspect_ratio: aspectRatio,

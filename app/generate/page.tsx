@@ -48,10 +48,10 @@ const CHARACTER_TRAITS = [
 ]
 
 const IMAGE_MODELS = [
-  { value: 'flux-2-pro', label: 'Flux 2 Pro', description: 'High quality, detailed (default)' },
+  { value: 'grok-imagine-image', label: 'Grok Imagine', description: 'Best for cartoon books (default)' },
+  { value: 'flux-2-pro', label: 'Flux 2 Pro', description: 'High quality, detailed' },
   { value: 'recraft-v4', label: 'Recraft v4', description: 'Sharp, stylized illustrations' },
   { value: 'qwen-image', label: 'Qwen Image', description: 'Strong text rendering' },
-  { value: 'grok-imagine', label: 'Grok Imagine', description: 'Creative & imaginative' },
 ]
 
 const NARRATOR_VOICES = [
@@ -369,7 +369,7 @@ export default function GeneratePage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [narratorVoice, setNarratorVoice] = useState('default')
-  const [imageModel, setImageModel] = useState('flux-2-pro')
+  const [imageModel, setImageModel] = useState('grok-imagine-image')
 
   // Character Builder
   const [characterName, setCharacterName] = useState('')
