@@ -6,7 +6,10 @@
       "Bash(git check-ignore:*)",
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nFix package-lock.json for Railway deployment\n\nRegenerate package-lock.json with lockfileVersion 3 to fix npm ci failures on Railway.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(cp /root/.claude/projects/-home-user-Childrensbook2/5f18afd1-6394-4958-92b3-28b16f291a7f/tool-results/webfetch-1777690155052-bri79u.bin /tmp/design.gz)",
+      "Bash(gunzip -f /tmp/design.gz)",
+      "Read(//tmp/**)"
     ]
   }
 }
