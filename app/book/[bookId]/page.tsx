@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { Icon } from '@/components/Icons'
 
 interface BookPage {
   text: string
@@ -33,19 +32,16 @@ export default function BookViewerPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [isPageTransitioning, setIsPageTransitioning] = useState(false)
-  const [audioRef, setAudioRef] = useState<HTMLAudioElement | null>(null)
+  const [, setAudioRef] = useState<HTMLAudioElement | null>(null)
 
   // Animation state
   const [userApiKey, setUserApiKey] = useState<string>('')
-  // pageVideos: maps pageKey (string "-1" or "0","1",...) to generated video data URL
   const [pageVideos, setPageVideos] = useState<Record<string, string>>({})
-  // animatingPageKey: which page is currently being animated (null = none)
   const [animatingPageKey, setAnimatingPageKey] = useState<string | null>(null)
   const [animateQueueId, setAnimateQueueId] = useState<string | null>(null)
   const [animateModel, setAnimateModel] = useState<string | null>(null)
   const [animateElapsed, setAnimateElapsed] = useState<number>(0)
   const [animateAvgTime, setAnimateAvgTime] = useState<number>(120000)
-  // Video modal
   const [showVideoModal, setShowVideoModal] = useState(false)
   const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null)
 
@@ -53,9 +49,7 @@ export default function BookViewerPage() {
     const fetchBook = async () => {
       try {
         const response = await fetch(`/api/book/${bookId}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch book')
-        }
+        if (!response.ok) throw new Error('Failed to fetch book')
         const data = await response.json()
         setBook(data)
         setIsLoading(false)
@@ -64,150 +58,87 @@ export default function BookViewerPage() {
         setIsLoading(false)
       }
     }
-
     fetchBook()
-
-    // Load Venice API key from localStorage (same key as generate page)
     const savedKey = localStorage.getItem('kinderquill_venice_api_key')
     if (savedKey) setUserApiKey(savedKey)
   }, [bookId])
 
-  // Poll Venice for animation completion
   useEffect(() => {
     if (!animateQueueId || !animatingPageKey) return
-
     const poll = async () => {
       try {
         const res = await fetch('/api/animate-retrieve', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ queueId: animateQueueId, model: animateModel, userApiKey }),
         })
         const data = await res.json()
-
         if (data.status === 'complete' && data.videoUrl) {
           setPageVideos(prev => ({ ...prev, [animatingPageKey]: data.videoUrl }))
-          setModalVideoUrl(data.videoUrl)
-          setShowVideoModal(true)
-          setAnimatingPageKey(null)
-          setAnimateQueueId(null)
-          setAnimateModel(null)
+          setModalVideoUrl(data.videoUrl); setShowVideoModal(true)
+          setAnimatingPageKey(null); setAnimateQueueId(null); setAnimateModel(null)
         } else if (data.status === 'processing') {
-          setAnimateElapsed(data.elapsed ?? 0)
-          setAnimateAvgTime(data.averageTime ?? 120000)
+          setAnimateElapsed(data.elapsed ?? 0); setAnimateAvgTime(data.averageTime ?? 120000)
         } else if (data.error) {
-          console.error('Animation error:', data.error)
-          alert('Animation failed: ' + data.error)
-          setAnimatingPageKey(null)
-          setAnimateQueueId(null)
-          setAnimateModel(null)
+          console.error('Animation error:', data.error); alert('Animation failed: ' + data.error)
+          setAnimatingPageKey(null); setAnimateQueueId(null); setAnimateModel(null)
         }
-      } catch (err) {
-        console.error('Animation poll error:', err)
-      }
+      } catch (err) { console.error('Animation poll error:', err) }
     }
-
     const interval = setInterval(poll, 10000)
     return () => clearInterval(interval)
   }, [animateQueueId, animatingPageKey, animateModel, userApiKey])
 
   const handleGenerateAudio = async () => {
     if (!book) return
-
     setIsGeneratingAudio(true)
     try {
-      const response = await fetch(`/api/generate-audio/${bookId}`, {
-        method: 'POST',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to generate audio')
-      }
-
+      const response = await fetch(`/api/generate-audio/${bookId}`, { method: 'POST' })
+      if (!response.ok) throw new Error('Failed to generate audio')
       const data = await response.json()
       setBook({ ...book, audioUrl: data.audioUrl })
     } catch (error) {
       console.error('Error generating audio:', error)
       alert('Failed to generate audio. Please try again.')
-    } finally {
-      setIsGeneratingAudio(false)
-    }
+    } finally { setIsGeneratingAudio(false) }
   }
 
   const handlePageChange = (newPage: number) => {
     setIsPageTransitioning(true)
-    setTimeout(() => {
-      setCurrentPage(newPage)
-      setIsPageTransitioning(false)
-    }, 150)
+    setTimeout(() => { setCurrentPage(newPage); setIsPageTransitioning(false) }, 150)
   }
 
-  const handleDownloadPDF = () => {
-    window.open(`/pdf/${bookId}?download=true`, '_blank')
-  }
-
-  const handleDownloadAudio = () => {
-    if (!book || !book.audioUrl) return
-    window.open(`/api/download-audio/${bookId}`, '_blank')
-  }
+  const handleDownloadPDF = () => { window.open(`/pdf/${bookId}?download=true`, '_blank') }
+  const handleDownloadAudio = () => { if (!book || !book.audioUrl) return; window.open(`/api/download-audio/${bookId}`, '_blank') }
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/share/${bookId}`
-    
     if (navigator.share) {
-      try {
-        await navigator.share({
-          title: book?.title || 'My KinderQuill Story',
-          text: `Check out this story: ${book?.title}`,
-          url: shareUrl,
-        })
-      } catch (err) {
-        // User cancelled or share failed, fallback to clipboard
-        copyToClipboard(shareUrl)
-      }
-    } else {
-      copyToClipboard(shareUrl)
-    }
+      try { await navigator.share({ title: book?.title || 'My KinderQuill Story', text: `Check out this story: ${book?.title}`, url: shareUrl }) }
+      catch { copyToClipboard(shareUrl) }
+    } else { copyToClipboard(shareUrl) }
   }
 
   const copyToClipboard = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url)
-      alert('Link copied to clipboard! Share it with friends and family.')
-    } catch (err) {
-      alert(`Share this link: ${url}`)
-    }
+    try { await navigator.clipboard.writeText(url); alert('Link copied to clipboard!') }
+    catch { alert(`Share this link: ${url}`) }
   }
 
   const handleAnimate = async (pageKey: string, pageIndex: number) => {
-    if (animatingPageKey) return // already animating something
-    setAnimatingPageKey(pageKey)
-    setAnimateElapsed(0)
-    setAnimateAvgTime(120000)
-
+    if (animatingPageKey) return
+    setAnimatingPageKey(pageKey); setAnimateElapsed(0); setAnimateAvgTime(120000)
     try {
       const res = await fetch('/api/animate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId, pageIndex, userApiKey }),
       })
       const data = await res.json()
-      if (!res.ok || data.error) {
-        alert(data.error || 'Failed to start animation')
-        setAnimatingPageKey(null)
-        return
-      }
-      setAnimateQueueId(data.queueId)
-      if (data.model) setAnimateModel(data.model)
-    } catch (err: any) {
-      alert(err.message || 'Failed to start animation')
-      setAnimatingPageKey(null)
-    }
+      if (!res.ok || data.error) { alert(data.error || 'Failed to start animation'); setAnimatingPageKey(null); return }
+      setAnimateQueueId(data.queueId); if (data.model) setAnimateModel(data.model)
+    } catch (err: any) { alert(err.message || 'Failed to start animation'); setAnimatingPageKey(null) }
   }
 
   const handleDownloadHTML = () => {
     if (!book) return
-
     const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -215,251 +146,71 @@ export default function BookViewerPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: 'Plus Jakarta Sans', 'Noto Sans', sans-serif;
-      background: linear-gradient(to bottom right, #f3e8ff, #fce7f3, #fef3c7);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    .book-container {
-      max-width: 800px;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-    }
-    .page {
-      display: none;
-      flex-direction: column;
-      gap: 20px;
-      width: 100%;
-      animation: fadeIn 0.5s ease-in;
-    }
-    .page.active {
-      display: flex;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .page-image {
-      width: 100%;
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-      animation: zoomIn 0.6s ease-out;
-    }
-    @keyframes zoomIn {
-      from { transform: scale(0.95); opacity: 0.8; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    .page-text {
-      background: rgba(255, 255, 255, 0.9);
-      padding: 24px;
-      border-radius: 16px;
-      font-size: 18px;
-      line-height: 1.8;
-      color: #1f2937;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      animation: slideUp 0.6s ease-out;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(30px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .header {
-      width: 100%;
-      text-align: center;
-      padding: 20px;
-      background: rgba(255, 255, 255, 0.8);
-      border-radius: 16px;
-      margin-bottom: 20px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    .header h1 {
-      font-size: 28px;
-      font-weight: bold;
-      color: #1f2937;
-    }
-    .navigation {
-      display: flex;
-      justify-content: space-between;
-      width: 100%;
-      gap: 15px;
-      margin-top: 20px;
-      position: sticky;
-      bottom: 20px;
-    }
-    .nav-button {
-      flex: 1;
-      padding: 15px 25px;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    .nav-button:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-    }
-    .nav-button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .nav-button.prev {
-      background: #f3f4f6;
-      color: #374151;
-    }
-    .nav-button.next {
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      color: white;
-    }
-    .page-indicators {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      margin-top: 10px;
-      flex-wrap: wrap;
-    }
-    .indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #d1d5db;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-    .indicator.active {
-      width: 32px;
-      background: #3b82f6;
-      border-radius: 4px;
-    }
-    @media (max-width: 768px) {
-      .page-text {
-        font-size: 16px;
-        padding: 20px;
-      }
-      .header h1 {
-        font-size: 24px;
-      }
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: sans-serif; background: linear-gradient(to bottom right, #f3e8ff, #fce7f3, #fef3c7); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    .book-container { max-width: 800px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .page { display: none; flex-direction: column; gap: 20px; width: 100%; }
+    .page.active { display: flex; }
+    .page-image { width: 100%; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .page-text { background: rgba(255,255,255,0.9); padding: 24px; border-radius: 16px; font-size: 18px; line-height: 1.8; color: #1f2937; }
+    .header { width: 100%; text-align: center; padding: 20px; background: rgba(255,255,255,0.8); border-radius: 16px; margin-bottom: 20px; }
+    .header h1 { font-size: 28px; font-weight: bold; color: #1f2937; }
+    .navigation { display: flex; justify-content: space-between; width: 100%; gap: 15px; margin-top: 20px; position: sticky; bottom: 20px; }
+    .nav-button { flex: 1; padding: 15px 25px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
+    .nav-button.prev { background: #f3f4f6; color: #374151; }
+    .nav-button.next { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; }
+    .nav-button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .page-indicators { display: flex; justify-content: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .indicator { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; cursor: pointer; transition: all 0.3s; }
+    .indicator.active { width: 32px; background: #3b82f6; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="book-container">
-      <div class="header">
-        <h1>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1>
-      </div>
-      ${book.titlePage ? `
-      <div class="page active" id="page-title">
-        <img src="${book.titlePage.image}" alt="${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}" class="page-image" />
-        <div class="page-text" style="text-align: center; font-size: 24px; font-weight: bold;">
-          ${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-          <div style="font-size: 14px; font-weight: normal; margin-top: 10px; color: #6b7280;">A KinderQuill Story</div>
-        </div>
-      </div>
-      ` : ''}
-      ${book.pages.map((page, index) => `
-      <div class="page ${!book.titlePage && index === 0 ? 'active' : ''}" id="page-${index}">
-        <img src="${page.image}" alt="Page ${index + 1}" class="page-image" />
-        <div class="page-text">${page.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
-      </div>
-    `).join('')}
+    <div class="header"><h1>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1></div>
+    ${book.titlePage ? `<div class="page active" id="page-title"><img src="${book.titlePage.image}" alt="${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}" class="page-image" /><div class="page-text" style="text-align:center;font-size:24px;font-weight:bold;">${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>` : ''}
+    ${book.pages.map((page, index) => `<div class="page ${!book.titlePage && index === 0 ? 'active' : ''}" id="page-${index}"><img src="${page.image}" alt="Page ${index + 1}" class="page-image" /><div class="page-text">${page.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`).join('')}
     <div class="page-indicators">
       ${book.titlePage ? '<div class="indicator active" onclick="goToPage(0)"></div>' : ''}
-      ${book.pages.map((_, index) => `
-        <div class="indicator ${!book.titlePage && index === 0 ? 'active' : ''}" onclick="goToPage(${book.titlePage ? index + 1 : index})"></div>
-      `).join('')}
+      ${book.pages.map((_, index) => `<div class="indicator ${!book.titlePage && index === 0 ? 'active' : ''}" onclick="goToPage(${book.titlePage ? index + 1 : index})"></div>`).join('')}
     </div>
     <div class="navigation">
-      <button class="nav-button prev" onclick="previousPage()" id="prevBtn">
-        ← Previous
-      </button>
-      <button class="nav-button next" onclick="nextPage()" id="nextBtn">
-        Next →
-      </button>
+      <button class="nav-button prev" onclick="previousPage()" id="prevBtn">← Previous</button>
+      <button class="nav-button next" onclick="nextPage()" id="nextBtn">Next →</button>
     </div>
   </div>
   <script>
     let currentPage = 0;
     const hasTitlePage = ${book.titlePage ? 'true' : 'false'};
     const totalPages = ${book.pages.length} + (hasTitlePage ? 1 : 0);
-
     function showPage(index) {
-      document.querySelectorAll('.page').forEach((page, i) => {
-        page.classList.toggle('active', i === index);
-      });
-      document.querySelectorAll('.indicator').forEach((indicator, i) => {
-        indicator.classList.toggle('active', i === index);
-      });
+      document.querySelectorAll('.page').forEach((page, i) => page.classList.toggle('active', i === index));
+      document.querySelectorAll('.indicator').forEach((ind, i) => ind.classList.toggle('active', i === index));
       document.getElementById('prevBtn').disabled = index === 0;
       document.getElementById('nextBtn').disabled = index === totalPages - 1;
     }
-    
-    function nextPage() {
-      if (currentPage < totalPages - 1) {
-        currentPage++;
-        showPage(currentPage);
-      }
-    }
-    
-    function previousPage() {
-      if (currentPage > 0) {
-        currentPage--;
-        showPage(currentPage);
-      }
-    }
-    
-    function goToPage(index) {
-      currentPage = index;
-      showPage(currentPage);
-    }
-    
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') previousPage();
-      if (e.key === 'ArrowRight') nextPage();
-    });
-    
-    // Initialize
+    function nextPage() { if (currentPage < totalPages - 1) showPage(++currentPage); }
+    function previousPage() { if (currentPage > 0) showPage(--currentPage); }
+    function goToPage(index) { currentPage = index; showPage(index); }
+    document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') previousPage(); if (e.key === 'ArrowRight') nextPage(); });
     showPage(0);
-  </script>
+  <\/script>
 </body>
 </html>`
-
     const blob = new Blob([htmlContent], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    a.href = url; a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
   }
 
+  // ── Loading ──
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50">
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
         <div className="text-center">
-          <Icon name="auto_awesome" className="text-purple-500 animate-spin mb-4" size={64} />
-          <p className="text-lg font-semibold text-gray-800">Loading book...</p>
+          <div className="text-6xl animate-kq-spin mb-4">✨</div>
+          <p className="text-lg font-semibold" style={{ color: '#fefcf5', fontFamily: 'Fredoka One, cursive' }}>Loading book...</p>
         </div>
       </div>
     )
@@ -467,13 +218,10 @@ export default function BookViewerPage() {
 
   if (!book) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background-light dark:bg-background-dark">
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
         <div className="text-center">
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">Book not found</p>
-          <button
-            onClick={() => router.push('/generate')}
-            className="mt-4 rounded-lg bg-primary px-6 py-2 text-white hover:opacity-90"
-          >
+          <p className="text-lg font-semibold" style={{ color: '#fefcf5' }}>Book not found</p>
+          <button onClick={() => router.push('/generate')} className="mt-4 px-6 py-2 rounded-full text-sm font-bold" style={{ background: '#9b5de5', color: '#fff' }}>
             Create New Book
           </button>
         </div>
@@ -483,378 +231,221 @@ export default function BookViewerPage() {
 
   if (!book.pages || book.pages.length === 0) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background-light dark:bg-background-dark">
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
         <div className="text-center">
-          <p className="text-lg font-semibold text-gray-800 dark:text-gray-200">Book is still being generated...</p>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Please wait a moment and refresh.</p>
+          <p className="text-lg font-semibold" style={{ color: '#fefcf5' }}>Book is still being generated...</p>
+          <p className="mt-2 text-sm" style={{ color: '#a0b4d6' }}>Please wait a moment and refresh.</p>
         </div>
       </div>
     )
   }
 
-  // Calculate total pages including title page
   const hasTitlePage = !!book.titlePage
   const totalPages = book.pages.length + (hasTitlePage ? 1 : 0)
   const isTitlePage = hasTitlePage && currentPage === 0
   const contentPageIndex = hasTitlePage ? currentPage - 1 : currentPage
   const page = isTitlePage ? null : book.pages[contentPageIndex]
 
-  // Shared: video modal
+  // ── Video Modal ──
   const VideoModal = () => {
     if (!showVideoModal || !modalVideoUrl) return null
     return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
-        onClick={() => setShowVideoModal(false)}
-      >
-        <div
-          className="relative w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl bg-gray-900"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-violet-600 to-pink-600">
-            <div className="flex items-center gap-2 text-white font-bold text-sm">
-              <span>✨</span> Animated Illustration
-            </div>
-            <button
-              onClick={() => setShowVideoModal(false)}
-              className="text-white/80 hover:text-white text-xl leading-none transition-colors"
-            >
-              ✕
-            </button>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)' }} onClick={() => setShowVideoModal(false)}>
+        <div className="relative w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl" style={{ background: '#0d1b3e', border: '2px solid rgba(155,93,229,0.4)' }} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 py-3" style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}>
+            <div className="flex items-center gap-2 text-white font-bold text-sm">✨ Animated Illustration</div>
+            <button onClick={() => setShowVideoModal(false)} className="text-white/80 hover:text-white text-xl transition-colors">✕</button>
           </div>
-          {/* Video player */}
-          <video
-            src={modalVideoUrl}
-            autoPlay
-            loop
-            controls
-            playsInline
-            className="w-full"
-            style={{ maxHeight: '70vh', objectFit: 'contain', background: '#000' }}
-          />
-          {/* Download button */}
-          <div className="flex justify-center gap-3 px-4 py-3 bg-gray-900">
-            <a
-              href={modalVideoUrl}
-              download="animation.mp4"
-              className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold rounded-xl transition-colors"
-            >
-              <span>⬇</span> Download MP4
-            </a>
-            <button
-              onClick={() => setShowVideoModal(false)}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl transition-colors"
-            >
-              Close
-            </button>
+          <video src={modalVideoUrl} autoPlay loop controls playsInline className="w-full" style={{ maxHeight: '70vh', objectFit: 'contain', background: '#000' }} />
+          <div className="flex justify-center gap-3 px-4 py-3" style={{ background: '#0d1b3e' }}>
+            <a href={modalVideoUrl} download="animation.mp4" className="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-xl transition-colors" style={{ background: '#9b5de5' }}>⬇ Download MP4</a>
+            <button onClick={() => setShowVideoModal(false)} className="px-4 py-2 text-white text-sm font-medium rounded-xl transition-colors" style={{ background: 'rgba(255,255,255,0.1)' }}>Close</button>
           </div>
         </div>
       </div>
     )
   }
 
-  // Shared: animate button component
+  // ── Animate Button ──
   const AnimateButton = ({ pageKey, pageIndex }: { pageKey: string; pageIndex: number }) => {
     const video = pageVideos[pageKey]
     const isAnimating = animatingPageKey === pageKey
     const progressPct = animateAvgTime > 0 ? Math.min(99, Math.round((animateElapsed / animateAvgTime) * 100)) : 0
-
     if (video) {
       return (
-        <button
-          onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white text-xs font-bold rounded-xl shadow-lg transition-all hover:scale-105"
-        >
-          <span>▶</span> Watch Animation
+        <button onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all hover:scale-105"
+          style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}>
+          ▶ Watch Animation
         </button>
       )
     }
-
     if (isAnimating) {
       return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-black/60 text-white text-xs font-medium rounded-xl backdrop-blur-sm">
-          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center gap-2 px-3 py-1.5 text-white text-xs font-medium rounded-xl" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}>
+          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-kq-spin" />
           <span>Animating… {animateQueueId ? `${progressPct}%` : 'starting'}</span>
         </div>
       )
     }
-
     return (
-      <button
-        onClick={() => handleAnimate(pageKey, pageIndex)}
-        disabled={!!animatingPageKey}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-black/50 hover:bg-black/70 text-white text-xs font-bold rounded-xl backdrop-blur-sm shadow-lg transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        <span>✨</span> Animate
+      <button onClick={() => handleAnimate(pageKey, pageIndex)} disabled={!!animatingPageKey}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ background: 'rgba(155,93,229,0.65)', border: '1.5px solid rgba(155,93,229,0.5)', backdropFilter: 'blur(8px)' }}>
+        ✨ Animate
       </button>
     )
   }
 
-  // Handle title page display
-  if (isTitlePage && book.titlePage) {
-    return (
-      <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
-        <VideoModal />
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 dark:bg-gray-900/90 p-4 shadow-sm backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push('/')}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 transition-colors"
-              title="Home"
-            >
-              <Icon name="home" className="text-purple-700 dark:text-purple-300" size={24} />
-            </button>
-            <button
-              onClick={() => router.back()}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
-              title="Back"
-            >
-              <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 flex-1 justify-center">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 truncate px-4">
-              {book.title}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Share Button */}
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-              title="Share this story"
-            >
-              <Icon name="share" size={18} />
-              <span className="hidden sm:inline">Share</span>
-            </button>
-            
-            {/* Download HTML Button */}
-            <button
-              onClick={handleDownloadHTML}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-              title="Download as interactive HTML file"
-            >
-              <Icon name="code" size={18} />
-              <span className="hidden sm:inline">HTML</span>
-            </button>
-            
-            {/* Download PDF Button */}
-            <button
-              onClick={handleDownloadPDF}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-              title="Download as PDF for printing"
-            >
-              <Icon name="picture_as_pdf" size={18} />
-              <span className="hidden sm:inline">PDF</span>
-            </button>
-            
-            {/* Audio Section on Title Page */}
-            {book.audioUrl ? (
-              <button
-                onClick={handleDownloadAudio}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-                title="Download audiobook as MP3"
-              >
-                <Icon name="download" size={18} />
-                <span className="hidden sm:inline">MP3</span>
-              </button>
-            ) : (
-              <button
-                onClick={handleGenerateAudio}
-                disabled={isGeneratingAudio}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:scale-105 active:scale-95"
-                title="Generate audiobook narration"
-              >
-                <Icon
-                  name={isGeneratingAudio ? 'hourglass_empty' : 'record_voice_over'}
-                  className={isGeneratingAudio ? 'animate-spin' : ''}
-                  size={18}
-                />
-                <span>{isGeneratingAudio ? 'Generating...' : 'Generate Audiobook'}</span>
-              </button>
-            )}
-          </div>
-        </div>
+  // ── Top Bar (shared between title page and content pages) ──
+  const TopBar = () => (
+    <div className="kq-top-bar">
+      <div className="flex items-center gap-2">
+        <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home">🏠</button>
+        <button onClick={() => router.back()} className="kq-icon-btn" title="Back">←</button>
+      </div>
+      <div className="flex items-center gap-2 flex-1 justify-center px-2">
+        <span style={{ fontFamily: 'Fredoka One, cursive', fontSize: '0.95rem', color: '#fefcf5' }} className="truncate">
+          {book.title}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button onClick={handleShare}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
+          style={{ background: 'rgba(77,201,255,0.15)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
+          title="Share">
+          ↗ <span className="hidden sm:inline">Share</span>
+        </button>
+        <button onClick={handleDownloadHTML}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
+          style={{ background: 'rgba(0,229,160,0.15)', border: '1.5px solid rgba(0,229,160,0.3)', color: '#00e5a0' }}
+          title="Download HTML">
+          {'</>'} <span className="hidden sm:inline">HTML</span>
+        </button>
+        <button onClick={handleDownloadPDF}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
+          style={{ background: 'rgba(255,82,71,0.15)', border: '1.5px solid rgba(255,82,71,0.3)', color: '#ff8a82' }}
+          title="Download PDF">
+          ⬇ <span className="hidden sm:inline">PDF</span>
+        </button>
+        {book.audioUrl ? (
+          <button onClick={handleDownloadAudio}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
+            style={{ background: 'rgba(155,93,229,0.15)', border: '1.5px solid rgba(155,93,229,0.3)', color: '#c89dff' }}
+            title="Download MP3">
+            🎧 <span className="hidden sm:inline">MP3</span>
+          </button>
+        ) : (
+          <button onClick={handleGenerateAudio} disabled={isGeneratingAudio}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            style={{ background: 'rgba(77,201,255,0.15)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
+            title="Generate Audiobook">
+            {isGeneratingAudio ? <><span className="animate-kq-spin">🎙</span> <span className="hidden sm:inline">Generating…</span></> : <><span>🎙</span> <span className="hidden sm:inline">Narrate</span></>}
+          </button>
+        )}
+      </div>
+    </div>
+  )
 
-        {/* Title Page Content */}
+  // ── Page Indicators ──
+  const PageIndicators = () => (
+    <div className="flex w-full flex-row items-center justify-center gap-1.5 py-3">
+      {Array.from({ length: totalPages }).map((_, index) => (
+        <button
+          key={index}
+          onClick={() => handlePageChange(index)}
+          className={`kq-page-dot ${index === currentPage ? 'active' : ''}`}
+          aria-label={`Go to page ${index + 1}`}
+        />
+      ))}
+    </div>
+  )
+
+  // ── Nav Buttons ──
+  const NavButtons = ({ onPrev, onNext, prevDisabled, nextDisabled }: {
+    onPrev: () => void; onNext: () => void; prevDisabled: boolean; nextDisabled: boolean
+  }) => (
+    <div className="sticky bottom-0 py-3 px-4" style={{ background: 'rgba(8,15,36,0.95)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(77,201,255,0.1)' }}>
+      <div className="flex justify-between gap-4 max-w-4xl mx-auto">
+        <button
+          onClick={onPrev} disabled={prevDisabled}
+          className="flex h-12 items-center justify-center gap-2 px-6 rounded-full font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: 'rgba(255,255,255,0.07)', border: '2px solid rgba(255,255,255,0.15)', color: '#fefcf5' }}
+        >
+          ← Previous
+        </button>
+        <button
+          onClick={onNext} disabled={nextDisabled}
+          className="flex h-12 items-center justify-center gap-2 px-6 rounded-full font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: nextDisabled ? 'rgba(255,255,255,0.07)' : '#f5d000', color: nextDisabled ? '#a0b4d6' : '#0d1b3e', border: 'none', boxShadow: nextDisabled ? 'none' : '0 4px 0 #b89f00' }}
+        >
+          Next →
+        </button>
+      </div>
+    </div>
+  )
+
+  // ── Shared page shell ──
+  const pageShell = (children: React.ReactNode) => (
+    <div className="kq-stars-bg relative flex min-h-screen w-full flex-col" style={{ background: '#080f24' }}>
+      <VideoModal />
+      <div className="relative z-10 flex flex-col min-h-screen">
+        {children}
+      </div>
+    </div>
+  )
+
+  // ── Title Page ──
+  if (isTitlePage && book.titlePage) {
+    return pageShell(
+      <>
+        <TopBar />
         <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 max-w-4xl mx-auto w-full">
-          <div className={`relative w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-            }`}>
-            <img
-              src={book.titlePage.image}
-              alt="Book Cover"
-              className="w-full h-auto object-cover"
-            />
+          <div className={`relative w-full rounded-2xl overflow-hidden shadow-2xl mb-4 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+            <img src={book.titlePage.image} alt="Book Cover" className="w-full h-auto object-cover" />
             <div className="absolute bottom-3 right-3">
               <AnimateButton pageKey="-1" pageIndex={-1} />
             </div>
           </div>
         </main>
-
-        {/* Page Indicators */}
-        <div className="flex w-full flex-row items-center justify-center gap-2 py-4">
-          {Array.from({ length: totalPages }).map((_, index) => (
-            <button
-              key={index}
-              onClick={() => handlePageChange(index)}
-              className={`h-2 rounded-full transition-all duration-300 hover:scale-125 ${index === currentPage
-                ? 'w-8 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 shadow-lg'
-                : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-                }`}
-              aria-label={`Go to page ${index + 1}`}
-            />
-          ))}
-        </div>
-
-        {/* Navigation Buttons */}
-        <div className="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-lg">
-          <div className="flex flex-1 justify-between gap-4 px-4 py-4 max-w-4xl mx-auto">
-            <button
-              onClick={() => handlePageChange(0)}
-              disabled={true}
-              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 px-6 text-base font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
-            >
-              <Icon name="chevron_left" size={24} />
-              <span>Previous</span>
-            </button>
-            <button
-              onClick={() => handlePageChange(1)}
-              className="flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 dark:from-blue-600 dark:hover:bg-blue-700 px-6 text-base font-semibold text-white transition-all shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
-            >
-              <span>Next</span>
-              <Icon name="chevron_right" size={24} />
-            </button>
-          </div>
-        </div>
-      </div>
+        <PageIndicators />
+        <NavButtons
+          onPrev={() => handlePageChange(0)} onNext={() => handlePageChange(1)}
+          prevDisabled={true} nextDisabled={false}
+        />
+      </>
     )
   }
 
   if (!page) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background-light dark:bg-background-dark">
-        <p className="text-lg">Invalid page</p>
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
+        <p className="text-lg" style={{ color: '#fefcf5' }}>Invalid page</p>
       </div>
     )
   }
 
-  return (
-    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 font-display dark:from-gray-900 dark:via-purple-900 dark:to-gray-900">
-      <VideoModal />
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between bg-white/90 dark:bg-gray-900/90 p-4 shadow-sm backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => router.push('/')}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 transition-colors"
-            title="Home"
-          >
-            <Icon name="home" className="text-purple-700 dark:text-purple-300" size={24} />
-          </button>
-          <button
-            onClick={() => router.back()}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
-            title="Back"
-          >
-            <Icon name="arrow_back" className="text-gray-700 dark:text-gray-300" size={24} />
-          </button>
-        </div>
-        <div className="flex items-center gap-2 flex-1 justify-center">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-white/50 backdrop-blur-sm border-2 border-white/60 flex items-center justify-center">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuqyg_Asjsvty0tzYyB8sHQMgmo8HxFMLBQkGxQ-YWrQd1H1C1hxlO9XQItRXtU3EqZsQREdO9LJ1Ie7H7WYMP5aY0A31jbZ9fsQVUWafv3bcsJ2whAAhxcmp7zZRKazVaD0ztLi_Pa-WeiXQeu9dpTFGKAvYwQLkCSfGZsKpVYIV2_LJnapPvyM_ynHNh5ZLTEyFXmqQ7qiPO0r69pIRPgGl0Hvol7tSFTSihOnxUAMj6kg-mJc-LWCdbo2kREVe5bROQ3mGCNA"
-              alt="KinderQuill"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 truncate px-4">
-            {book.title}
-          </h2>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Download HTML Button */}
-          <button
-            onClick={handleDownloadHTML}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-            title="Download as interactive HTML file"
-          >
-            <Icon name="code" size={18} />
-            <span className="hidden sm:inline">HTML</span>
-          </button>
-          
-          {/* Download PDF Button */}
-          <button
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-            title="Download as PDF for printing"
-          >
-            <Icon name="picture_as_pdf" size={18} />
-            <span className="hidden sm:inline">PDF</span>
-          </button>
-          
-          {/* Audio Section */}
-          {book.audioUrl ? (
-            <div className="flex items-center gap-2">
-              {/* Audio Player */}
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 rounded-full px-3 py-1.5 border border-blue-200 dark:border-blue-800">
-                <Icon name="headphones" size={18} className="text-blue-500" />
-                <audio
-                  ref={setAudioRef}
-                  controls
-                  className="h-8"
-                  style={{ minWidth: '120px', maxWidth: '180px' }}
-                >
-                  <source src={book.audioUrl} type="audio/mpeg" />
-                </audio>
-              </div>
-              {/* Download Audio Button */}
-              <button
-                onClick={handleDownloadAudio}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium transition-all shadow-md hover:scale-105 active:scale-95"
-                title="Download audiobook as MP3"
-              >
-                <Icon name="download" size={18} />
-                <span className="hidden sm:inline">MP3</span>
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleGenerateAudio}
-              disabled={isGeneratingAudio}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:scale-105 active:scale-95"
-              title="Generate audiobook narration"
-            >
-              <Icon
-                name={isGeneratingAudio ? 'hourglass_empty' : 'record_voice_over'}
-                className={isGeneratingAudio ? 'animate-spin' : ''}
-                size={18}
-              />
-              <span>{isGeneratingAudio ? 'Generating...' : 'Generate Audiobook'}</span>
-            </button>
-          )}
+  // ── Content Page ──
+  return pageShell(
+    <>
+      <TopBar />
+
+      {/* Page counter badge */}
+      <div className="flex justify-center pt-3 pb-1">
+        <div className="kq-chip kq-chip-electric">
+          Page {currentPage + 1} of {totalPages}
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="flex flex-1 flex-col px-4 py-6 max-w-4xl mx-auto w-full">
-        {/* Image with animation */}
-        <div className={`relative w-full rounded-2xl overflow-hidden shadow-xl mb-6 bg-white dark:bg-gray-800 transition-all duration-500 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-          }`}>
+      <main className="flex flex-1 flex-col px-4 py-3 max-w-4xl mx-auto w-full">
+        {/* Illustration */}
+        <div className={`relative w-full rounded-2xl overflow-hidden shadow-2xl mb-4 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+          style={{ border: '2px solid rgba(77,201,255,0.15)' }}>
           {page.image ? (
-            <img
-              src={page.image}
-              alt={`Page ${currentPage + 1} illustration`}
-              className="w-full h-auto object-cover animate-fadeIn"
-              key={currentPage}
-            />
+            <img src={page.image} alt={`Page ${currentPage + 1} illustration`} className="w-full h-auto object-cover animate-fadeIn" key={currentPage} />
           ) : (
-            <div className="w-full h-64 bg-gradient-to-br from-purple-200 to-pink-200 dark:from-purple-800 dark:to-pink-800 flex items-center justify-center">
-              <Icon name="image" className="text-white/50 animate-pulse" size={64} />
-            </div>
+            <div className="w-full h-64 flex items-center justify-center text-6xl" style={{ background: 'linear-gradient(135deg, #1a1a6e, #2d1b5e)' }}>✨</div>
           )}
-          {/* Animate button overlay */}
           {page.image && (
             <div className="absolute bottom-3 right-3">
               <AnimateButton pageKey={String(contentPageIndex)} pageIndex={contentPageIndex} />
@@ -862,59 +453,40 @@ export default function BookViewerPage() {
           )}
         </div>
 
-        {/* Text with animation */}
-        <div className={`bg-white/80 dark:bg-gray-800/80 rounded-2xl p-6 shadow-lg backdrop-blur-sm transition-all duration-500 ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
-          }`}>
-          <p className="text-lg leading-relaxed text-gray-800 dark:text-gray-200 font-medium animate-slideUp">
+        {/* Story text */}
+        <div
+          className={`rounded-2xl p-5 mb-3 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
+          style={{ background: 'rgba(26,42,94,0.7)', border: '1.5px solid rgba(77,201,255,0.15)', backdropFilter: 'blur(8px)' }}
+        >
+          <p className="text-base leading-relaxed font-medium animate-slideUp" style={{ color: '#e8f0ff', fontFamily: 'Nunito, sans-serif' }}>
             {page.text}
           </p>
         </div>
+
+        {/* Audio player row (if audio exists) */}
+        {book.audioUrl && (
+          <div className="flex items-center gap-2 mb-3 p-2 rounded-xl" style={{ background: 'rgba(77,201,255,0.08)', border: '1px solid rgba(77,201,255,0.2)' }}>
+            <span className="text-lg">🎧</span>
+            <audio ref={setAudioRef} controls className="flex-1 h-8" style={{ minWidth: 0 }}>
+              <source src={book.audioUrl} type="audio/mpeg" />
+            </audio>
+          </div>
+        )}
       </main>
 
-      {/* Page Indicators */}
-      <div className="flex w-full flex-row items-center justify-center gap-2 py-4">
-        {Array.from({ length: totalPages }).map((_, index) => (
-          <button
-            key={index}
-            onClick={() => handlePageChange(index)}
-            className={`h-2 rounded-full transition-all duration-300 hover:scale-125 ${index === currentPage
-              ? 'w-8 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 shadow-lg'
-              : 'w-2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'
-              }`}
-            aria-label={`Go to page ${index + 1}`}
-          />
-        ))}
-      </div>
+      <PageIndicators />
+      <NavButtons
+        onPrev={() => handlePageChange(Math.max(0, currentPage - 1))}
+        onNext={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
+        prevDisabled={currentPage === 0}
+        nextDisabled={currentPage === totalPages - 1}
+      />
 
-      {/* Navigation Buttons */}
-      <div className="sticky bottom-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 shadow-lg">
-        <div className="flex flex-1 justify-between gap-4 px-4 py-4 max-w-4xl mx-auto">
-          <button
-            onClick={() => handlePageChange(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0}
-            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 px-6 text-base font-semibold text-gray-700 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
-          >
-            <Icon name="chevron_left" size={24} />
-            <span>Previous</span>
-          </button>
-          <button
-            onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
-            disabled={currentPage === totalPages - 1}
-            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 dark:from-blue-600 dark:hover:bg-blue-700 px-6 text-base font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
-          >
-            <span>Next</span>
-            <Icon name="chevron_right" size={24} />
-          </button>
-        </div>
-      </div>
-
-      {/* Footer - Created with Venice.ai */}
-      <footer className="w-full py-3 text-center border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-        <p className="text-xs text-gray-600 dark:text-gray-400">
-          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
+      <footer className="py-2 text-center" style={{ background: 'rgba(8,15,36,0.9)' }}>
+        <p className="text-xs" style={{ color: '#a0b4d6' }}>
+          Created with <span className="font-semibold" style={{ color: '#9b5de5' }}>Venice.ai</span>
         </p>
       </footer>
-    </div>
+    </>
   )
 }
-
