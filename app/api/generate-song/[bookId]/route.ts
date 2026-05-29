@@ -3,9 +3,14 @@ import { getBook } from '@/lib/storage'
 
 // MiniMax Music 2.6 — generates a full sung song from a style prompt + lyrics,
 // which is exactly what we want for a children's sing-along theme.
+// Per /models?type=music: supports_lyrics=true, supports_lyrics_optimizer=false,
+// prompt ≤300 chars, lyrics ≤1000 chars, mp3 output.
 const MUSIC_MODEL = 'minimax-music-v26'
+const PROMPT_LIMIT = 300
+const LYRICS_LIMIT = 1000
 
 // Writes a short, cheerful, age-appropriate set of lyrics about the book.
+// Kept well under MiniMax's 1000-character lyrics limit.
 async function generateLyrics(
   title: string, ageRange: string, apiKey: string,
 ): Promise<string | null> {
@@ -20,21 +25,28 @@ async function generateLyrics(
           {
             role: 'system',
             content:
-              "You write short, joyful, wholesome children's song lyrics. Output ONLY the lyrics — a simple sing-along with a [Verse] and a repeating [Chorus], easy rhymes, gentle and positive, suitable for young children. No title, no explanation, no profanity.",
+              "You write short, joyful, wholesome children's song lyrics. Output ONLY the lyrics — one [Verse] and one repeating [Chorus], 6–10 short lines total, easy rhymes, gentle and positive, suitable for young children. Keep it well under 1000 characters. No title, no explanation, no profanity.",
           },
           {
             role: 'user',
-            content: `Write a cheerful theme song (about 8–12 short lines) for a children's picture book titled "${title}" for around ${ageRange} grade readers.`,
+            content: `Write a short cheerful theme song for a children's picture book titled "${title}" for around ${ageRange} grade readers.`,
           },
         ],
         temperature: 0.9,
-        max_tokens: 400,
+        max_tokens: 350,
       }),
     })
     if (!res.ok) return null
     const data = await res.json()
-    const lyrics = data.choices?.[0]?.message?.content?.trim()
-    return lyrics || null
+    let lyrics: string | undefined = data.choices?.[0]?.message?.content?.trim()
+    if (!lyrics) return null
+    // Hard-clamp to the model's lyrics limit (trim to a clean line break).
+    if (lyrics.length > LYRICS_LIMIT) {
+      lyrics = lyrics.slice(0, LYRICS_LIMIT)
+      const lastBreak = lyrics.lastIndexOf('\n')
+      if (lastBreak > 200) lyrics = lyrics.slice(0, lastBreak)
+    }
+    return lyrics
   } catch {
     return null
   }
@@ -76,21 +88,19 @@ export async function POST(
       anime: 'energetic, bright, and heroic',
     }
     const mood = moodByStyle[book.illustrationStyle] || 'cheerful and magical'
-    const musicPrompt =
-      `A ${mood} children's sing-along theme song for the picture book "${book.title}". ` +
-      'Upbeat, wholesome, easy melody with warm vocals a child can sing along to, ' +
-      'playful pop/folk for kids, light acoustic instrumentation.'
+    // Keep within MiniMax's 300-char prompt limit (title can be long).
+    const musicPrompt = (
+      `A ${mood} children's sing-along theme song for "${book.title}". ` +
+      'Upbeat, wholesome, warm vocals a child can sing along to, playful kids pop/folk, light acoustic.'
+    ).slice(0, PROMPT_LIMIT)
 
     // Write kid-friendly lyrics about the book for MiniMax to sing.
+    // v26 does NOT support lyrics_optimizer, so if lyric generation fails we
+    // send the prompt alone (lyrics are optional for this model).
     const lyrics = await generateLyrics(book.title, book.ageRange, apiKey)
 
     const body: Record<string, unknown> = { model: MUSIC_MODEL, prompt: musicPrompt }
-    if (lyrics) {
-      body.lyrics_prompt = lyrics
-    } else {
-      // Lyric generation failed — let MiniMax auto-write them from the prompt.
-      body.lyrics_optimizer = true
-    }
+    if (lyrics) body.lyrics_prompt = lyrics
 
     const queueRes = await fetch('https://api.venice.ai/api/v1/audio/queue', {
       method: 'POST',
