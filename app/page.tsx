@@ -15,7 +15,7 @@ export default function WelcomePage() {
       style={{ background: 'linear-gradient(160deg, #0d1b3e 0%, #1a0a3e 50%, #0d2a40 100%)' }}
     >
       {/* Content layer (above stars) */}
-      <div className="relative z-10 flex flex-1 flex-col items-center px-4 py-10 max-w-lg mx-auto w-full">
+      <div className="relative z-10 flex flex-1 flex-col items-center px-4 lg:px-8 py-10 max-w-lg lg:max-w-6xl mx-auto w-full">
 
         {/* Top bar */}
         <div className="w-full flex items-center justify-between mb-8">
@@ -36,8 +36,11 @@ export default function WelcomePage() {
           </button>
         </div>
 
+        {/* Desktop two-column hero (mobile keeps the original single-column stack) */}
+        <div className="w-full lg:grid lg:grid-cols-2 lg:gap-x-12 lg:items-center lg:flex-1 lg:content-center">
+
         {/* Hero area */}
-        <div className="relative flex justify-center mb-6 w-full">
+        <div className="relative flex justify-center mb-6 w-full lg:col-start-1 lg:row-start-1">
           {/* Decorative planets */}
           <div
             className="absolute animate-kq-float"
@@ -86,26 +89,26 @@ export default function WelcomePage() {
         </div>
 
         {/* Headline */}
-        <div className="text-center mb-6">
-          <h1 style={{ fontFamily: 'Fredoka One, cursive', lineHeight: 1.15 }} className="text-4xl mb-3">
+        <div className="text-center lg:text-left mb-6 lg:col-start-1 lg:row-start-2">
+          <h1 style={{ fontFamily: 'Fredoka One, cursive', lineHeight: 1.15 }} className="text-4xl lg:text-5xl mb-3">
             <span style={{ color: '#f5d000' }}>Magic Stories</span>
             <br />
             <span style={{ color: '#fefcf5' }}>Born From Your</span>
             <br />
             <span style={{ color: '#00e5a0' }}>Imagination ✦</span>
           </h1>
-          <p className="font-body font-semibold text-sm max-w-xs mx-auto leading-relaxed" style={{ color: '#a0b4d6' }}>
+          <p className="font-body font-semibold text-sm lg:text-base max-w-xs lg:max-w-md mx-auto lg:mx-0 leading-relaxed" style={{ color: '#a0b4d6' }}>
             Create personalized AI storybooks with custom illustrations — in seconds!
           </p>
         </div>
 
         {/* Featured Books Carousel */}
-        <div className="w-full mb-8">
+        <div className="w-full mb-8 lg:mb-0 lg:col-start-2 lg:row-start-1">
           <FeaturedBooksCarousel />
         </div>
 
         {/* Action buttons */}
-        <div className="flex w-full flex-col items-center gap-3">
+        <div className="flex w-full flex-col items-center gap-3 lg:col-start-2 lg:row-start-2 lg:mt-6">
           <button
             onClick={() => router.push('/generate')}
             className="kq-btn-primary"
@@ -141,7 +144,7 @@ export default function WelcomePage() {
         </div>
 
         {/* Venice badge */}
-        <div className="mt-8 text-center">
+        <div className="mt-8 lg:mt-6 text-center lg:text-left lg:col-start-1 lg:row-start-3">
           <div
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1.5px solid rgba(255,255,255,0.1)' }}
@@ -152,6 +155,8 @@ export default function WelcomePage() {
             </span>
           </div>
         </div>
+
+        </div>{/* end desktop two-column hero */}
       </div>
 
       {/* Footer */}

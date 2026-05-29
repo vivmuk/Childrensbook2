@@ -101,7 +101,7 @@ export default function GalleryPage() {
           </button>
         </div>
 
-        <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-5">
+        <main className="flex-1 max-w-6xl xl:max-w-7xl mx-auto w-full px-4 py-5">
           <p className="text-center text-sm font-semibold mb-5" style={{ color: '#a0b4d6' }}>
             ✦ Magical stories created by kids everywhere ✦
           </p>
