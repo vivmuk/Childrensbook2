@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       illustrationStyle,
       storyLength = 8,
       narratorVoice = 'default',
-      imageModel = 'grok-imagine-image',
+      imageModel = 'grok-imagine-image-quality',
       character,
       userVeniceApiKey,
       cartoonHeroImage,
@@ -293,7 +293,7 @@ async function generateBookImages(
   illustrationStyle: string,
   characters: { main?: string; others?: string[] } | undefined,
   apiKey: string,
-  imageModel: string = 'grok-imagine-image',
+  imageModel: string = 'grok-imagine-image-quality',
   cartoonHeroImage?: string,
 ) {
   const book = await getBook(bookId)
@@ -316,7 +316,7 @@ async function generateBookImages(
   const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
 
   // Build all prompts up front
-  const coverPrompt = `Beautiful children's book cover for "${book.title}". ${illustrationStyle} style, children's book cover art, colorful, whimsical, high quality, inviting, magical, eye-catching. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}`
+  const coverPrompt = `Beautiful children's picture book cover for "${book.title}". The book title "${book.title}" is displayed prominently at the top as large, clear, playful hand-lettered title text, correctly spelled, integrated into the cover design. ${illustrationStyle} style, children's book cover art, colorful, whimsical, high quality, inviting, magical, eye-catching. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}`
   imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })
 
   const pagePrompts: string[] = pages.map((page: any, i: number) => {
