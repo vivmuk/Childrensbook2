@@ -1,9 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBook } from '@/lib/storage'
 
-// Queues an original theme song for a book using Venice's music generation API
-// (POST /audio/queue, model `elevenlabs-music`). Returns a queue_id the client
-// polls via /api/song-retrieve.
+// MiniMax Music 2.6 — generates a full sung song from a style prompt + lyrics,
+// which is exactly what we want for a children's sing-along theme.
+const MUSIC_MODEL = 'minimax-music-v26'
+
+// Writes a short, cheerful, age-appropriate set of lyrics about the book.
+async function generateLyrics(
+  title: string, ageRange: string, apiKey: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: AbortSignal.timeout(45_000),
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemini-3-flash-preview',
+        messages: [
+          {
+            role: 'system',
+            content:
+              "You write short, joyful, wholesome children's song lyrics. Output ONLY the lyrics — a simple sing-along with a [Verse] and a repeating [Chorus], easy rhymes, gentle and positive, suitable for young children. No title, no explanation, no profanity.",
+          },
+          {
+            role: 'user',
+            content: `Write a cheerful theme song (about 8–12 short lines) for a children's picture book titled "${title}" for around ${ageRange} grade readers.`,
+          },
+        ],
+        temperature: 0.9,
+        max_tokens: 400,
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const lyrics = data.choices?.[0]?.message?.content?.trim()
+    return lyrics || null
+  } catch {
+    return null
+  }
+}
+
+// Queues an original SUNG theme song for a book using Venice's music API
+// (POST /audio/queue). Returns a queue_id the client polls via /api/song-retrieve.
 export async function POST(
   request: NextRequest,
   { params }: { params: { bookId: string } },
@@ -29,7 +67,7 @@ export async function POST(
       return NextResponse.json({ status: 'complete', songUrl: book.songUrl })
     }
 
-    // Craft a warm, kid-friendly instrumental theme tailored to the book.
+    // A style/mood prompt describing the sound we want.
     const moodByStyle: Record<string, string> = {
       ghibli: 'dreamy, gentle, and nostalgic',
       miyazaki: 'sweeping, wondrous, and heartfelt',
@@ -38,23 +76,27 @@ export async function POST(
       anime: 'energetic, bright, and heroic',
     }
     const mood = moodByStyle[book.illustrationStyle] || 'cheerful and magical'
-
     const musicPrompt =
-      `An original ${mood} theme song for a children's picture book titled "${book.title}". ` +
-      'Whimsical and uplifting, with twinkling glockenspiel, soft warm strings, playful woodwinds, ' +
-      'and a gentle melody a young child would hum. Instrumental, wholesome, storybook soundtrack.'
+      `A ${mood} children's sing-along theme song for the picture book "${book.title}". ` +
+      'Upbeat, wholesome, easy melody with warm vocals a child can sing along to, ' +
+      'playful pop/folk for kids, light acoustic instrumentation.'
 
-    const model = 'elevenlabs-music'
+    // Write kid-friendly lyrics about the book for MiniMax to sing.
+    const lyrics = await generateLyrics(book.title, book.ageRange, apiKey)
+
+    const body: Record<string, unknown> = { model: MUSIC_MODEL, prompt: musicPrompt }
+    if (lyrics) {
+      body.lyrics_prompt = lyrics
+    } else {
+      // Lyric generation failed — let MiniMax auto-write them from the prompt.
+      body.lyrics_optimizer = true
+    }
+
     const queueRes = await fetch('https://api.venice.ai/api/v1/audio/queue', {
       method: 'POST',
       signal: AbortSignal.timeout(30_000),
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        prompt: musicPrompt,
-        duration_seconds: 30,
-        force_instrumental: true,
-      }),
+      body: JSON.stringify(body),
     })
 
     if (!queueRes.ok) {
@@ -73,7 +115,8 @@ export async function POST(
       return NextResponse.json({ error: 'No queue ID returned from music service' }, { status: 500 })
     }
 
-    return NextResponse.json({ status: 'processing', queueId, model })
+    console.log(`[${params.bookId}] Queued song with model ${MUSIC_MODEL} (lyrics: ${!!lyrics})`)
+    return NextResponse.json({ status: 'processing', queueId, model: MUSIC_MODEL })
   } catch (err: any) {
     console.error('generate-song error:', err)
     return NextResponse.json({ error: err.message || 'Failed to start theme song' }, { status: 500 })

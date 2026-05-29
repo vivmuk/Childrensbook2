@@ -134,7 +134,7 @@ export default function BookViewerPage() {
   useEffect(() => {
     if (!songQueueId) return
     let attempts = 0
-    const maxAttempts = 40 // 40 × 3s = 2 minutes
+    const maxAttempts = 60 // 60 × 3s = 3 minutes (sung songs take longer)
     let interval: ReturnType<typeof setInterval>
     const stop = () => { clearInterval(interval); setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false) }
     const poll = async () => {
@@ -411,8 +411,8 @@ export default function BookViewerPage() {
           <button onClick={handleGenerateSong} disabled={isGeneratingSong}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             style={{ background: 'rgba(0,196,180,0.15)', border: '1.5px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
-            title="Create an original theme song for this book">
-            {isGeneratingSong ? <><span className="animate-kq-spin">🎵</span> <span className="hidden sm:inline">Composing…</span></> : <><span>🎵</span> <span className="hidden sm:inline">Theme Song</span></>}
+            title="Create an original sing-along song for this book">
+            {isGeneratingSong ? <><span className="animate-kq-spin">🎵</span> <span className="hidden sm:inline">Composing…</span></> : <><span>🎵</span> <span className="hidden sm:inline">Sing-Along Song</span></>}
           </button>
         )}
       </div>
