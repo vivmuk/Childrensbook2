@@ -134,7 +134,7 @@ export default function BookViewerPage() {
   useEffect(() => {
     if (!songQueueId) return
     let attempts = 0
-    const maxAttempts = 40 // 40 × 3s = 2 minutes
+    const maxAttempts = 60 // 60 × 3s = 3 minutes (sung songs take longer)
     let interval: ReturnType<typeof setInterval>
     const stop = () => { clearInterval(interval); setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false) }
     const poll = async () => {
@@ -411,8 +411,8 @@ export default function BookViewerPage() {
           <button onClick={handleGenerateSong} disabled={isGeneratingSong}
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             style={{ background: 'rgba(0,196,180,0.15)', border: '1.5px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
-            title="Create an original theme song for this book">
-            {isGeneratingSong ? <><span className="animate-kq-spin">🎵</span> <span className="hidden sm:inline">Composing…</span></> : <><span>🎵</span> <span className="hidden sm:inline">Theme Song</span></>}
+            title="Create an original sing-along song for this book">
+            {isGeneratingSong ? <><span className="animate-kq-spin">🎵</span> <span className="hidden sm:inline">Composing…</span></> : <><span>🎵</span> <span className="hidden sm:inline">Sing-Along Song</span></>}
           </button>
         )}
       </div>
@@ -472,8 +472,8 @@ export default function BookViewerPage() {
     return pageShell(
       <>
         <TopBar />
-        <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 max-w-4xl mx-auto w-full">
-          <div className={`relative w-full rounded-2xl overflow-hidden shadow-2xl mb-4 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
+        <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 lg:py-10 max-w-4xl mx-auto w-full">
+          <div className={`relative w-full lg:max-w-3xl rounded-2xl overflow-hidden shadow-2xl mb-4 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
             <img src={book.titlePage.image} alt="Book Cover" className="w-full h-auto object-cover" />
             <div className="absolute bottom-3 right-3">
               <AnimateButton pageKey="-1" pageIndex={-1} />
@@ -502,21 +502,21 @@ export default function BookViewerPage() {
     <>
       <TopBar />
 
-      {/* Page counter badge */}
-      <div className="flex justify-center pt-3 pb-1">
+      {/* Page counter badge (mobile only — desktop shows it in the side panel) */}
+      <div className="flex justify-center pt-3 pb-1 lg:hidden">
         <div className="kq-chip kq-chip-electric">
           Page {currentPage + 1} of {totalPages}
         </div>
       </div>
 
-      <main className="flex flex-1 flex-col px-4 py-3 max-w-4xl mx-auto w-full">
+      <main className="flex flex-1 flex-col lg:flex-row lg:items-start lg:gap-8 px-4 py-3 lg:py-6 w-full max-w-4xl lg:max-w-6xl mx-auto">
         {/* Illustration */}
-        <div className={`relative w-full rounded-2xl overflow-hidden shadow-2xl mb-4 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+        <div className={`relative w-full lg:w-3/5 lg:flex-shrink-0 rounded-2xl overflow-hidden shadow-2xl mb-4 lg:mb-0 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
           style={{ border: '2px solid rgba(77,201,255,0.15)' }}>
           {page.image ? (
             <img src={page.image} alt={`Page ${currentPage + 1} illustration`} className="w-full h-auto object-cover animate-fadeIn" key={currentPage} />
           ) : (
-            <div className="w-full h-64 flex items-center justify-center text-6xl" style={{ background: 'linear-gradient(135deg, #1a1a6e, #2d1b5e)' }}>✨</div>
+            <div className="w-full h-64 lg:h-[60vh] flex items-center justify-center text-6xl" style={{ background: 'linear-gradient(135deg, #1a1a6e, #2d1b5e)' }}>✨</div>
           )}
           {page.image && (
             <div className="absolute bottom-3 right-3">
@@ -525,44 +525,53 @@ export default function BookViewerPage() {
           )}
         </div>
 
-        {/* Story text */}
-        <div
-          className={`rounded-2xl p-5 mb-3 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
-          style={{ background: 'rgba(26,42,94,0.7)', border: '1.5px solid rgba(77,201,255,0.15)', backdropFilter: 'blur(8px)' }}
-        >
-          <p className="text-base leading-relaxed font-medium animate-slideUp" style={{ color: '#e8f0ff', fontFamily: 'Nunito, sans-serif' }}>
-            {page.text}
-          </p>
+        {/* Right panel: text + audio + song (sticks beside the art on desktop) */}
+        <div className="w-full lg:w-2/5 flex flex-col gap-3 lg:sticky lg:top-24">
+          {/* Desktop-only page label */}
+          <div className="hidden lg:flex items-center justify-between">
+            <span style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.05rem', color: '#fefcf5' }} className="truncate">{book.title}</span>
+            <div className="kq-chip kq-chip-electric shrink-0">Page {currentPage + 1} of {totalPages}</div>
+          </div>
+
+          {/* Story text */}
+          <div
+            className={`rounded-2xl p-5 lg:p-6 transition-all duration-300 lg:max-h-[58vh] lg:overflow-y-auto ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
+            style={{ background: 'rgba(26,42,94,0.7)', border: '1.5px solid rgba(77,201,255,0.15)', backdropFilter: 'blur(8px)' }}
+          >
+            <p className="text-base lg:text-lg leading-relaxed font-medium animate-slideUp" style={{ color: '#e8f0ff', fontFamily: 'Nunito, sans-serif' }}>
+              {page.text}
+            </p>
+          </div>
+
+          {/* Audio player row (if audio exists) */}
+          {book.audioUrl && (
+            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(77,201,255,0.08)', border: '1px solid rgba(77,201,255,0.2)' }}>
+              <span className="text-lg">🎧</span>
+              <audio ref={setAudioRef} controls className="flex-1 h-8" style={{ minWidth: 0 }}>
+                <source src={book.audioUrl} type="audio/mpeg" />
+              </audio>
+            </div>
+          )}
+
+          {/* Theme song player (if a song exists) */}
+          {book.songUrl && (
+            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(0,196,180,0.08)', border: '1px solid rgba(0,196,180,0.25)' }}>
+              <span className="text-lg">🎵</span>
+              <audio controls className="flex-1 h-8" style={{ minWidth: 0 }}>
+                <source src={book.songUrl} />
+              </audio>
+              <a
+                href={book.songUrl}
+                download={`${(book.title || 'theme-song').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-theme.mp3`}
+                className="shrink-0 px-2 py-1 rounded-lg text-xs font-bold"
+                style={{ background: 'rgba(0,196,180,0.15)', border: '1px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
+                title="Download theme song"
+              >
+                ⬇
+              </a>
+            </div>
+          )}
         </div>
-
-        {/* Audio player row (if audio exists) */}
-        {book.audioUrl && (
-          <div className="flex items-center gap-2 mb-3 p-2 rounded-xl" style={{ background: 'rgba(77,201,255,0.08)', border: '1px solid rgba(77,201,255,0.2)' }}>
-            <span className="text-lg">🎧</span>
-            <audio ref={setAudioRef} controls className="flex-1 h-8" style={{ minWidth: 0 }}>
-              <source src={book.audioUrl} type="audio/mpeg" />
-            </audio>
-          </div>
-        )}
-
-        {/* Theme song player (if a song exists) */}
-        {book.songUrl && (
-          <div className="flex items-center gap-2 mb-3 p-2 rounded-xl" style={{ background: 'rgba(0,196,180,0.08)', border: '1px solid rgba(0,196,180,0.25)' }}>
-            <span className="text-lg">🎵</span>
-            <audio controls className="flex-1 h-8" style={{ minWidth: 0 }}>
-              <source src={book.songUrl} />
-            </audio>
-            <a
-              href={book.songUrl}
-              download={`${(book.title || 'theme-song').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-theme.mp3`}
-              className="shrink-0 px-2 py-1 rounded-lg text-xs font-bold"
-              style={{ background: 'rgba(0,196,180,0.15)', border: '1px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
-              title="Download theme song"
-            >
-              ⬇
-            </a>
-          </div>
-        )}
       </main>
 
       <PageIndicators />

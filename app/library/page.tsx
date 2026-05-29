@@ -84,7 +84,7 @@ export default function LibraryPage() {
           </button>
         </div>
 
-        <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-5">
+        <main className="flex-1 max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto w-full px-4 py-5">
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="text-center py-3 px-2 rounded-2xl" style={{ background: 'rgba(245,208,0,0.08)', border: '1.5px solid rgba(245,208,0,0.2)' }}>
@@ -144,7 +144,7 @@ export default function LibraryPage() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
               {filteredBooks.map(book => (
                 <div
                   key={book.id}

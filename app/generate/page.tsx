@@ -504,7 +504,7 @@ export default function GeneratePage() {
           />
         )}
 
-        <main className="flex grow flex-col items-center justify-start px-4 py-4 max-w-2xl mx-auto w-full">
+        <main className="flex grow flex-col items-center justify-start px-4 py-4 max-w-2xl lg:max-w-4xl mx-auto w-full">
           {isGenerating ? (
             <div className="flex-1 flex flex-col items-center justify-center w-full py-8">
               <GeneratingGame progress={generationProgress} />
@@ -567,6 +567,9 @@ export default function GeneratePage() {
                 </div>
               )}
 
+              {/* Desktop: two-column creator (mobile stays single-column) */}
+              <div className="w-full lg:grid lg:grid-cols-2 lg:gap-x-6 lg:items-start">
+              <div className="min-w-0">
               {/* Story Templates */}
               <div className="w-full mb-4">
                 <div className="kq-section-label">📖 Story Type</div>
@@ -642,6 +645,7 @@ export default function GeneratePage() {
                 )}
               </div>
 
+              </div>{/* end left column */}
               {/* Cartoon Hero Section */}
               <div className="w-full mb-4 rounded-2xl p-4"
                 style={{ background: 'rgba(155,93,229,0.07)', border: '2px solid rgba(155,93,229,0.25)' }}>
@@ -729,6 +733,7 @@ export default function GeneratePage() {
                 <input ref={heroFileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleHeroImageLoad(f) }} />
               </div>
 
+              </div>{/* end two-column creator */}
               {/* Advanced Options Toggle */}
               <button
                 onClick={() => setShowAdvanced(!showAdvanced)}
@@ -741,9 +746,9 @@ export default function GeneratePage() {
 
               {/* Advanced Options */}
               {showAdvanced && (
-                <div className="w-full space-y-5 kq-card mb-4">
+                <div className="w-full space-y-5 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 kq-card mb-4">
                   {/* Character Builder */}
-                  <div>
+                  <div className="lg:col-span-2">
                     <div className="flex items-center justify-between mb-2">
                       <div className="kq-section-label mb-0">🦸 Character Builder</div>
                       <div
