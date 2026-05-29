@@ -130,10 +130,15 @@ export default function BookViewerPage() {
     }
   }
 
-  // Poll for the queued theme song until the audio is ready.
+  // Poll for the queued theme song until the audio is ready (give up after ~2 min).
   useEffect(() => {
     if (!songQueueId) return
+    let attempts = 0
+    const maxAttempts = 40 // 40 × 3s = 2 minutes
+    let interval: ReturnType<typeof setInterval>
+    const stop = () => { clearInterval(interval); setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false) }
     const poll = async () => {
+      attempts++
       try {
         const res = await fetch(`/api/song-retrieve/${bookId}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -142,14 +147,22 @@ export default function BookViewerPage() {
         const data = await res.json()
         if (data.status === 'complete' && data.songUrl) {
           setBook(prev => (prev ? { ...prev, songUrl: data.songUrl } : prev))
-          setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false)
+          stop()
         } else if (data.error) {
           console.error('Song retrieve error:', data.error)
-          setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false)
+          alert('The theme song could not be created. Please try again.')
+          stop()
+        } else if (attempts >= maxAttempts) {
+          console.warn('Theme song timed out after 2 minutes')
+          alert('The theme song is taking longer than expected. Please try again in a moment.')
+          stop()
         }
-      } catch (err) { console.error('Song poll error:', err) }
+      } catch (err) {
+        console.error('Song poll error:', err)
+        if (attempts >= maxAttempts) stop()
+      }
     }
-    const interval = setInterval(poll, 3000)
+    interval = setInterval(poll, 3000)
     return () => clearInterval(interval)
   }, [songQueueId, songModel, userApiKey, bookId])
 
@@ -539,6 +552,15 @@ export default function BookViewerPage() {
             <audio controls className="flex-1 h-8" style={{ minWidth: 0 }}>
               <source src={book.songUrl} />
             </audio>
+            <a
+              href={book.songUrl}
+              download={`${(book.title || 'theme-song').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-theme.mp3`}
+              className="shrink-0 px-2 py-1 rounded-lg text-xs font-bold"
+              style={{ background: 'rgba(0,196,180,0.15)', border: '1px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
+              title="Download theme song"
+            >
+              ⬇
+            </a>
           </div>
         )}
       </main>

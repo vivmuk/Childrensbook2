@@ -380,13 +380,33 @@ export default function GeneratePage() {
     } catch (err: any) { setCartoonError(err.message || 'Failed to cartoonify.') } finally { setIsCartoonifying(false) }
   }
 
+  // Shrink a drawing to a sane size before sending — keeps the upload fast and
+  // well under the vision model's payload limit.
+  const downscaleImage = (dataUrl: string, maxDim = 1024): Promise<string> =>
+    new Promise(resolve => {
+      const img = new window.Image()
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+        if (scale === 1) { resolve(dataUrl); return }
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(dataUrl); return }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.85))
+      }
+      img.onerror = () => resolve(dataUrl)
+      img.src = dataUrl
+    })
+
   const handleDrawingUpload = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
     setIsReadingDrawing(true); setDrawingError('')
     const reader = new FileReader()
     reader.onload = async e => {
       try {
-        const dataUrl = e.target?.result as string
+        const dataUrl = await downscaleImage(e.target?.result as string)
         const res = await fetch('/api/describe-drawing', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: dataUrl, userApiKey: userApiKey || undefined }),

@@ -340,17 +340,24 @@ async function generateBookImages(
   // Strip data URI prefix from cartoon hero if present
   const heroBase64 = cartoonHeroImage ? cartoonHeroImage.replace(/^data:[^;]+;base64,/, '') : undefined
 
-  // 1 + 2. Fire cover and all page images simultaneously
-  const [coverResult, ...pageResults] = await Promise.all([
-    heroBase64
-      ? editImage(coverPrompt, heroBase64, '16:9', apiKey).then(r => { onImageDone(); return r })
-      : generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => { onImageDone(); return img ? { data: img, isPng: false } : null }),
-    ...pagePrompts.map((prompt: string) =>
+  // Build one task per image (cover first, then pages) and run them through a
+  // bounded pool so we never overwhelm the Venice API with a burst of requests.
+  type ImgResult = { data: string; isPng: boolean } | null
+  const tasks: Array<() => Promise<ImgResult>> = [
+    () =>
       heroBase64
-        ? editImage(prompt, heroBase64, '3:2', apiKey).then(r => { onImageDone(); return r })
-        : generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => { onImageDone(); return img ? { data: img, isPng: false } : null })
+        ? editImage(coverPrompt, heroBase64, '16:9', apiKey)
+        : generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => (img ? { data: img, isPng: false } : null)),
+    ...pagePrompts.map((prompt: string) => () =>
+      heroBase64
+        ? editImage(prompt, heroBase64, '3:2', apiKey)
+        : generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => (img ? { data: img, isPng: false } : null)),
     ),
-  ])
+  ]
+
+  const allResults = await runWithConcurrency(tasks, 4, onImageDone)
+  const coverResult = allResults[0]
+  const pageResults = allResults.slice(1)
 
   if (coverResult) {
     const prefix = coverResult.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
@@ -364,7 +371,7 @@ async function generateBookImages(
       // so the story still completes; the page can be regenerated later.
       failedImages++
       console.warn(`[${bookId}] Image for page ${i + 1} failed after retries — using placeholder`)
-      return { pageNumber: i + 1, text: pages[i].text, image: `data:image/webp;base64,${PLACEHOLDER_WEBP}` }
+      return { pageNumber: i + 1, text: pages[i].text, image: PLACEHOLDER_IMAGE }
     }
     const prefix = result.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
     return { pageNumber: i + 1, text: pages[i].text, image: `${prefix}${result.data}` }
@@ -381,10 +388,40 @@ async function generateBookImages(
 
 // ── Venice image API helpers ─────────────────────────────────────────────────
 
-// Transparent 1x1 webp used as a last-resort placeholder so a single failed
+// A friendly, valid SVG used as a last-resort placeholder so a single failed
 // image never throws away an otherwise-complete book.
-const PLACEHOLDER_WEBP =
-  'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=='
+const PLACEHOLDER_IMAGE = (() => {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0%" stop-color="#9b5de5"/><stop offset="100%" stop-color="#4dc9ff"/></linearGradient></defs>` +
+    `<rect width="100%" height="100%" fill="url(#g)"/>` +
+    `<text x="50%" y="46%" font-family="Arial, sans-serif" font-size="72" fill="#ffffff" text-anchor="middle">✨</text>` +
+    `<text x="50%" y="58%" font-family="Arial, sans-serif" font-size="34" fill="#ffffff" text-anchor="middle" opacity="0.9">Illustration coming soon</text>` +
+    `</svg>`
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+})()
+
+// Runs async tasks with a bounded concurrency pool, preserving result order.
+// Keeps us from firing a dozen image requests at once (429 storms / timeouts).
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+  onEach?: () => void | Promise<void>,
+): Promise<T[]> {
+  const results = new Array<T>(tasks.length)
+  let next = 0
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++
+      results[i] = await tasks[i]()
+      if (onEach) await onEach()
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
 
 // fetch with a hard timeout — a hung Venice request must not stall the whole book.
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {

@@ -27,6 +27,7 @@ export async function POST(
 
     const retrieveRes = await fetch('https://api.venice.ai/api/v1/audio/retrieve', {
       method: 'POST',
+      signal: AbortSignal.timeout(60_000),
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ queue_id: queueId, ...(model && { model }) }),
     })

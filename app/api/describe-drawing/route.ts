@@ -21,10 +21,15 @@ export async function POST(request: NextRequest) {
     // Ensure a proper data URI for the vision model.
     const imageUrl = image.startsWith('data:') ? image : `data:image/png;base64,${image}`
 
-    const res = await fetch('https://api.venice.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 60_000)
+    let res: Response
+    try {
+      res = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
         model: 'gemini-3-flash-preview',
         messages: [
           {
@@ -43,7 +48,10 @@ export async function POST(request: NextRequest) {
         temperature: 0.9,
         max_tokens: 300,
       }),
-    })
+      })
+    } finally {
+      clearTimeout(timer)
+    }
 
     if (!res.ok) {
       const errText = await res.text()
@@ -55,10 +63,16 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await res.json()
-    const storyIdea = data.choices?.[0]?.message?.content?.trim()
-    if (!storyIdea) {
+    const raw = data.choices?.[0]?.message?.content?.trim()
+    if (!raw) {
       return NextResponse.json({ error: 'Could not interpret the drawing. Please try again.' }, { status: 502 })
     }
+
+    // Strip wrapping quotes / markdown the model sometimes adds despite instructions.
+    const storyIdea = raw
+      .replace(/^["'`*\s]+|["'`*\s]+$/g, '')
+      .replace(/^(story idea|idea)\s*[:\-]\s*/i, '')
+      .trim()
 
     return NextResponse.json({ storyIdea })
   } catch (err: any) {

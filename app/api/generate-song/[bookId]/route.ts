@@ -47,6 +47,7 @@ export async function POST(
     const model = 'elevenlabs-music'
     const queueRes = await fetch('https://api.venice.ai/api/v1/audio/queue', {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
