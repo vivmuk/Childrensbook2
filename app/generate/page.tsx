@@ -315,6 +315,11 @@ export default function GeneratePage() {
   const [cartoonError, setCartoonError] = useState('')
   const heroFileInputRef = useRef<HTMLInputElement>(null)
 
+  // Draw-to-Story: turn a child's drawing into a story idea via a vision model
+  const [isReadingDrawing, setIsReadingDrawing] = useState(false)
+  const [drawingError, setDrawingError] = useState('')
+  const drawingFileInputRef = useRef<HTMLInputElement>(null)
+
   const pendingMetaRef = useRef<{ ageRange: string; illustrationStyle: string } | null>(null)
 
   useEffect(() => {
@@ -374,6 +379,29 @@ export default function GeneratePage() {
       if (!res.ok) { setCartoonError(data.error || 'Failed to cartoonify. Please try again.') } else { setCartoonHeroDataUrl(data.cartoonImage) }
     } catch (err: any) { setCartoonError(err.message || 'Failed to cartoonify.') } finally { setIsCartoonifying(false) }
   }
+
+  const handleDrawingUpload = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) return
+    setIsReadingDrawing(true); setDrawingError('')
+    const reader = new FileReader()
+    reader.onload = async e => {
+      try {
+        const dataUrl = e.target?.result as string
+        const res = await fetch('/api/describe-drawing', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl, userApiKey: userApiKey || undefined }),
+        })
+        const data = await res.json()
+        if (!res.ok) { setDrawingError(data.error || 'Could not read the drawing. Please try another.') }
+        else if (data.storyIdea) { setStoryIdea(data.storyIdea); setSelectedTemplate('custom') }
+      } catch (err: any) {
+        setDrawingError(err.message || 'Could not read the drawing.')
+      } finally {
+        setIsReadingDrawing(false)
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [userApiKey])
 
   const doGenerate = async (overrideApiKey?: string) => {
     setIsGenerating(true); setGenerationProgress(0)
@@ -570,6 +598,28 @@ export default function GeneratePage() {
                   rows={3}
                   placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || 'A brave knight afraid of spiders, or a magical treehouse that travels through time...'}
                 />
+                <input
+                  ref={drawingFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleDrawingUpload(f); e.target.value = '' }}
+                />
+                <button
+                  onClick={() => drawingFileInputRef.current?.click()}
+                  disabled={isReadingDrawing}
+                  className="mt-2 w-full py-2.5 px-3 flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+                  style={{ background: 'rgba(0,196,180,0.08)', border: '1.5px dashed rgba(0,196,180,0.4)', color: '#4fd6c6' }}
+                >
+                  {isReadingDrawing ? (
+                    <>✨ Reading your drawing…</>
+                  ) : (
+                    <>🎨 Turn a drawing into a story</>
+                  )}
+                </button>
+                {drawingError && (
+                  <p className="mt-1.5 text-xs" style={{ color: '#ff8a8a' }}>{drawingError}</p>
+                )}
               </div>
 
               {/* Cartoon Hero Section */}

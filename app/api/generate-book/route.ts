@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { setBook, getBook, type Book, getUserBooks } from '@/lib/storage'
+import { setBook, getBook, type Book, countUserBooks } from '@/lib/storage'
 
 const LOCAL_USER_ID = 'local-user'
 
@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
   try {
     const userId = LOCAL_USER_ID
 
-    // Enforce per-user book limit
-    const userBooks = await getUserBooks(userId)
-    if (userBooks.length >= 100) {
+    // Enforce per-user book limit (cheap COUNT — no page images loaded)
+    const userBookCount = await countUserBooks(userId)
+    if (userBookCount >= 100) {
       return NextResponse.json(
         { error: 'You have reached the limit of 100 books. Please delete some old books.' },
         { status: 403 },
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
     for (const model of models) {
       modelUsed = model
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        completionResponse = await fetch('https://api.venice.ai/api/v1/chat/completions', {
+        completionResponse = await fetchWithTimeout('https://api.venice.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
             max_tokens: 16000,
             response_format: { type: 'json_object' },
           }),
-        })
+        }, 120_000)
 
         if (completionResponse.ok) break
 
@@ -357,11 +357,19 @@ async function generateBookImages(
     book.titlePage = { image: `${prefix}${coverResult.data}`, title: book.title }
   }
 
+  let failedImages = 0
   book.pages = pageResults.map((result, i) => {
-    if (!result) throw new Error(`Failed to generate image for page ${i + 1}`)
+    if (!result) {
+      // A single failed image must not discard the whole book — use a placeholder
+      // so the story still completes; the page can be regenerated later.
+      failedImages++
+      console.warn(`[${bookId}] Image for page ${i + 1} failed after retries — using placeholder`)
+      return { pageNumber: i + 1, text: pages[i].text, image: `data:image/webp;base64,${PLACEHOLDER_WEBP}` }
+    }
     const prefix = result.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
     return { pageNumber: i + 1, text: pages[i].text, image: `${prefix}${result.data}` }
   })
+  if (failedImages > 0) console.warn(`[${bookId}] Completed with ${failedImages} placeholder image(s)`)
 
   // 3. Complete
   book.status = 'completed'
@@ -373,6 +381,22 @@ async function generateBookImages(
 
 // ── Venice image API helpers ─────────────────────────────────────────────────
 
+// Transparent 1x1 webp used as a last-resort placeholder so a single failed
+// image never throws away an otherwise-complete book.
+const PLACEHOLDER_WEBP =
+  'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA=='
+
+// fetch with a hard timeout — a hung Venice request must not stall the whole book.
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function generateImage(
   prompt: string,
   model: string,
@@ -380,25 +404,35 @@ async function generateImage(
   height: number,
   steps: number,
   apiKey: string,
+  maxAttempts = 3,
 ): Promise<string | null> {
-  try {
-    const res = await fetch('https://api.venice.ai/api/v1/image/generate', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, width, height, format: 'webp', steps }),
-    })
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        'https://api.venice.ai/api/v1/image/generate',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, prompt, width, height, format: 'webp', steps }),
+        },
+        90_000,
+      )
 
-    if (!res.ok) {
-      console.error(`Image generation error: ${res.status} — ${(await res.text()).slice(0, 200)}`)
-      return null
+      if (res.ok) {
+        const data = await res.json()
+        const img = data.images?.[0]
+        if (img) return img
+      } else {
+        console.error(`Image generation error (attempt ${attempt}): ${res.status} — ${(await res.text()).slice(0, 200)}`)
+        // Don't retry auth/validation errors — they won't recover.
+        if (res.status === 401 || res.status === 400) return null
+      }
+    } catch (err) {
+      console.error(`Image generation exception (attempt ${attempt}):`, err)
     }
-
-    const data = await res.json()
-    return data.images?.[0] ?? null
-  } catch (err) {
-    console.error('Image generation exception:', err)
-    return null
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 2000))
   }
+  return null
 }
 
 // Uses Venice /image/edit to place the cartoon hero character into each scene
@@ -407,31 +441,38 @@ async function editImage(
   heroBase64: string,
   aspectRatio: string,
   apiKey: string,
+  maxAttempts = 3,
 ): Promise<{ data: string; isPng: true } | null> {
-  try {
-    const res = await fetch('https://api.venice.ai/api/v1/image/edit', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'grok-imagine-edit',
-        prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero in this scene.`,
-        image: heroBase64,
-        aspect_ratio: aspectRatio,
-        safe_mode: true,
-      }),
-    })
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        'https://api.venice.ai/api/v1/image/edit',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'grok-imagine-edit',
+            prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero in this scene.`,
+            image: heroBase64,
+            aspect_ratio: aspectRatio,
+            safe_mode: true,
+          }),
+        },
+        90_000,
+      )
 
-    if (!res.ok) {
-      console.error(`Image edit error: ${res.status} — ${(await res.text()).slice(0, 200)}`)
-      return null
+      if (res.ok) {
+        // /image/edit returns binary PNG
+        const pngBuffer = await res.arrayBuffer()
+        const base64 = Buffer.from(pngBuffer).toString('base64')
+        return { data: base64, isPng: true }
+      }
+      console.error(`Image edit error (attempt ${attempt}): ${res.status} — ${(await res.text()).slice(0, 200)}`)
+      if (res.status === 401 || res.status === 400) return null
+    } catch (err) {
+      console.error(`Image edit exception (attempt ${attempt}):`, err)
     }
-
-    // /image/edit returns binary PNG
-    const pngBuffer = await res.arrayBuffer()
-    const base64 = Buffer.from(pngBuffer).toString('base64')
-    return { data: base64, isPng: true }
-  } catch (err) {
-    console.error('Image edit exception:', err)
-    return null
+    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 2000))
   }
+  return null
 }

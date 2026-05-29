@@ -4,6 +4,8 @@ import {
   getBookFromSQLite,
   setBookInSQLite,
   getUserBooksFromSQLite,
+  getUserBookSummariesFromSQLite,
+  countUserBooksInSQLite,
   deleteBookFromSQLite,
   toggleFavoriteInSQLite,
   getFavoritesFromSQLite,
@@ -39,6 +41,7 @@ interface Book {
   illustrationStyle: string
   status: 'generating' | 'completed' | 'error'
   audioUrl?: string
+  songUrl?: string
   createdAt: string
   expectedPages?: number
   generationProgress?: number
@@ -151,6 +154,27 @@ export async function getUserBooks(userId: string): Promise<Book[]> {
     console.log('SQLite query failed, returning in-memory books')
   }
   return Array.from(inMemoryBooks.values()).filter(book => book.ownerId === userId)
+}
+
+// Metadata + cover only — no page images. Use for library/listing grids.
+export async function getUserBookSummaries(userId: string): Promise<Book[]> {
+  try {
+    const summaries = await getUserBookSummariesFromSQLite(userId)
+    if (summaries.length > 0) return summaries
+  } catch (error) {
+    console.log('SQLite summary query failed, returning in-memory books')
+  }
+  return Array.from(inMemoryBooks.values())
+    .filter(book => book.ownerId === userId)
+    .map(({ pages, ...rest }) => ({ ...rest, pages: [] }))
+}
+
+export async function countUserBooks(userId: string): Promise<number> {
+  try {
+    return await countUserBooksInSQLite(userId)
+  } catch {
+    return Array.from(inMemoryBooks.values()).filter(book => book.ownerId === userId).length
+  }
 }
 
 export async function toggleFavorite(userId: string, bookId: string): Promise<boolean> {

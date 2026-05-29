@@ -23,7 +23,10 @@ export async function GET(
       pagesCompleted: book.pages?.length || 0,
       totalPages: book.expectedPages || 8,
       expectedPages: book.expectedPages || 8,
-      pages: book.pages || [],
+      // Only send lightweight page text during polling — never the base64 images.
+      // The client doesn't render page images on the generating screen, and shipping
+      // them on every 2s poll wasted megabytes of bandwidth per generation.
+      pages: (book.pages || []).map(p => ({ pageNumber: p.pageNumber, text: p.text })),
       // Include metadata for client-side localStorage saving
       title: book.title,
       ageRange: book.ageRange,
