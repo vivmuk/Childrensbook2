@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getUserBooks } from '@/lib/storage'
+import { getUserBookSummaries } from '@/lib/storage'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,7 +7,8 @@ const LOCAL_USER_ID = 'local-user'
 
 export async function GET(request: NextRequest) {
   try {
-    const books = await getUserBooks(LOCAL_USER_ID)
+    // Summaries only (cover + metadata, no page images) — keeps the list payload small.
+    const books = await getUserBookSummaries(LOCAL_USER_ID)
     return NextResponse.json({ books })
   } catch (error: any) {
     console.error('Error fetching user books:', error)

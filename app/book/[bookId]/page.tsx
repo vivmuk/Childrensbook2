@@ -21,6 +21,7 @@ interface Book {
   ageRange: string
   illustrationStyle: string
   audioUrl?: string
+  songUrl?: string
 }
 
 export default function BookViewerPage() {
@@ -44,6 +45,11 @@ export default function BookViewerPage() {
   const [animateAvgTime, setAnimateAvgTime] = useState<number>(120000)
   const [showVideoModal, setShowVideoModal] = useState(false)
   const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null)
+
+  // Theme song state
+  const [isGeneratingSong, setIsGeneratingSong] = useState(false)
+  const [songQueueId, setSongQueueId] = useState<string | null>(null)
+  const [songModel, setSongModel] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchBook = async () => {
@@ -101,6 +107,64 @@ export default function BookViewerPage() {
       alert('Failed to generate audio. Please try again.')
     } finally { setIsGeneratingAudio(false) }
   }
+
+  const handleGenerateSong = async () => {
+    if (!book || isGeneratingSong) return
+    setIsGeneratingSong(true)
+    try {
+      const res = await fetch(`/api/generate-song/${bookId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userApiKey: userApiKey || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to start theme song')
+      if (data.status === 'complete' && data.songUrl) {
+        setBook({ ...book, songUrl: data.songUrl }); setIsGeneratingSong(false)
+      } else {
+        setSongQueueId(data.queueId); if (data.model) setSongModel(data.model)
+      }
+    } catch (err: any) {
+      console.error('Theme song error:', err)
+      alert(err.message || 'Failed to create theme song. Please try again.')
+      setIsGeneratingSong(false)
+    }
+  }
+
+  // Poll for the queued theme song until the audio is ready (give up after ~2 min).
+  useEffect(() => {
+    if (!songQueueId) return
+    let attempts = 0
+    const maxAttempts = 40 // 40 × 3s = 2 minutes
+    let interval: ReturnType<typeof setInterval>
+    const stop = () => { clearInterval(interval); setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false) }
+    const poll = async () => {
+      attempts++
+      try {
+        const res = await fetch(`/api/song-retrieve/${bookId}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queueId: songQueueId, model: songModel, userApiKey: userApiKey || undefined }),
+        })
+        const data = await res.json()
+        if (data.status === 'complete' && data.songUrl) {
+          setBook(prev => (prev ? { ...prev, songUrl: data.songUrl } : prev))
+          stop()
+        } else if (data.error) {
+          console.error('Song retrieve error:', data.error)
+          alert('The theme song could not be created. Please try again.')
+          stop()
+        } else if (attempts >= maxAttempts) {
+          console.warn('Theme song timed out after 2 minutes')
+          alert('The theme song is taking longer than expected. Please try again in a moment.')
+          stop()
+        }
+      } catch (err) {
+        console.error('Song poll error:', err)
+        if (attempts >= maxAttempts) stop()
+      }
+    }
+    interval = setInterval(poll, 3000)
+    return () => clearInterval(interval)
+  }, [songQueueId, songModel, userApiKey, bookId])
 
   const handlePageChange = (newPage: number) => {
     setIsPageTransitioning(true)
@@ -343,6 +407,14 @@ export default function BookViewerPage() {
             {isGeneratingAudio ? <><span className="animate-kq-spin">🎙</span> <span className="hidden sm:inline">Generating…</span></> : <><span>🎙</span> <span className="hidden sm:inline">Narrate</span></>}
           </button>
         )}
+        {!book.songUrl && (
+          <button onClick={handleGenerateSong} disabled={isGeneratingSong}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            style={{ background: 'rgba(0,196,180,0.15)', border: '1.5px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
+            title="Create an original theme song for this book">
+            {isGeneratingSong ? <><span className="animate-kq-spin">🎵</span> <span className="hidden sm:inline">Composing…</span></> : <><span>🎵</span> <span className="hidden sm:inline">Theme Song</span></>}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -470,6 +542,25 @@ export default function BookViewerPage() {
             <audio ref={setAudioRef} controls className="flex-1 h-8" style={{ minWidth: 0 }}>
               <source src={book.audioUrl} type="audio/mpeg" />
             </audio>
+          </div>
+        )}
+
+        {/* Theme song player (if a song exists) */}
+        {book.songUrl && (
+          <div className="flex items-center gap-2 mb-3 p-2 rounded-xl" style={{ background: 'rgba(0,196,180,0.08)', border: '1px solid rgba(0,196,180,0.25)' }}>
+            <span className="text-lg">🎵</span>
+            <audio controls className="flex-1 h-8" style={{ minWidth: 0 }}>
+              <source src={book.songUrl} />
+            </audio>
+            <a
+              href={book.songUrl}
+              download={`${(book.title || 'theme-song').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-theme.mp3`}
+              className="shrink-0 px-2 py-1 rounded-lg text-xs font-bold"
+              style={{ background: 'rgba(0,196,180,0.15)', border: '1px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
+              title="Download theme song"
+            >
+              ⬇
+            </a>
           </div>
         )}
       </main>

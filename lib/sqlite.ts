@@ -30,6 +30,9 @@ export function getDatabase(): any {
     const dbPath = join(process.cwd(), 'data', 'kinderquill.db')
     db = new Database(dbPath)
     db.pragma('journal_mode = WAL')
+    // Avoid SQLITE_BUSY when status polling reads while generation writes.
+    db.pragma('busy_timeout = 5000')
+    db.pragma('synchronous = NORMAL')
     initDatabase()
   }
   return db
@@ -48,6 +51,7 @@ function initDatabase() {
       illustration_style TEXT,
       status TEXT DEFAULT 'generating',
       audio_url TEXT,
+      song_url TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       expected_pages INTEGER DEFAULT 8,
       generation_progress INTEGER DEFAULT 0,
@@ -112,6 +116,12 @@ function initDatabase() {
       read_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `)
+
+  // Migrations: add columns that may be missing on databases created by older versions.
+  const bookColumns = (db.prepare('PRAGMA table_info(books)').all() as any[]).map(c => c.name)
+  if (!bookColumns.includes('song_url')) {
+    db.exec('ALTER TABLE books ADD COLUMN song_url TEXT')
+  }
 
   // Create indexes
   db.exec(`CREATE INDEX IF NOT EXISTS idx_books_owner ON books(owner_id)`)

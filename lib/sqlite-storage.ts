@@ -18,6 +18,7 @@ export interface SQLiteBook {
   illustration_style: string
   status: 'generating' | 'completed' | 'error'
   audio_url?: string
+  song_url?: string
   created_at: string
   expected_pages: number
   generation_progress: number
@@ -55,6 +56,10 @@ function dbBookToBook(dbBook: SQLiteBook): Book {
 
   if (dbBook.audio_url) {
     book.audioUrl = dbBook.audio_url
+  }
+
+  if (dbBook.song_url) {
+    book.songUrl = dbBook.song_url
   }
 
   if (dbBook.character_name) {
@@ -110,6 +115,7 @@ export async function setBookInSQLite(book: Book): Promise<void> {
       illustration_style: book.illustrationStyle,
       status: book.status,
       audio_url: book.audioUrl || null,
+      song_url: book.songUrl || null,
       created_at: book.createdAt,
       expected_pages: book.expectedPages || 8,
       generation_progress: book.generationProgress || 0,
@@ -132,9 +138,9 @@ export async function setBookInSQLite(book: Book): Promise<void> {
   const stmt = db.prepare(`
     INSERT OR REPLACE INTO books (
       id, title, title_page_image, age_range, illustration_style, status,
-      audio_url, created_at, expected_pages, generation_progress, narrator_voice,
+      audio_url, song_url, created_at, expected_pages, generation_progress, narrator_voice,
       character_name, character_type, character_traits, owner_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
 
   stmt.run(
@@ -145,6 +151,7 @@ export async function setBookInSQLite(book: Book): Promise<void> {
     book.illustrationStyle,
     book.status,
     book.audioUrl || null,
+    book.songUrl || null,
     book.createdAt,
     book.expectedPages || 8,
     book.generationProgress || 0,
@@ -155,20 +162,53 @@ export async function setBookInSQLite(book: Book): Promise<void> {
     book.ownerId || null
   )
 
-  // Save pages if they exist
+  // Save pages if they exist — wrapped in a transaction so the delete + reinsert
+  // is atomic and an order of magnitude faster than autocommitting each row.
   if (book.pages && book.pages.length > 0) {
     const pageStmt = db.prepare(`
       INSERT OR REPLACE INTO book_pages (book_id, page_number, text, image)
       VALUES (?, ?, ?, ?)
     `)
-
     const deletePages = db.prepare('DELETE FROM book_pages WHERE book_id = ?')
-    deletePages.run(book.id)
 
-    for (const page of book.pages) {
-      pageStmt.run(book.id, page.pageNumber, page.text, page.image)
-    }
+    const writePages = db.transaction((pages: BookPage[]) => {
+      deletePages.run(book.id)
+      for (const page of pages) {
+        pageStmt.run(book.id, page.pageNumber, page.text, page.image)
+      }
+    })
+    writePages(book.pages)
   }
+}
+
+// Lightweight book summaries — selects metadata + cover only (no page images).
+// Used by library/listing views so we don't load megabytes of base64 per book.
+export async function getUserBookSummariesFromSQLite(userId: string): Promise<Book[]> {
+  if (!isSQLiteAvailable()) {
+    return Array.from(memoryStorage.books.values())
+      .filter(b => b.owner_id === userId)
+      .map(b => dbBookToBook(b))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  }
+
+  const db = getDatabase()
+  if (!db) return []
+
+  const rows = db
+    .prepare('SELECT * FROM books WHERE owner_id = ? ORDER BY created_at DESC')
+    .all(userId) as SQLiteBook[]
+  // dbBookToBook leaves pages as [] — exactly what a list view needs.
+  return rows.map(dbBookToBook)
+}
+
+export async function countUserBooksInSQLite(userId: string): Promise<number> {
+  if (!isSQLiteAvailable()) {
+    return Array.from(memoryStorage.books.values()).filter(b => b.owner_id === userId).length
+  }
+  const db = getDatabase()
+  if (!db) return 0
+  const row = db.prepare('SELECT COUNT(*) as n FROM books WHERE owner_id = ?').get(userId) as any
+  return row?.n || 0
 }
 
 export async function getUserBooksFromSQLite(userId: string): Promise<Book[]> {
