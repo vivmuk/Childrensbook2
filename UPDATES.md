@@ -4,6 +4,37 @@ This document summarizes all development updates made to KinderQuill over the la
 
 ---
 
+## Phase 4: Personalization, Reading Modes & Daily Engagement (Jun 25)
+
+### Adult-or-child Photo Hero (improved)
+- The "Make Someone the Hero" photo flow now works for a **child OR a grown-up**. The cartoonify step is subject-agnostic and **preserves the person's apparent age** (an adult stays an adult).
+- A vision pass describes the hero and detects child/teen/adult; the story is genuinely written **about that person**.
+- When the hero is a grown-up, the story is steered to be **warm, uplifting and inspiring** — celebrating the grown-up — while staying wholesome and age-appropriate for the child reading it.
+- Illustration prompts strengthened (composition, lighting, quality boosters) and the hero's age is locked into every page so the image model never re-renders an adult as a child.
+
+### Multi-language Stories (#8)
+- New **Story Language** selector (English, Spanish, French, German, Italian, Portuguese, Hindi, Mandarin, Japanese, Arabic). Title and page text are written natively in the chosen language; illustration prompts stay in English.
+
+### Saved Heroes / Series (#2)
+- Save a cartoon hero (name + look) and **reuse them across new books** for recurring characters and ongoing series.
+
+### Read-Along Highlighting (#3)
+- A **Read Along** control in the book viewer highlights each sentence in turn at a natural pace and auto-turns the page.
+
+### Dyslexia-friendly "Easy Read" Mode (#9)
+- One-tap toggle for a dyslexia-friendly font, larger text, extra letter/word spacing, and a soft cream background. Preference persists.
+
+### Continue the Adventure / Sequels (#7)
+- The last page of every book offers **Continue the Adventure**, opening the generator pre-filled with a sequel idea starring the same hero.
+
+### Story of the Day + Streaks (#5)
+- Homepage now shows a rotating **Story of the Day** prompt and a **daily visit streak** to build a reading habit.
+
+### Print & Email Share (#4, #6)
+- Added an **Email** share option (sends the read-only link) and a print-friendly keepsake route for the book.
+
+---
+
 ## Phase 1: Story Templates, Length Options, Sharing & PDF Generation (Jan 31)
 
 ### Story Templates & Length Options

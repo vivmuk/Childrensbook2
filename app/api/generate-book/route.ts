@@ -12,23 +12,57 @@ const AGE_TO_COMPLEXITY: Record<string, string> = {
   '5th': 'complex, with rich vocabulary, sophisticated sentence structure, and nuanced emotions — think Harry Potter level',
 }
 
+interface HeroContext {
+  description?: string
+  isAdult?: boolean
+  name?: string
+}
+
 // Improved story prompt that encourages better educational content and AI literacy
 function buildStoryPrompt(
   storyIdea: string,
   ageRange: string,
   illustrationStyle: string,
   pageCount: number,
+  opts: { language?: string; hero?: HeroContext } = {},
 ): string {
   const complexity = AGE_TO_COMPLEXITY[ageRange] || AGE_TO_COMPLEXITY['2nd']
+
+  const language = (opts.language || 'English').trim()
+  const languageBlock =
+    language && language.toLowerCase() !== 'english'
+      ? `\nLANGUAGE:
+- Write the title and ALL page text entirely in ${language}, with natural, native-sounding phrasing a ${language}-speaking parent would happily read aloud.
+- Keep every "imageDescription" in ENGLISH (the illustration model reads English best).\n`
+      : ''
+
+  // When the hero comes from a real photo we describe them so the story is
+  // genuinely about that person. A grown-up hero stays a grown-up — but the
+  // tale is still wholesome, positive and inspiring for the child reading it.
+  const hero = opts.hero
+  let heroBlock = ''
+  if (hero?.description) {
+    const heroName = hero.name ? `, named ${hero.name},` : ''
+    heroBlock = hero.isAdult
+      ? `\nREAL-LIFE HERO (GROWN-UP):
+- The main character is a real grown-up${heroName} who looks like this: ${hero.description}
+- This is a child's beloved grown-up (a parent, grandparent, teacher, or hero they look up to). Make the story ABOUT this grown-up and their kindness, courage, talents, and big heart.
+- Keep it 100% wholesome, warm, uplifting and INSPIRING — show the grown-up doing something brave, caring, creative, or adventurous that makes the child reader proud and hopeful.
+- Keep the grown-up an adult in every page and imageDescription (do NOT turn them into a child). Surround them with gentle, age-appropriate wonder.\n`
+      : `\nREAL-LIFE HERO (CHILD):
+- The main character is a real child${heroName} who looks like this: ${hero.description}
+- Make the story ABOUT this child being brave, curious, and kind. Keep them a child in every page and imageDescription.\n`
+  }
 
   return `You are an award-winning children's book author celebrated for creating stories that are both magical and educational. Your books have won the Caldecott Medal and the Newbery Medal. Create a masterpiece children's storybook based on this idea:
 
 "${storyIdea}"
-
+${heroBlock}${languageBlock}
 STORY REQUIREMENTS:
 - Reading level: ${ageRange} grade — language complexity should be ${complexity}
 - Exactly ${pageCount} pages — no more, no less
 - Each page: 6–8 complete, beautifully crafted sentences (never just 2–4 sentences)
+- Always positive, hopeful and inspiring — gentle stakes, no scary or sad endings; every story leaves the reader uplifted
 - Write at publication quality — every sentence should delight, teach, or move the reader
 
 WRITING CRAFT GUIDELINES:
@@ -98,6 +132,8 @@ export async function POST(request: NextRequest) {
       character,
       userVeniceApiKey,
       cartoonHeroImage,
+      language = 'English',
+      hero,
     } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
@@ -117,7 +153,14 @@ export async function POST(request: NextRequest) {
 
     const pageCount = Math.min(Math.max(parseInt(storyLength) || 8, 5), 12)
     const bookId = `book_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const storyPrompt = buildStoryPrompt(storyIdea, ageRange, illustrationStyle, pageCount)
+    const heroContext: HeroContext | undefined =
+      hero && hero.description
+        ? { description: String(hero.description), isAdult: !!hero.isAdult, name: hero.name ? String(hero.name) : undefined }
+        : undefined
+    const storyPrompt = buildStoryPrompt(storyIdea, ageRange, illustrationStyle, pageCount, {
+      language,
+      hero: heroContext,
+    })
 
     console.log(`[${bookId}] Generating story (${pageCount} pages, ${ageRange} grade)...`)
 
@@ -267,7 +310,7 @@ export async function POST(request: NextRequest) {
     await setBook(bookId, book)
 
     // Fire-and-forget image generation (pass the resolved API key)
-    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel, cartoonHeroImage).catch(
+    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel, cartoonHeroImage, heroContext).catch(
       async err => {
         console.error(`[${bookId}] Image generation error:`, err)
         const b = await getBook(bookId)
@@ -295,6 +338,7 @@ async function generateBookImages(
   apiKey: string,
   imageModel: string = 'grok-imagine-image',
   cartoonHeroImage?: string,
+  hero?: HeroContext,
 ) {
   const book = await getBook(bookId)
   if (!book) return
@@ -302,8 +346,15 @@ async function generateBookImages(
   const charParts: string[] = []
   if (characters?.main) charParts.push(characters.main)
   if (characters?.others?.length) charParts.push(...characters.others.slice(0, 3))
-  const charPrefix = charParts.length
-    ? `Characters: ${charParts.join('; ')}. Maintain consistent character appearance. `
+  // When the hero is a real grown-up, lock their age into every illustration so
+  // the image model never accidentally renders them as a child.
+  const heroAgeNote = hero?.isAdult
+    ? `The main hero is an ADULT grown-up${hero.name ? ` named ${hero.name}` : ''} (${hero.description || 'a kind, warm grown-up'}); always depict them as a fully grown adult, never as a child. `
+    : hero?.description
+      ? `The main hero is a child${hero.name ? ` named ${hero.name}` : ''} (${hero.description}). `
+      : ''
+  const charPrefix = (heroAgeNote || charParts.length)
+    ? `${heroAgeNote}${charParts.length ? `Characters: ${charParts.join('; ')}. ` : ''}Maintain consistent character appearance across every page. `
     : ''
 
   const totalPages = pages.length
@@ -315,14 +366,18 @@ async function generateBookImages(
 
   const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
 
+  // Shared quality + composition boosters appended to every prompt for a more
+  // polished, professional storybook look (better lighting, depth, framing).
+  const QUALITY = 'masterpiece children\'s book illustration, professional storybook art, rich vivid colors, soft expressive lighting, clean confident linework, balanced composition with clear focal point, depth and atmosphere, warm and inviting, highly detailed, no text, no watermark, no letters'
+
   // Build all prompts up front
-  const coverPrompt = `Beautiful children's book cover for "${book.title}". ${illustrationStyle} style, children's book cover art, colorful, whimsical, high quality, inviting, magical, eye-catching. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}`
+  const coverPrompt = `${charPrefix}Beautiful children's book COVER illustration for the title "${book.title}". ${illustrationStyle} style. Eye-catching hero shot of the main character, dynamic and magical, leaves room at the top for a title. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}. ${QUALITY}`.substring(0, 2800)
   imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })
 
   const pagePrompts: string[] = pages.map((page: any, i: number) => {
     const desc = page.imageDescription || page.text.substring(0, 300)
-    const basePrompt = `${desc}, ${illustrationStyle} style, children's book illustration, colorful, whimsical, high quality, detailed, charming, vivid colors`
-    const fullPrompt = charPrefix ? `${charPrefix}${basePrompt}`.substring(0, 2800) : basePrompt.substring(0, 2800)
+    const basePrompt = `${desc}. ${illustrationStyle} style. ${QUALITY}`
+    const fullPrompt = `${charPrefix}${basePrompt}`.substring(0, 2800)
     imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
     return fullPrompt
   })
@@ -489,7 +544,7 @@ async function editImage(
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'grok-imagine-edit',
-            prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero in this scene.`,
+            prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero of this scene, keeping their face, hairstyle and apparent age exactly as in the reference (do not change their age).`,
             image: heroBase64,
             aspect_ratio: aspectRatio,
             safe_mode: true,
