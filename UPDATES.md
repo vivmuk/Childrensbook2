@@ -33,6 +33,18 @@ This document summarizes all development updates made to KinderQuill over the la
 ### Print & Email Share (#4, #6)
 - Added an **Email** share option (sends the read-only link) and a print-friendly keepsake route for the book.
 
+### Prompt-Quality Overhaul
+**Story prompt**
+- Page length now **scales with reading level** (kindergarten gets 2–3 short sentences; 5th grade gets 6–8 rich ones) instead of a fixed "6–8 sentences" that fought the age rules.
+- Added a **Visual Bible**: the model locks a precise main-character description + a 3–5 colour palette and pastes the character string **verbatim** into every illustration prompt for far better character consistency.
+- Illustration descriptions now request **varied shot types** (wide / medium / close-up) for visual rhythm.
+- Tighter **title** rule (≤6 words, no clichés) and an optional **chant-along refrain** for K–2 readers.
+
+**Image generation** (previously-unused Venice levers)
+- Added a dedicated **`negative_prompt`** (extra fingers, deformed faces, gibberish text, watermarks, scary/dark, etc.).
+- **Fixed per-book seed** (with a small per-page offset) so the hero, style and palette stay consistent across the cover and all pages.
+- Set **`cfg_scale`** for stronger prompt adherence, enabled **`hide_watermark`**, and threaded the book-wide colour palette into every prompt.
+
 ---
 
 ## Phase 1: Story Templates, Length Options, Sharing & PDF Generation (Jan 31)
