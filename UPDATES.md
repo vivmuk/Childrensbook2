@@ -4,6 +4,49 @@ This document summarizes all development updates made to KinderQuill over the la
 
 ---
 
+## Phase 4: Personalization, Reading Modes & Daily Engagement (Jun 25)
+
+### Adult-or-child Photo Hero (improved)
+- The "Make Someone the Hero" photo flow now works for a **child OR a grown-up**. The cartoonify step is subject-agnostic and **preserves the person's apparent age** (an adult stays an adult).
+- A vision pass describes the hero and detects child/teen/adult; the story is genuinely written **about that person**.
+- When the hero is a grown-up, the story is steered to be **warm, uplifting and inspiring** — celebrating the grown-up — while staying wholesome and age-appropriate for the child reading it.
+- Illustration prompts strengthened (composition, lighting, quality boosters) and the hero's age is locked into every page so the image model never re-renders an adult as a child.
+
+### Multi-language Stories (#8)
+- New **Story Language** selector (English, Spanish, French, German, Italian, Portuguese, Hindi, Mandarin, Japanese, Arabic). Title and page text are written natively in the chosen language; illustration prompts stay in English.
+
+### Saved Heroes / Series (#2)
+- Save a cartoon hero (name + look) and **reuse them across new books** for recurring characters and ongoing series.
+
+### Read-Along Highlighting (#3)
+- A **Read Along** control in the book viewer highlights each sentence in turn at a natural pace and auto-turns the page.
+
+### Dyslexia-friendly "Easy Read" Mode (#9)
+- One-tap toggle for a dyslexia-friendly font, larger text, extra letter/word spacing, and a soft cream background. Preference persists.
+
+### Continue the Adventure / Sequels (#7)
+- The last page of every book offers **Continue the Adventure**, opening the generator pre-filled with a sequel idea starring the same hero.
+
+### Story of the Day + Streaks (#5)
+- Homepage now shows a rotating **Story of the Day** prompt and a **daily visit streak** to build a reading habit.
+
+### Print & Email Share (#4, #6)
+- Added an **Email** share option (sends the read-only link) and a print-friendly keepsake route for the book.
+
+### Prompt-Quality Overhaul
+**Story prompt**
+- Page length now **scales with reading level** (kindergarten gets 2–3 short sentences; 5th grade gets 6–8 rich ones) instead of a fixed "6–8 sentences" that fought the age rules.
+- Added a **Visual Bible**: the model locks a precise main-character description + a 3–5 colour palette and pastes the character string **verbatim** into every illustration prompt for far better character consistency.
+- Illustration descriptions now request **varied shot types** (wide / medium / close-up) for visual rhythm.
+- Tighter **title** rule (≤6 words, no clichés) and an optional **chant-along refrain** for K–2 readers.
+
+**Image generation** (previously-unused Venice levers)
+- Added a dedicated **`negative_prompt`** (extra fingers, deformed faces, gibberish text, watermarks, scary/dark, etc.).
+- **Fixed per-book seed** (with a small per-page offset) so the hero, style and palette stay consistent across the cover and all pages.
+- Set **`cfg_scale`** for stronger prompt adherence, enabled **`hide_watermark`**, and threaded the book-wide colour palette into every prompt.
+
+---
+
 ## Phase 1: Story Templates, Length Options, Sharing & PDF Generation (Jan 31)
 
 ### Story Templates & Length Options

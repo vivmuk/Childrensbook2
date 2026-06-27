@@ -24,6 +24,15 @@ interface Book {
   songUrl?: string
 }
 
+const LS_DYSLEXIA = 'kinderquill_dyslexia_mode'
+
+// Split page prose into sentences for read-along highlighting.
+function splitSentences(text: string): string[] {
+  const matches = text.match(/[^.!?…]+[.!?…]*\s*/g)
+  const parts = (matches || [text]).map(s => s.trim()).filter(Boolean)
+  return parts.length ? parts : [text]
+}
+
 export default function BookViewerPage() {
   const router = useRouter()
   const params = useParams()
@@ -51,6 +60,11 @@ export default function BookViewerPage() {
   const [songQueueId, setSongQueueId] = useState<string | null>(null)
   const [songModel, setSongModel] = useState<string | null>(null)
 
+  // Reading modes: read-along highlighting + dyslexia-friendly text
+  const [dyslexiaMode, setDyslexiaMode] = useState(false)
+  const [readAlong, setReadAlong] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(-1)
+
   useEffect(() => {
     const fetchBook = async () => {
       try {
@@ -67,7 +81,51 @@ export default function BookViewerPage() {
     fetchBook()
     const savedKey = localStorage.getItem('kinderquill_venice_api_key')
     if (savedKey) setUserApiKey(savedKey)
+    try { if (localStorage.getItem(LS_DYSLEXIA) === '1') setDyslexiaMode(true) } catch {}
   }, [bookId])
+
+  const toggleDyslexia = () => {
+    setDyslexiaMode(prev => {
+      const next = !prev
+      try { localStorage.setItem(LS_DYSLEXIA, next ? '1' : '0') } catch {}
+      return next
+    })
+  }
+
+  const toggleReadAlong = () => {
+    setReadAlong(prev => {
+      if (prev) setHighlightIndex(-1)
+      return !prev
+    })
+  }
+
+  // Drives read-along: highlight one sentence at a time, then turn the page.
+  useEffect(() => {
+    if (!readAlong || !book) return
+    const hasTitle = !!book.titlePage
+    const total = book.pages.length + (hasTitle ? 1 : 0)
+    // Skip the cover during read-along — jump to the first story page.
+    if (hasTitle && currentPage === 0) { setCurrentPage(1); return }
+    const contentIdx = hasTitle ? currentPage - 1 : currentPage
+    const pg = book.pages[contentIdx]
+    if (!pg) return
+    const sents = splitSentences(pg.text)
+    let idx = 0
+    setHighlightIndex(0)
+    let timer: ReturnType<typeof setTimeout>
+    const schedule = () => {
+      const words = sents[idx].split(/\s+/).filter(Boolean).length
+      const dur = Math.max(1700, words * 360) // ~natural read-aloud pace
+      timer = setTimeout(() => {
+        idx++
+        if (idx < sents.length) { setHighlightIndex(idx); schedule() }
+        else if (currentPage < total - 1) { setCurrentPage(currentPage + 1) }
+        else { setReadAlong(false); setHighlightIndex(-1) }
+      }, dur)
+    }
+    schedule()
+    return () => clearTimeout(timer)
+  }, [readAlong, currentPage, book])
 
   useEffect(() => {
     if (!animateQueueId || !animatingPageKey) return
@@ -172,7 +230,23 @@ export default function BookViewerPage() {
   }
 
   const handleDownloadPDF = () => { window.open(`/pdf/${bookId}?download=true`, '_blank') }
+  const handlePrint = () => { window.open(`/pdf/${bookId}?download=true`, '_blank') }
   const handleDownloadAudio = () => { if (!book || !book.audioUrl) return; window.open(`/api/download-audio/${bookId}`, '_blank') }
+
+  // Email this storybook (share the read-only link via the user's mail client)
+  const handleEmail = () => {
+    const shareUrl = `${window.location.origin}/share/${bookId}`
+    const subject = encodeURIComponent(`A storybook for you: ${book?.title || 'My KinderQuill Story'}`)
+    const body = encodeURIComponent(`I made this magical storybook with KinderQuill — I hope you love it!\n\n${shareUrl}`)
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
+  }
+
+  // Continue the Adventure — open the generator pre-filled with a sequel idea
+  const handleContinueAdventure = () => {
+    if (!book) return
+    const idea = `Continue the adventure from the storybook "${book.title}". Bring back the same beloved hero for a brand-new chapter with a fresh, exciting challenge — keep it positive, warm and inspiring, with a happy ending.`
+    router.push(`/generate?idea=${encodeURIComponent(idea)}`)
+  }
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/share/${bookId}`
@@ -380,6 +454,12 @@ export default function BookViewerPage() {
           title="Share">
           ↗ <span className="hidden sm:inline">Share</span>
         </button>
+        <button onClick={handleEmail}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
+          style={{ background: 'rgba(245,208,0,0.15)', border: '1.5px solid rgba(245,208,0,0.3)', color: '#f5d000' }}
+          title="Email this story">
+          ✉ <span className="hidden sm:inline">Email</span>
+        </button>
         <button onClick={handleDownloadHTML}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
           style={{ background: 'rgba(0,229,160,0.15)', border: '1.5px solid rgba(0,229,160,0.3)', color: '#00e5a0' }}
@@ -533,15 +613,81 @@ export default function BookViewerPage() {
             <div className="kq-chip kq-chip-electric shrink-0">Page {currentPage + 1} of {totalPages}</div>
           </div>
 
+          {/* Reading controls: read-along + dyslexia-friendly mode */}
+          <div className="flex items-center gap-2">
+            <button onClick={toggleReadAlong}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
+              style={{
+                background: readAlong ? '#f5d000' : 'rgba(245,208,0,0.12)',
+                border: '1.5px solid rgba(245,208,0,0.4)',
+                color: readAlong ? '#0d1b3e' : '#f5d000',
+              }}
+              title="Highlight each sentence as it's read aloud">
+              {readAlong ? '⏸ Stop' : '▶ Read Along'}
+            </button>
+            <button onClick={toggleDyslexia}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
+              style={{
+                background: dyslexiaMode ? '#4fd6c6' : 'rgba(0,196,180,0.12)',
+                border: '1.5px solid rgba(0,196,180,0.4)',
+                color: dyslexiaMode ? '#06231f' : '#4fd6c6',
+              }}
+              title="Easy-reading mode: dyslexia-friendly font and spacing">
+              🔤 <span>Easy Read</span>
+            </button>
+          </div>
+
           {/* Story text */}
           <div
             className={`rounded-2xl p-5 lg:p-6 transition-all duration-300 lg:max-h-[58vh] lg:overflow-y-auto ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
-            style={{ background: 'rgba(26,42,94,0.7)', border: '1.5px solid rgba(77,201,255,0.15)', backdropFilter: 'blur(8px)' }}
+            style={{
+              background: dyslexiaMode ? '#fbf3da' : 'rgba(26,42,94,0.7)',
+              border: dyslexiaMode ? '1.5px solid rgba(0,0,0,0.08)' : '1.5px solid rgba(77,201,255,0.15)',
+              backdropFilter: 'blur(8px)',
+            }}
           >
-            <p className="text-base lg:text-lg leading-relaxed font-medium animate-slideUp" style={{ color: '#e8f0ff', fontFamily: 'Nunito, sans-serif' }}>
-              {page.text}
+            <p
+              className={`text-base lg:text-lg font-medium animate-slideUp ${dyslexiaMode ? '' : 'leading-relaxed'}`}
+              style={{
+                color: dyslexiaMode ? '#2a2410' : '#e8f0ff',
+                fontFamily: dyslexiaMode
+                  ? "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif"
+                  : 'Nunito, sans-serif',
+                letterSpacing: dyslexiaMode ? '0.04em' : undefined,
+                wordSpacing: dyslexiaMode ? '0.12em' : undefined,
+                lineHeight: dyslexiaMode ? 2.1 : undefined,
+                fontSize: dyslexiaMode ? '1.18rem' : undefined,
+              }}
+            >
+              {splitSentences(page.text).map((sentence, i) => (
+                <span
+                  key={i}
+                  style={
+                    readAlong && i === highlightIndex
+                      ? {
+                          background: dyslexiaMode ? '#ffe27a' : 'rgba(245,208,0,0.35)',
+                          color: dyslexiaMode ? '#2a2410' : '#fff7d6',
+                          borderRadius: 6,
+                          boxShadow: '0 0 0 3px ' + (dyslexiaMode ? '#ffe27a' : 'rgba(245,208,0,0.35)'),
+                          transition: 'background 0.2s',
+                        }
+                      : undefined
+                  }
+                >
+                  {sentence}{' '}
+                </span>
+              ))}
             </p>
           </div>
+
+          {/* Continue the Adventure — sequel starring the same hero (last page only) */}
+          {currentPage === totalPages - 1 && (
+            <button onClick={handleContinueAdventure}
+              className="w-full py-3 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)', color: '#fff', boxShadow: '0 4px 0 #6b3db5' }}>
+              🚀 Continue the Adventure!
+            </button>
+          )}
 
           {/* Audio player row (if audio exists) */}
           {book.audioUrl && (

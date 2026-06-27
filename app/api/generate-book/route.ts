@@ -12,24 +12,83 @@ const AGE_TO_COMPLEXITY: Record<string, string> = {
   '5th': 'complex, with rich vocabulary, sophisticated sentence structure, and nuanced emotions — think Harry Potter level',
 }
 
+// How much text belongs on a page at each reading level. The old prompt asked
+// for "6–8 sentences" at every grade, which fought the kindergarten rule of
+// "3–5 word sentences" — so we scale length to the age instead.
+const AGE_TO_PAGELEN: Record<string, string> = {
+  kindergarten: '2–3 very short sentences (about 3–6 words each)',
+  '1st': '3–4 short, simple sentences',
+  '2nd': '4–5 clear, easy-to-follow sentences',
+  '3rd': '5–6 sentences with a little variety in length',
+  '4th': '6–7 descriptive, well-crafted sentences',
+  '5th': '6–8 rich, varied, vivid sentences',
+}
+
+// Younger readers love a repeated refrain they can chant along with.
+const AGE_WANTS_REFRAIN: Record<string, boolean> = {
+  kindergarten: true, '1st': true, '2nd': true, '3rd': false, '4th': false, '5th': false,
+}
+
+interface HeroContext {
+  description?: string
+  isAdult?: boolean
+  name?: string
+}
+
 // Improved story prompt that encourages better educational content and AI literacy
 function buildStoryPrompt(
   storyIdea: string,
   ageRange: string,
   illustrationStyle: string,
   pageCount: number,
+  opts: { language?: string; hero?: HeroContext } = {},
 ): string {
   const complexity = AGE_TO_COMPLEXITY[ageRange] || AGE_TO_COMPLEXITY['2nd']
+  const pageLen = AGE_TO_PAGELEN[ageRange] || AGE_TO_PAGELEN['2nd']
+  const wantsRefrain = AGE_WANTS_REFRAIN[ageRange] ?? false
+  const refrainBlock = wantsRefrain
+    ? '\n- Include ONE short, fun refrain (a repeated rhythmic line) that comes back on several pages so the child can chant along.'
+    : ''
+
+  const language = (opts.language || 'English').trim()
+  const languageBlock =
+    language && language.toLowerCase() !== 'english'
+      ? `\nLANGUAGE:
+- Write the title and ALL page text entirely in ${language}, with natural, native-sounding phrasing a ${language}-speaking parent would happily read aloud.
+- Keep every "imageDescription" in ENGLISH (the illustration model reads English best).\n`
+      : ''
+
+  // When the hero comes from a real photo we describe them so the story is
+  // genuinely about that person. A grown-up hero stays a grown-up — but the
+  // tale is still wholesome, positive and inspiring for the child reading it.
+  const hero = opts.hero
+  let heroBlock = ''
+  if (hero?.description) {
+    const heroName = hero.name ? `, named ${hero.name},` : ''
+    heroBlock = hero.isAdult
+      ? `\nREAL-LIFE HERO (GROWN-UP):
+- The main character is a real grown-up${heroName} who looks like this: ${hero.description}
+- This is a child's beloved grown-up (a parent, grandparent, teacher, or hero they look up to). Make the story ABOUT this grown-up and their kindness, courage, talents, and big heart.
+- Keep it 100% wholesome, warm, uplifting and INSPIRING — show the grown-up doing something brave, caring, creative, or adventurous that makes the child reader proud and hopeful.
+- Keep the grown-up an adult in every page and imageDescription (do NOT turn them into a child). Surround them with gentle, age-appropriate wonder.\n`
+      : `\nREAL-LIFE HERO (CHILD):
+- The main character is a real child${heroName} who looks like this: ${hero.description}
+- Make the story ABOUT this child being brave, curious, and kind. Keep them a child in every page and imageDescription.\n`
+  }
 
   return `You are an award-winning children's book author celebrated for creating stories that are both magical and educational. Your books have won the Caldecott Medal and the Newbery Medal. Create a masterpiece children's storybook based on this idea:
 
 "${storyIdea}"
-
+${heroBlock}${languageBlock}
 STORY REQUIREMENTS:
 - Reading level: ${ageRange} grade — language complexity should be ${complexity}
 - Exactly ${pageCount} pages — no more, no less
-- Each page: 6–8 complete, beautifully crafted sentences (never just 2–4 sentences)
-- Write at publication quality — every sentence should delight, teach, or move the reader
+- Each page: ${pageLen}. Match this length to the reading level — do NOT overload young readers.
+- Always positive, hopeful and inspiring — gentle stakes, no scary or sad endings; every story leaves the reader uplifted
+- Write at publication quality — every sentence should delight, teach, or move the reader${refrainBlock}
+
+TITLE:
+- Short, evocative and memorable — 6 words or fewer. No "Once upon a time", no generic titles.
 
 WRITING CRAFT GUIDELINES:
 - Use vivid sensory details: what do characters see, hear, feel, smell?
@@ -38,6 +97,7 @@ WRITING CRAFT GUIDELINES:
 - Build emotional resonance — let readers feel the joy, wonder, fear, and triumph
 - Include natural-sounding dialogue that feels real and age-appropriate
 - Weave life lessons gently — never preachy, always through story and character
+- Avoid clichés and tired openings; surprise and delight the reader
 - Every page should end with something that makes the reader want to turn to the next page
 
 NARRATIVE STRUCTURE:
@@ -46,30 +106,35 @@ NARRATIVE STRUCTURE:
 - Pages ${Math.ceil(pageCount * 0.6) + 1}–${pageCount - 1}: Climax and emotional peak
 - Page ${pageCount}: Satisfying resolution with a lasting lesson or warm feeling
 
-CHARACTER CONSISTENCY FOR ILLUSTRATIONS:
-- Give your main character distinctive, memorable visual features (color, clothing, size, expression)
-- In each imageDescription, always restate these features so illustrations stay consistent
-- Describe secondary characters the same way in every imageDescription they appear in
+VISUAL BIBLE (critical for consistent illustrations):
+- First lock a "visualBible": a precise, reusable description of the MAIN CHARACTER (species/age, hair, eyes, skin tone, exact outfit + colors, size, signature accessory) and a "colorPalette" of 3–5 colors that define the whole book's look.
+- In EVERY imageDescription, paste the main character description from the visualBible VERBATIM (do not rephrase it) so the character looks identical on every page. Do the same for any recurring side character.
+- Keep the colorPalette consistent across all pages.
 
 ILLUSTRATION DESCRIPTIONS:
-- Each imageDescription should be vivid and specific (up to 800 characters)
-- Describe the exact scene, mood, lighting, and action
-- Always include: character appearance, setting details, color palette, emotional tone
+- Each imageDescription should be vivid and specific (up to 800 characters), in ENGLISH.
+- Start with the verbatim main-character description, then the setting, lighting, action, mood, and the colorPalette.
+- Vary the camera framing across pages for visual rhythm: use a mix of wide establishing shots, medium shots, and emotional close-ups. State the shot type.
 - Style: ${illustrationStyle}
 
 Respond with ONLY valid JSON — no markdown, no code blocks, no extra text:
 
 {
-  "title": "The Story Title",
+  "title": "The Story Title (≤6 words)",
+  "visualBible": {
+    "mainCharacter": "Precise reusable visual description: species/age, hair, eyes, skin tone, exact outfit and colors, size, signature accessory",
+    "colorPalette": "3–5 defining colors for the whole book"
+  },
   "characters": {
-    "main": "Detailed description of main character including name, appearance, clothing, distinctive features",
+    "main": "Same as visualBible.mainCharacter — the verbatim string to reuse",
     "others": ["Description of other character 1", "Description of other character 2"]
   },
   "pages": [
     {
       "pageNumber": 1,
-      "text": "6–8 sentences of beautiful, publication-quality children's book prose...",
-      "imageDescription": "Detailed scene description including characters (with their appearance), setting, lighting, action, mood, and style notes. Up to 800 characters."
+      "shotType": "wide establishing shot | medium shot | close-up",
+      "text": "Beautiful, publication-quality children's book prose matching the required page length...",
+      "imageDescription": "Begin with the VERBATIM mainCharacter description, then setting, lighting, action, mood, shot type, and colorPalette. English. Up to 800 characters."
     }
   ]
 }`
@@ -98,6 +163,8 @@ export async function POST(request: NextRequest) {
       character,
       userVeniceApiKey,
       cartoonHeroImage,
+      language = 'English',
+      hero,
     } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
@@ -117,7 +184,14 @@ export async function POST(request: NextRequest) {
 
     const pageCount = Math.min(Math.max(parseInt(storyLength) || 8, 5), 12)
     const bookId = `book_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const storyPrompt = buildStoryPrompt(storyIdea, ageRange, illustrationStyle, pageCount)
+    const heroContext: HeroContext | undefined =
+      hero && hero.description
+        ? { description: String(hero.description), isAdult: !!hero.isAdult, name: hero.name ? String(hero.name) : undefined }
+        : undefined
+    const storyPrompt = buildStoryPrompt(storyIdea, ageRange, illustrationStyle, pageCount, {
+      language,
+      hero: heroContext,
+    })
 
     console.log(`[${bookId}] Generating story (${pageCount} pages, ${ageRange} grade)...`)
 
@@ -267,7 +341,8 @@ export async function POST(request: NextRequest) {
     await setBook(bookId, book)
 
     // Fire-and-forget image generation (pass the resolved API key)
-    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel, cartoonHeroImage).catch(
+    const palette = storyData.visualBible?.colorPalette || ''
+    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel, cartoonHeroImage, heroContext, palette).catch(
       async err => {
         console.error(`[${bookId}] Image generation error:`, err)
         const b = await getBook(bookId)
@@ -295,15 +370,32 @@ async function generateBookImages(
   apiKey: string,
   imageModel: string = 'grok-imagine-image',
   cartoonHeroImage?: string,
+  hero?: HeroContext,
+  palette: string = '',
 ) {
   const book = await getBook(bookId)
   if (!book) return
 
+  // One fixed seed for the whole book → far more consistent character, style and
+  // palette across the cover and every page. Derived deterministically from the
+  // book id so re-runs of the same book stay stable.
+  const bookSeed = Math.abs(
+    Array.from(bookId).reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7),
+  ) % 999_999_999
+  const paletteNote = palette ? `Consistent color palette: ${palette}. ` : ''
+
   const charParts: string[] = []
   if (characters?.main) charParts.push(characters.main)
   if (characters?.others?.length) charParts.push(...characters.others.slice(0, 3))
-  const charPrefix = charParts.length
-    ? `Characters: ${charParts.join('; ')}. Maintain consistent character appearance. `
+  // When the hero is a real grown-up, lock their age into every illustration so
+  // the image model never accidentally renders them as a child.
+  const heroAgeNote = hero?.isAdult
+    ? `The main hero is an ADULT grown-up${hero.name ? ` named ${hero.name}` : ''} (${hero.description || 'a kind, warm grown-up'}); always depict them as a fully grown adult, never as a child. `
+    : hero?.description
+      ? `The main hero is a child${hero.name ? ` named ${hero.name}` : ''} (${hero.description}). `
+      : ''
+  const charPrefix = (heroAgeNote || charParts.length)
+    ? `${heroAgeNote}${charParts.length ? `Characters: ${charParts.join('; ')}. ` : ''}Maintain consistent character appearance across every page. `
     : ''
 
   const totalPages = pages.length
@@ -315,14 +407,19 @@ async function generateBookImages(
 
   const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
 
+  // Shared quality + composition boosters appended to every prompt for a more
+  // polished, professional storybook look (better lighting, depth, framing).
+  const QUALITY = 'masterpiece children\'s book illustration, professional storybook art, rich vivid colors, soft expressive lighting, clean confident linework, balanced composition with clear focal point, depth and atmosphere, warm and inviting, highly detailed'
+
   // Build all prompts up front
-  const coverPrompt = `Beautiful children's book cover for "${book.title}". ${illustrationStyle} style, children's book cover art, colorful, whimsical, high quality, inviting, magical, eye-catching. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}`
+  const coverPrompt = `${charPrefix}${paletteNote}Beautiful children's book COVER illustration for the title "${book.title}". ${illustrationStyle} style. Eye-catching hero shot of the main character, dynamic and magical, leaves room at the top for a title. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}. ${QUALITY}`.substring(0, 2800)
   imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })
 
   const pagePrompts: string[] = pages.map((page: any, i: number) => {
     const desc = page.imageDescription || page.text.substring(0, 300)
-    const basePrompt = `${desc}, ${illustrationStyle} style, children's book illustration, colorful, whimsical, high quality, detailed, charming, vivid colors`
-    const fullPrompt = charPrefix ? `${charPrefix}${basePrompt}`.substring(0, 2800) : basePrompt.substring(0, 2800)
+    const shot = page.shotType ? `${page.shotType}. ` : ''
+    const basePrompt = `${shot}${desc}. ${illustrationStyle} style. ${QUALITY}`
+    const fullPrompt = `${charPrefix}${paletteNote}${basePrompt}`.substring(0, 2800)
     imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
     return fullPrompt
   })
@@ -347,11 +444,11 @@ async function generateBookImages(
     () =>
       heroBase64
         ? editImage(coverPrompt, heroBase64, '16:9', apiKey)
-        : generateImage(coverPrompt, imageModel, 1280, 720, 30, apiKey).then(img => (img ? { data: img, isPng: false } : null)),
-    ...pagePrompts.map((prompt: string) => () =>
+        : generateImage(coverPrompt, imageModel, 1280, 720, apiKey, bookSeed).then(img => (img ? { data: img, isPng: false } : null)),
+    ...pagePrompts.map((prompt: string, i: number) => () =>
       heroBase64
         ? editImage(prompt, heroBase64, '3:2', apiKey)
-        : generateImage(prompt, imageModel, 1024, 768, 30, apiKey).then(img => (img ? { data: img, isPng: false } : null)),
+        : generateImage(prompt, imageModel, 1024, 768, apiKey, (bookSeed + i + 1) % 999_999_999).then(img => (img ? { data: img, isPng: false } : null)),
     ),
   ]
 
@@ -434,13 +531,18 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
+// Things we never want in a children's illustration. A dedicated negative
+// prompt removes far more artifacts than baking "no text" into the positive one.
+const NEGATIVE_PROMPT =
+  'text, words, letters, captions, signature, watermark, logo, extra fingers, extra limbs, deformed hands, fused fingers, distorted face, mutated, disfigured, duplicate characters, cloned face, blurry, lowres, jpeg artifacts, grainy, scary, creepy, gore, dark, gloomy, horror, nsfw'
+
 async function generateImage(
   prompt: string,
   model: string,
   width: number,
   height: number,
-  steps: number,
   apiKey: string,
+  seed: number,
   maxAttempts = 3,
 ): Promise<string | null> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -450,7 +552,19 @@ async function generateImage(
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, prompt, width, height, format: 'webp', steps }),
+          body: JSON.stringify({
+            model,
+            prompt,
+            width,
+            height,
+            format: 'webp',
+            steps: 20,
+            seed,                       // fixed per book → consistent look across pages
+            negative_prompt: NEGATIVE_PROMPT,
+            cfg_scale: 7,               // stronger adherence to the described character
+            hide_watermark: true,
+            safe_mode: true,
+          }),
         },
         90_000,
       )
@@ -489,7 +603,7 @@ async function editImage(
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'grok-imagine-edit',
-            prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero in this scene.`,
+            prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero of this scene, keeping their face, hairstyle and apparent age exactly as in the reference (do not change their age).`,
             image: heroBase64,
             aspect_ratio: aspectRatio,
             safe_mode: true,

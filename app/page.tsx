@@ -1,13 +1,63 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeaturedBooksCarousel } from '@/components/FeaturedBooksCarousel'
 import { HowItWorksModal } from '@/components/HowItWorksModal'
 
+// A fresh story prompt every day (rotates by day-of-year, same for everyone).
+const DAILY_PROMPTS = [
+  'A sleepy little dragon who collects falling stars in a jar',
+  'A brave snail who enters the great garden race',
+  'A lighthouse keeper’s cat who guides lost ships home',
+  'A girl who discovers her crayons can paint real weather',
+  'A robot gardener who teaches flowers to sing',
+  'Twin otters who build a boat to find the end of the river',
+  'A shy cloud who is afraid to rain on the thirsty meadow',
+  'A boy and his grandmother who bake a moon-shaped cake to the sky',
+  'A firefly who lights the way for a lost baby owl',
+  'A penguin chef who opens the coziest café in Antarctica',
+  'A kite who dreams of touching the tallest mountain',
+  'A tiny mouse librarian who guards a book of forgotten lullabies',
+  'A young inventor who builds wings out of autumn leaves',
+  'A whale who hums the ocean to sleep every night',
+]
+
+function dayOfYear(d: Date): number {
+  const start = new Date(d.getFullYear(), 0, 0)
+  return Math.floor((d.getTime() - start.getTime()) / 86_400_000)
+}
+
+const LS_STREAK = 'kinderquill_streak'
+
 export default function WelcomePage() {
   const router = useRouter()
   const [showHowItWorks, setShowHowItWorks] = useState(false)
+  const [streak, setStreak] = useState(0)
+
+  const today = new Date()
+  const dailyPrompt = DAILY_PROMPTS[dayOfYear(today) % DAILY_PROMPTS.length]
+
+  // Track a simple daily visit streak to encourage a reading habit.
+  useEffect(() => {
+    try {
+      const todayKey = today.toDateString()
+      const yesterday = new Date(today.getTime() - 86_400_000).toDateString()
+      const raw = localStorage.getItem(LS_STREAK)
+      const data = raw ? JSON.parse(raw) : { last: '', count: 0 }
+      let count = data.count || 0
+      if (data.last === todayKey) {
+        count = count || 1
+      } else if (data.last === yesterday) {
+        count = count + 1
+      } else {
+        count = 1
+      }
+      localStorage.setItem(LS_STREAK, JSON.stringify({ last: todayKey, count }))
+      setStreak(count)
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div
@@ -27,14 +77,43 @@ export default function WelcomePage() {
               ✦ Powered by Venice AI ✦
             </div>
           </div>
-          <button
-            onClick={() => router.push('/library')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-            style={{ background: 'rgba(77,201,255,0.12)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
-          >
-            📚 My Books
-          </button>
+          <div className="flex items-center gap-2">
+            {streak > 0 && (
+              <div
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold"
+                style={{ background: 'rgba(255,138,101,0.15)', border: '1.5px solid rgba(255,138,101,0.4)', color: '#ff8a65' }}
+                title={`You've visited ${streak} day${streak === 1 ? '' : 's'} in a row!`}
+              >
+                🔥 {streak} day{streak === 1 ? '' : 's'}
+              </div>
+            )}
+            <button
+              onClick={() => router.push('/library')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+              style={{ background: 'rgba(77,201,255,0.12)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
+            >
+              📚 My Books
+            </button>
+          </div>
         </div>
+
+        {/* Story of the Day */}
+        <button
+          onClick={() => router.push(`/generate?idea=${encodeURIComponent(dailyPrompt)}`)}
+          className="w-full mb-8 text-left rounded-2xl p-4 transition-all hover:scale-[1.01]"
+          style={{ background: 'linear-gradient(135deg, rgba(155,93,229,0.18), rgba(77,201,255,0.12))', border: '1.5px solid rgba(155,93,229,0.35)' }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#f5d000', color: '#0d1b3e' }}>✨ STORY OF THE DAY</span>
+              </div>
+              <p className="font-semibold text-sm lg:text-base truncate" style={{ color: '#fefcf5' }}>{dailyPrompt}</p>
+              <p className="text-xs mt-0.5" style={{ color: '#a0b4d6' }}>Tap to create today’s magical story →</p>
+            </div>
+            <span className="text-3xl shrink-0">🎁</span>
+          </div>
+        </button>
 
         {/* Desktop two-column hero (mobile keeps the original single-column stack) */}
         <div className="w-full lg:grid lg:grid-cols-2 lg:gap-x-12 lg:items-center lg:flex-1 lg:content-center">

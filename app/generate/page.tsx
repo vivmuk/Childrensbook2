@@ -91,11 +91,47 @@ const RANDOM_PROMPTS = [
   'A magical library where books choose their readers',
 ]
 
+const LANGUAGES = [
+  { value: 'English',    label: '🇬🇧 English' },
+  { value: 'Spanish',    label: '🇪🇸 Español' },
+  { value: 'French',     label: '🇫🇷 Français' },
+  { value: 'German',     label: '🇩🇪 Deutsch' },
+  { value: 'Italian',    label: '🇮🇹 Italiano' },
+  { value: 'Portuguese', label: '🇵🇹 Português' },
+  { value: 'Hindi',      label: '🇮🇳 हिन्दी' },
+  { value: 'Mandarin Chinese', label: '🇨🇳 中文' },
+  { value: 'Japanese',   label: '🇯🇵 日本語' },
+  { value: 'Arabic',     label: '🇸🇦 العربية' },
+]
+
 // ── LocalStorage helpers ─────────────────────────────────────────────────────
 
 const LS_BOOK_COUNT = 'kinderquill_free_book_count'
 const LS_API_KEY    = 'kinderquill_venice_api_key'
 const LS_MY_BOOKS   = 'kinderquill_my_books'
+const LS_HEROES     = 'kinderquill_saved_heroes'
+
+interface SavedHero {
+  id: string
+  name: string
+  image: string        // cartoon data URL
+  description?: string
+  isAdult?: boolean
+}
+
+function getSavedHeroes(): SavedHero[] {
+  try { return JSON.parse(localStorage.getItem(LS_HEROES) || '[]') } catch { return [] }
+}
+function saveHero(hero: SavedHero) {
+  try {
+    const existing = getSavedHeroes().filter(h => h.id !== hero.id)
+    existing.unshift(hero)
+    localStorage.setItem(LS_HEROES, JSON.stringify(existing.slice(0, 12)))
+  } catch {}
+}
+function removeHero(id: string) {
+  try { localStorage.setItem(LS_HEROES, JSON.stringify(getSavedHeroes().filter(h => h.id !== id))) } catch {}
+}
 
 function getFreeBookCount(): number {
   try { return parseInt(localStorage.getItem(LS_BOOK_COUNT) || '0', 10) || 0 } catch { return 0 }
@@ -314,6 +350,15 @@ export default function GeneratePage() {
   const [isCartoonifying, setIsCartoonifying] = useState(false)
   const [cartoonError, setCartoonError] = useState('')
   const heroFileInputRef = useRef<HTMLInputElement>(null)
+  // Detected/edited hero details (works for a child OR a grown-up)
+  const [heroIsAdult, setHeroIsAdult] = useState(false)
+  const [heroName, setHeroName] = useState('')
+  const [heroDescription, setHeroDescription] = useState('')
+  const [savedHeroes, setSavedHeroes] = useState<SavedHero[]>([])
+  const [heroSaved, setHeroSaved] = useState(false)
+
+  // Story language (#multi-language)
+  const [language, setLanguage] = useState('English')
 
   // Draw-to-Story: turn a child's drawing into a story idea via a vision model
   const [isReadingDrawing, setIsReadingDrawing] = useState(false)
@@ -330,9 +375,12 @@ export default function GeneratePage() {
     if (idea) setStoryIdea(idea)
     if (age) setAgeRange(age)
     if (style) setIllustrationStyle(style)
+    const lang = params.get('language')
+    if (lang) setLanguage(lang)
     const savedKey = localStorage.getItem(LS_API_KEY)
     if (savedKey) setUserApiKey(savedKey)
     setFreeBookCount(getFreeBookCount())
+    setSavedHeroes(getSavedHeroes())
   }, [])
 
   useEffect(() => {
@@ -366,7 +414,11 @@ export default function GeneratePage() {
   const handleHeroImageLoad = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
     const reader = new FileReader()
-    reader.onload = e => { setHeroPhotoDataUrl(e.target?.result as string); setCartoonHeroDataUrl(null); setCartoonError('') }
+    reader.onload = e => {
+      setHeroPhotoDataUrl(e.target?.result as string)
+      setCartoonHeroDataUrl(null); setCartoonError('')
+      setHeroName(''); setHeroDescription(''); setHeroIsAdult(false); setHeroSaved(false)
+    }
     reader.readAsDataURL(file)
   }, [])
 
@@ -376,8 +428,46 @@ export default function GeneratePage() {
     try {
       const res = await fetch('/api/cartoonify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: heroPhotoDataUrl, userApiKey: userApiKey || undefined }) })
       const data = await res.json()
-      if (!res.ok) { setCartoonError(data.error || 'Failed to cartoonify. Please try again.') } else { setCartoonHeroDataUrl(data.cartoonImage) }
+      if (!res.ok) {
+        setCartoonError(data.error || 'Failed to cartoonify. Please try again.')
+      } else {
+        setCartoonHeroDataUrl(data.cartoonImage)
+        if (data.hero) {
+          setHeroIsAdult(!!data.hero.isAdult)
+          setHeroDescription(data.hero.description || '')
+          if (data.hero.suggestedName && !heroName) setHeroName(data.hero.suggestedName)
+        }
+      }
     } catch (err: any) { setCartoonError(err.message || 'Failed to cartoonify.') } finally { setIsCartoonifying(false) }
+  }
+
+  // Reuse a previously saved hero (recurring characters / series)
+  const useSavedHero = (h: SavedHero) => {
+    setHeroPhotoDataUrl(h.image)
+    setCartoonHeroDataUrl(h.image)
+    setHeroName(h.name || '')
+    setHeroDescription(h.description || '')
+    setHeroIsAdult(!!h.isAdult)
+    setCartoonError(''); setHeroSaved(true)
+  }
+
+  const handleSaveHero = () => {
+    if (!cartoonHeroDataUrl) return
+    const hero: SavedHero = {
+      id: `hero_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: heroName.trim() || 'My Hero',
+      image: cartoonHeroDataUrl,
+      description: heroDescription,
+      isAdult: heroIsAdult,
+    }
+    saveHero(hero)
+    setSavedHeroes(getSavedHeroes())
+    setHeroSaved(true)
+  }
+
+  const handleRemoveHero = (id: string) => {
+    removeHero(id)
+    setSavedHeroes(getSavedHeroes())
   }
 
   // Shrink a drawing to a sane size before sending — keeps the upload fast and
@@ -441,6 +531,10 @@ export default function GeneratePage() {
           storyLength: parseInt(storyLength), narratorVoice, imageModel,
           userVeniceApiKey: effectiveApiKey || undefined,
           cartoonHeroImage: cartoonHeroDataUrl || undefined,
+          language,
+          hero: cartoonHeroDataUrl && heroDescription
+            ? { description: heroDescription, isAdult: heroIsAdult, name: heroName || undefined }
+            : undefined,
           character: showCharacterBuilder ? { name: characterName, type: characterType, traits: selectedTraits } : undefined,
         }),
       })
@@ -652,13 +746,35 @@ export default function GeneratePage() {
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: '#c89dff', fontFamily: 'Fredoka One, cursive' }}>
-                      ⭐ Make Your Child the Hero!
+                      ⭐ Make Someone the Hero!
                     </h3>
                     <p className="text-xs mt-0.5" style={{ color: '#a0b4d6' }}>
-                      Upload a photo and AI will cartoon-ify them into the story
+                      Upload a photo of a child <span className="opacity-70">or a grown-up they love</span> — AI cartoon-ifies them into the story
                     </p>
                   </div>
                 </div>
+
+                {/* Saved heroes — reuse a character across books (series) */}
+                {savedHeroes.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs font-bold mb-1.5" style={{ color: '#a0b4d6' }}>⭐ YOUR HEROES — tap to star them again</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {savedHeroes.map(h => (
+                        <div key={h.id} className="relative flex-shrink-0 text-center">
+                          <button onClick={() => useSavedHero(h)} title={`Use ${h.name}`}
+                            className="block rounded-xl overflow-hidden transition-all"
+                            style={{ border: `2px solid ${cartoonHeroDataUrl === h.image ? '#00e5a0' : 'rgba(155,93,229,0.4)'}` }}>
+                            <img src={h.image} alt={h.name} className="w-14 h-14 object-cover" />
+                          </button>
+                          <p className="text-[10px] mt-0.5 w-14 truncate" style={{ color: '#c89dff' }}>{h.name}</p>
+                          <button onClick={() => handleRemoveHero(h.id)}
+                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-white flex items-center justify-center"
+                            style={{ background: '#ff5247', fontSize: '9px' }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {!heroPhotoDataUrl ? (
                   <button
@@ -720,12 +836,43 @@ export default function GeneratePage() {
                         {isCartoonifying ? <><span className="animate-kq-spin">🎨</span> Creating...</> : <><span>✨</span> Cartoonify!</>}
                       </button>
                     ) : (
-                      <div className="flex gap-2">
-                        <div className="flex-1 rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)' }}>
+                      <div className="space-y-2.5">
+                        <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)' }}>
                           <span>✅</span>
-                          <p className="text-xs font-semibold" style={{ color: '#00e5a0' }}>Cartoon hero ready!</p>
+                          <p className="text-xs font-semibold" style={{ color: '#00e5a0' }}>Cartoon hero ready — the story will be about them!</p>
                         </div>
-                        <button onClick={() => { setCartoonHeroDataUrl(null); setCartoonError('') }} className="px-3 py-2 text-xs rounded-xl" style={{ color: '#a0b4d6', border: '1px solid rgba(255,255,255,0.12)', background: 'transparent' }}>Redo</button>
+
+                        {/* Hero name + who is this (child / grown-up) */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text" value={heroName} onChange={e => { setHeroName(e.target.value); setHeroSaved(false) }}
+                            placeholder="Hero's name"
+                            className="kq-input flex-1" style={{ padding: '8px 12px', fontSize: '0.82rem' }}
+                          />
+                          <div className="flex rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(155,93,229,0.3)' }}>
+                            {[{ v: false, label: '🧒 Child' }, { v: true, label: '🧑 Grown-up' }].map(o => (
+                              <button key={String(o.v)} onClick={() => { setHeroIsAdult(o.v); setHeroSaved(false) }}
+                                className="px-2.5 py-1.5 text-xs font-bold transition-colors"
+                                style={{ background: heroIsAdult === o.v ? '#9b5de5' : 'transparent', color: heroIsAdult === o.v ? '#fff' : '#a0b4d6' }}>
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-[11px]" style={{ color: '#a0b4d6' }}>
+                          {heroIsAdult
+                            ? '✨ A heartwarming, inspiring story starring this grown-up.'
+                            : '✨ A fun adventure starring this child.'}
+                        </p>
+
+                        <div className="flex gap-2">
+                          <button onClick={handleSaveHero} disabled={heroSaved}
+                            className="flex-1 px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-60 transition-colors"
+                            style={{ background: 'rgba(0,229,160,0.12)', border: '1px solid rgba(0,229,160,0.3)', color: '#00e5a0' }}>
+                            {heroSaved ? '⭐ Saved to Your Heroes' : '⭐ Save Hero for next time'}
+                          </button>
+                          <button onClick={() => { setCartoonHeroDataUrl(null); setCartoonError('') }} className="px-3 py-2 text-xs rounded-xl" style={{ color: '#a0b4d6', border: '1px solid rgba(255,255,255,0.12)', background: 'transparent' }}>Redo</button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -830,6 +977,14 @@ export default function GeneratePage() {
                     <div className="kq-section-label">🎂 Age Range</div>
                     <select value={ageRange} onChange={e => setAgeRange(e.target.value)} style={selectStyle}>
                       {AGE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Story Language */}
+                  <div>
+                    <div className="kq-section-label">🌍 Story Language</div>
+                    <select value={language} onChange={e => setLanguage(e.target.value)} style={selectStyle}>
+                      {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
                     </select>
                   </div>
 
