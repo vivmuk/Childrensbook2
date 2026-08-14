@@ -27,11 +27,15 @@ export async function GET(
     // Generate HTML content for PDF
     const htmlContent = generatePDFHTML(book)
 
-    // Launch puppeteer with @sparticuz/chromium for serverless environments
+    // Use the container's Chromium when one is provided (Docker image), and
+    // fall back to @sparticuz/chromium for serverless environments.
+    const executablePath =
+      process.env.PUPPETEER_EXECUTABLE_PATH || (await chromium.executablePath())
+
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: chromium.headless,
     })
 

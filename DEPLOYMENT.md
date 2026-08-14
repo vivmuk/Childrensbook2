@@ -24,20 +24,31 @@ VENICE_API_KEY=your_venice_api_key_here
 NODE_ENV=production
 ```
 
+Variables are injected at **run time** only. The image is built from the
+`Dockerfile` in this repo, which never declares them as `ARG`/`ENV`, so no
+credential is baked into an image layer.
+
 ### 3. Configure Build Settings
 
-Railway should auto-detect Next.js, but you can verify:
+The build is defined by `Dockerfile` and selected in `railway.json` /
+`railway.toml`:
 
-- **Build Command**: `npm run build`
+- **Builder**: `DOCKERFILE`
+- **Dockerfile Path**: `Dockerfile`
 - **Start Command**: `npm start`
 - **Root Directory**: `/` (default)
 
+If the service was created before the Dockerfile was added, switch the builder
+from Nixpacks to Dockerfile in Settings → Build.
+
 ### 4. Deploy
 
-Railway will automatically:
-1. Install dependencies (`npm install`)
-2. Build the application (`npm run build`)
-3. Start the server (`npm start`)
+Railway builds the image, which:
+1. Installs dependencies (`npm ci`)
+2. Builds the application (`npm run build`)
+3. Prunes dev dependencies and copies the build into a slim runtime image
+   containing Chromium (used for PDF export)
+4. Starts the server (`npm start`)
 
 ### 5. Get Your URL
 
