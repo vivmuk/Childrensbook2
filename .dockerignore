@@ -1,0 +1,34 @@
+# Keep credentials and local state out of the build context entirely.
+.env
+.env.*
+*.pem
+
+# Version control / editor state
+.git
+.gitignore
+.vscode
+.claude
+
+# Installed and generated artifacts (rebuilt inside the image)
+node_modules
+.next
+out
+build
+coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Local databases
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+data/*.db*
+
+# Not part of the deployed app
+stitch_book_previewer
+venice-openapi.yaml
+*.bat
+*.ps1
+Dockerfile
+.dockerignore
