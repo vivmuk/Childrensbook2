@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeaturedBooksCarousel } from '@/components/FeaturedBooksCarousel'
 import { HowItWorksModal } from '@/components/HowItWorksModal'
+import NightLightBookScene from '@/components/NightLightBookScene'
 
 // A fresh story prompt every day (rotates by day-of-year, same for everyone).
 const DAILY_PROMPTS = [
@@ -34,6 +35,10 @@ export default function WelcomePage() {
   const router = useRouter()
   const [showHowItWorks, setShowHowItWorks] = useState(false)
   const [streak, setStreak] = useState(0)
+  const [motionOk, setMotionOk] = useState(false)
+  // Defaults to portrait: the person holding this app is usually holding a
+  // phone, and we would rather not flash the wrong crop at them on load.
+  const [portrait, setPortrait] = useState(true)
 
   const today = new Date()
   const dailyPrompt = DAILY_PROMPTS[dayOfYear(today) % DAILY_PROMPTS.length]
@@ -59,196 +64,231 @@ export default function WelcomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // A moving background is a request we do not have to grant. If the device
+  // asks for less motion, the painted still stays and the film never plays.
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setMotionOk(!mq.matches)
+    const on = () => setMotionOk(!mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+
+  // Phones get the tall painting, wider screens get the wide one, so neither
+  // is a bad crop of the other.
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait)')
+    setPortrait(mq.matches)
+    const on = () => setPortrait(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+
   return (
-    <div
-      className="kq-stars-bg relative flex min-h-screen w-full flex-col overflow-x-hidden"
-      style={{ background: 'linear-gradient(160deg, #0d1b3e 0%, #1a0a3e 50%, #0d2a40 100%)' }}
-    >
-      {/* Content layer (above stars) */}
-      <div className="relative z-10 flex flex-1 flex-col items-center px-4 lg:px-8 py-10 max-w-lg lg:max-w-6xl mx-auto w-full">
+    <div className="relative min-h-[100dvh] w-full overflow-x-hidden bg-kq-ink">
+      {/* ══════════ The hero: the promise, in the first viewport ══════════ */}
+      <section className="relative min-h-[100dvh] w-full overflow-hidden">
+        {/* The painting, moving. The still goes down first so the hero is
+            never an empty box, and the film fades in over it. */}
+        <img
+          src={portrait ? '/art/hero-tall.png' : '/art/hero-wide.png'}
+          alt=""
+          aria-hidden="true"
+          className="kq-hero-media"
+          style={{ objectPosition: portrait ? 'center 45%' : '74% center' }}
+        />
+        {motionOk && (
+          <video
+            key={portrait ? 'tall' : 'wide'}
+            className="kq-hero-media"
+            poster={portrait ? '/art/hero-tall.png' : '/art/hero-wide.png'}
+            style={{ objectPosition: portrait ? 'center 45%' : '74% center' }}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
+          >
+            <source
+              src={portrait ? '/art/hero-loop-tall.mp4' : '/art/hero-loop.mp4'}
+              type="video/mp4"
+            />
+          </video>
+        )}
 
-        {/* Top bar */}
-        <div className="w-full flex items-center justify-between mb-8">
-          <div>
-            <div style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.6rem', color: '#f5d000', lineHeight: 1 }}>
-              KinderQuill
+        <div className="kq-scrim-top z-[2]" />
+        <div className="kq-scrim-bottom z-[2]" />
+
+        <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-content flex-col px-5 py-6 lg:px-10">
+          {/* Top bar */}
+          <header className="flex items-center justify-between">
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-2xl font-semibold tracking-tight text-kq-text">
+                KinderQuill
+              </span>
+              <span className="hidden text-[0.75rem] text-kq-dim sm:inline">
+                painted with Venice
+              </span>
             </div>
-            <div style={{ fontSize: '0.7rem', color: '#4dc9ff', fontWeight: 700, marginTop: 2 }}>
-              ✦ Powered by Venice AI ✦
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {streak > 0 && (
-              <div
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold"
-                style={{ background: 'rgba(255,138,101,0.15)', border: '1.5px solid rgba(255,138,101,0.4)', color: '#ff8a65' }}
-                title={`You've visited ${streak} day${streak === 1 ? '' : 's'} in a row!`}
+            <div className="flex items-center gap-2">
+              {streak > 0 && (
+                <div
+                  className="hidden items-center gap-1 whitespace-nowrap rounded-md border border-kq-line px-3 py-1.5 text-xs text-kq-dim sm:flex"
+                  title={`You have visited ${streak} day${streak === 1 ? '' : 's'} in a row`}
+                >
+                  {streak} day{streak === 1 ? '' : 's'} reading
+                </div>
+              )}
+              <button
+                onClick={() => router.push('/library')}
+                className="kq-btn-secondary w-auto px-4 py-2 text-sm"
               >
-                🔥 {streak} day{streak === 1 ? '' : 's'}
-              </div>
-            )}
-            <button
-              onClick={() => router.push('/library')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-              style={{ background: 'rgba(77,201,255,0.12)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
-            >
-              📚 My Books
-            </button>
-          </div>
-        </div>
-
-        {/* Story of the Day */}
-        <button
-          onClick={() => router.push(`/generate?idea=${encodeURIComponent(dailyPrompt)}`)}
-          className="w-full mb-8 text-left rounded-2xl p-4 transition-all hover:scale-[1.01]"
-          style={{ background: 'linear-gradient(135deg, rgba(155,93,229,0.18), rgba(77,201,255,0.12))', border: '1.5px solid rgba(155,93,229,0.35)' }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#f5d000', color: '#0d1b3e' }}>✨ STORY OF THE DAY</span>
-              </div>
-              <p className="font-semibold text-sm lg:text-base truncate" style={{ color: '#fefcf5' }}>{dailyPrompt}</p>
-              <p className="text-xs mt-0.5" style={{ color: '#a0b4d6' }}>Tap to create today’s magical story →</p>
+                My books
+              </button>
             </div>
-            <span className="text-3xl shrink-0">🎁</span>
+          </header>
+
+          {/* The promise */}
+          <div className="mt-14 max-w-xl lg:mt-20">
+            <h1 className="kq-hero-title text-[2.6rem] leading-[1.06] sm:text-6xl lg:text-[4.2rem]">
+              Make a picture book tonight
+            </h1>
+            <p className="mt-5 max-w-md text-base leading-relaxed text-kq-dim lg:text-lg">
+              Say what the story is about. Every page is painted fresh for you.
+            </p>
           </div>
-        </button>
 
-        {/* Desktop two-column hero (mobile keeps the original single-column stack) */}
-        <div className="w-full lg:grid lg:grid-cols-2 lg:gap-x-12 lg:items-center lg:flex-1 lg:content-center">
+          <div className="flex-1" />
 
-        {/* Hero area */}
-        <div className="relative flex justify-center mb-6 w-full lg:col-start-1 lg:row-start-1">
-          {/* Decorative planets */}
-          <div
-            className="absolute animate-kq-float"
-            style={{
-              top: 8, left: '8%',
-              width: 38, height: 38, borderRadius: '50%',
-              background: 'radial-gradient(circle at 35% 35%, #ff8a65, #d84315)',
-              boxShadow: '0 0 16px rgba(255,138,101,0.4)',
-              animationDelay: '0s',
-            }}
-          />
-          <div
-            className="absolute animate-kq-float"
-            style={{
-              top: 16, right: '10%',
-              width: 26, height: 26, borderRadius: '50%',
-              background: 'radial-gradient(circle at 35% 35%, #80deea, #00acc1)',
-              boxShadow: '0 0 12px rgba(128,222,234,0.4)',
-              animationDelay: '1s',
-            }}
-          />
-          <div
-            className="absolute animate-kq-float"
-            style={{
-              bottom: 0, right: '22%',
-              width: 16, height: 16, borderRadius: '50%',
-              background: 'radial-gradient(circle at 35% 35%, #ce93d8, #7b1fa2)',
-              animationDelay: '0.5s',
-            }}
-          />
-
-          {/* Logo circle */}
-          <div
-            className="animate-hero-float relative z-10"
-            style={{
-              width: 160, height: 160, borderRadius: '50%',
-              border: '4px solid #f5d000',
-              boxShadow: '0 0 0 10px rgba(245,208,0,0.1), 0 16px 48px rgba(0,0,0,0.5)',
-              background: 'linear-gradient(135deg, #152352, #1a0a3e)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '5rem',
-            }}
-          >
-            📖
+          {/* The one amber action, plus the ways back in */}
+          <div className="mx-auto w-full max-w-md pb-6">
+            <button
+              onClick={() => router.push('/generate')}
+              className="kq-btn-primary text-lg"
+            >
+              Make a book
+            </button>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => router.push('/library')}
+                className="kq-btn-secondary text-sm"
+              >
+                Your library
+              </button>
+              <button
+                onClick={() => router.push('/gallery')}
+                className="kq-btn-secondary text-sm"
+              >
+                See samples
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Headline */}
-        <div className="text-center lg:text-left mb-6 lg:col-start-1 lg:row-start-2">
-          <h1 style={{ fontFamily: 'Fredoka One, cursive', lineHeight: 1.15 }} className="text-4xl lg:text-5xl mb-3">
-            <span style={{ color: '#f5d000' }}>Magic Stories</span>
-            <br />
-            <span style={{ color: '#fefcf5' }}>Born From Your</span>
-            <br />
-            <span style={{ color: '#00e5a0' }}>Imagination ✦</span>
-          </h1>
-          <p className="font-body font-semibold text-sm lg:text-base max-w-xs lg:max-w-md mx-auto lg:mx-0 leading-relaxed" style={{ color: '#a0b4d6' }}>
-            Create personalized AI storybooks with custom illustrations — in seconds!
-          </p>
-        </div>
+      </section>
 
-        {/* Featured Books Carousel */}
-        <div className="w-full mb-8 lg:mb-0 lg:col-start-2 lg:row-start-1">
-          <FeaturedBooksCarousel />
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex w-full flex-col items-center gap-3 lg:col-start-2 lg:row-start-2 lg:mt-6">
+      {/* ══════════ Below the fold ══════════ */}
+      <div className="kq-ground relative">
+        <div className="mx-auto w-full max-w-content px-5 py-14 lg:px-10 lg:py-20">
+          {/* Story of the day */}
           <button
-            onClick={() => router.push('/generate')}
-            className="kq-btn-primary"
-            style={{ fontSize: '1.3rem', padding: '18px 32px' }}
+            onClick={() => router.push(`/generate?idea=${encodeURIComponent(dailyPrompt)}`)}
+            className="kq-card mb-12 w-full text-left transition-transform duration-200 hover:-translate-y-0.5"
           >
-            <span style={{ fontSize: '1.5rem' }}>✨</span>
-            Start Your Story!
-            <span style={{ fontSize: '1.5rem' }}>📖</span>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="kq-eyebrow mb-2">Story of the day</div>
+                <p className="font-display text-lg leading-snug text-kq-text lg:text-xl">
+                  {dailyPrompt}
+                </p>
+                <p className="mt-1.5 text-sm text-kq-dim">Start from this one tonight</p>
+              </div>
+              <span className="shrink-0 font-display text-2xl text-kq-amber">→</span>
+            </div>
           </button>
 
-          <div className="grid grid-cols-2 gap-3 w-full">
-            <button onClick={() => router.push('/gallery')} className="kq-btn-secondary">
-              🖼️ Gallery
-            </button>
-            <button onClick={() => router.push('/ai-stories')} className="kq-btn-secondary kq-btn-sky">
-              🤖 AI Stories
-            </button>
+          {/* How it works, as three real steps */}
+          <div className="mb-14 grid gap-6 sm:grid-cols-3">
+            <div>
+              <div className="kq-eyebrow mb-2">One</div>
+              <h3 className="mb-2 font-display text-xl text-kq-text">Say the idea</h3>
+              <p className="text-sm leading-relaxed text-kq-dim">
+                One sentence is enough. Who is it about, and what happens?
+              </p>
+            </div>
+            <div>
+              <div className="kq-eyebrow mb-2">Two</div>
+              <h3 className="mb-2 font-display text-xl text-kq-text">We paint it</h3>
+              <p className="text-sm leading-relaxed text-kq-dim">
+                Every page is illustrated and written. You can close the app and
+                come back, the book keeps being made.
+              </p>
+            </div>
+            <div>
+              <div className="kq-eyebrow mb-2">Three</div>
+              <h3 className="mb-2 font-display text-xl text-kq-text">Read it together</h3>
+              <p className="text-sm leading-relaxed text-kq-dim">
+                Read it aloud, or let it read to you. Save it in your library.
+              </p>
+            </div>
           </div>
 
-          <button onClick={() => router.push('/video-studio')} className="kq-btn-secondary kq-btn-purple">
-            🎬 AI Video Lab
-          </button>
+          {/* ══════════ The night scene: a real 3D book, painted pages ══════════ */}
+          <section className="relative mb-16 overflow-hidden rounded-xl border border-kq-line-soft bg-kq-ink">
+            <div className="kq-stars-bg absolute inset-0" />
+            <div className="relative z-10 px-6 pb-0 pt-10 text-center">
+              <div className="kq-eyebrow mb-3">Painted live</div>
+              <h2 className="mx-auto max-w-lg font-display text-2xl leading-snug text-kq-text lg:text-3xl">
+                Every page is illustrated, never repeated
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-kq-dim">
+                Two books never come out the same. Your story is painted page by page,
+                and you can close the app while it works.
+              </p>
+            </div>
+            <NightLightBookScene className="relative z-[1] h-[380px] w-full sm:h-[460px] lg:h-[520px]" />
+          </section>
+
+          {/* Sample books */}
+          <div className="mb-14">
+            <h2 className="mb-4 font-display text-2xl text-kq-text lg:text-3xl">
+              Books made here
+            </h2>
+            <FeaturedBooksCarousel />
+          </div>
+
+          {/* The other rooms, kept but quiet */}
+          <div className="mb-10">
+            <div className="kq-eyebrow mb-3">More to do</div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <button onClick={() => router.push('/ai-stories')} className="kq-btn-secondary text-sm">
+                Write a story
+              </button>
+              <button onClick={() => router.push('/video-studio')} className="kq-btn-secondary text-sm">
+                Animate a picture
+              </button>
+              <button onClick={() => router.push('/parent')} className="kq-btn-secondary text-sm">
+                Parent settings
+              </button>
+            </div>
+          </div>
 
           <button
             onClick={() => setShowHowItWorks(true)}
-            className="mt-1 text-sm font-semibold underline transition-colors"
-            style={{ color: '#a0b4d6' }}
-            onMouseOver={e => (e.currentTarget.style.color = '#fefcf5')}
-            onMouseOut={e => (e.currentTarget.style.color = '#a0b4d6')}
+            className="text-sm text-kq-dim underline decoration-kq-line underline-offset-4 transition-colors hover:text-kq-text"
           >
             How does it work?
           </button>
         </div>
 
-        {/* Venice badge */}
-        <div className="mt-8 lg:mt-6 text-center lg:text-left lg:col-start-1 lg:row-start-3">
-          <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1.5px solid rgba(255,255,255,0.1)' }}
-          >
-            <span>⚡</span>
-            <span className="font-body font-bold text-xs" style={{ color: '#a0b4d6' }}>
-              Powered by <strong style={{ color: '#fff' }}>Venice.ai</strong> — private AI
-            </span>
-          </div>
-        </div>
-
-        </div>{/* end desktop two-column hero */}
+        <footer className="border-t border-kq-line-soft px-5 py-6 text-center lg:px-10">
+          <p className="text-xs text-kq-dim">
+            Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
+          </p>
+        </footer>
       </div>
 
-      {/* Footer */}
-      <footer
-        className="relative z-10 w-full py-3 text-center"
-        style={{ background: 'rgba(10,18,48,0.9)', borderTop: '1px solid rgba(77,201,255,0.1)' }}
-      >
-        <p className="font-body text-xs font-medium" style={{ color: '#a0b4d6' }}>
-          Created with <span className="font-bold text-white">Venice.ai</span>
-        </p>
-      </footer>
-
-      {/* How It Works Modal */}
       <HowItWorksModal
         isOpen={showHowItWorks}
         onClose={() => setShowHowItWorks(false)}

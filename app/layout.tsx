@@ -1,12 +1,37 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
+import { Fraunces, Inter } from 'next/font/google'
 import './globals.css'
 
+/* Cosy Night-Light type: Fraunces for anything read (headlines, book pages,
+   the library titles) and Inter for anything operated (buttons, labels,
+   menus). Both are self-hosted by next/font, so there is no render-blocking
+   request to a font CDN and no flash of the wrong face. */
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-fraunces',
+  display: 'swap',
+  axes: ['SOFT', 'WONK'],
+})
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
-  title: 'KinderQuill - Create Magical Storybooks',
-  description: 'Create magical, personalized storybooks for your little ones.',
+  title: 'KinderQuill - Make a picture book tonight',
+  description:
+    'Make a painted picture book for your little one in minutes. Describe an idea, we paint every page.',
   icons: {
     icon: '/favicon.svg',
   },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#1B1D3A',
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({
@@ -15,18 +40,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Icons only. Text type is self-hosted above. */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="font-body">
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   )
 }
