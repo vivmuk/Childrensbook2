@@ -8,7 +8,7 @@ Your Venice API key has been provided. To use it:
 2. Add the following:
 
 ```
-VENICE_API_KEY=Qw553Q96e7bauOdtJXnbGLRBUAqQEwxBQiBLRD7RKj
+VENICE_API_KEY=<your-venice-api-key-here>
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -17,7 +17,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 ## For Railway Deployment
 
 When deploying to Railway, add the environment variable:
-- `VENICE_API_KEY` = `Qw553Q96e7bauOdtJXnbGLRBUAqQEwxBQiBLRD7RKj`
+- `VENICE_API_KEY` = `<your-venice-api-key-here>`
 
 ## Quick Start
 

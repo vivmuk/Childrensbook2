@@ -163,7 +163,12 @@ const SAMPLE_BOOKS: Omit<SampleBook, 'pages' | 'titlePage'>[] = [
 ]
 
 async function generateSampleBook(bookData: Omit<SampleBook, 'pages' | 'titlePage'>) {
-  const apiKey = process.env.VENICE_API_KEY || 'lnWNeSg0pA_rQUooNpbfpPDBaj2vJnWol5WqKWrIEF'
+  const apiKey = process.env.VENICE_API_KEY
+  if (!apiKey) {
+    throw new Error(
+      'VENICE_API_KEY is not set. This repository must never carry a hardcoded key fallback.'
+    )
+  }
   
   console.log(`Generating book: ${bookData.title}...`)
 

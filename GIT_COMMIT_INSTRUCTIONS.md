@@ -50,6 +50,6 @@ git push -u origin main
 
 When deploying to Railway, use this API key as an environment variable:
 ```
-VENICE_API_KEY=Qw553Q96e7bauOdtJXnbGLRBUAqQEwxBQiBLRD7RKj
+VENICE_API_KEY=<your-venice-api-key-here>
 ```
 
