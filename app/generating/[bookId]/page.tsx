@@ -5,6 +5,15 @@ import { useRouter, useParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
 
+/**
+ * The waiting screen. A parent lands here the moment a book starts and stays
+ * for a minute or two, so it is a room they sit in, not a spinner: the night
+ * ground, one quiet line of type, and the making-of screen underneath.
+ *
+ * The old shell here was still the bright purple and pink design (rounded-full
+ * buttons, emoji, grey Tailwind colours) wrapped around the new night screen,
+ * which is why the two never looked like the same app.
+ */
 export default function GeneratingPage() {
   const router = useRouter()
   const params = useParams()
@@ -36,54 +45,53 @@ export default function GeneratingPage() {
   }, [bookId, router])
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col items-center justify-start overflow-hidden bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-gray-900 font-display">
-
-      {/* Header */}
-      <div className="w-full flex items-center justify-between px-4 py-3 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md border-b border-white/30 dark:border-gray-700">
+    <div className="kq-ground kq-stars-bg flex min-h-[100dvh] w-full flex-col">
+      <div className="kq-top-bar">
         <button
           onClick={() => router.push('/')}
-          className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-white/80 hover:bg-white dark:bg-gray-700/80 dark:hover:bg-gray-700 transition-colors shadow-sm text-sm text-gray-700 dark:text-gray-200 font-medium"
+          className="kq-icon-btn"
+          aria-label="Back to the home screen"
         >
-          <Icon name="home" size={18} className="text-purple-600 dark:text-purple-400" />
-          <span className="hidden sm:inline">Home</span>
+          <Icon name="home" size={18} />
         </button>
 
-        <div className="text-center">
-          <h1 className="text-sm sm:text-base font-bold text-gray-800 dark:text-gray-100">
-            ✨ Creating Your Story
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            AI magic is at work!
-          </p>
+        <div className="min-w-0 flex-1 px-3 text-center">
+          <span className="block truncate font-display text-lg text-kq-text">
+            Painting your book
+          </span>
         </div>
 
-        {/* Spacer */}
-        <div className="w-16" />
+        {/* Balances the home button so the title stays centred */}
+        <span className="kq-icon-btn pointer-events-none opacity-0" aria-hidden="true" />
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full px-4 py-6 gap-4">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 py-8">
         {errorMsg ? (
-          <div className="max-w-sm w-full text-center">
-            <div className="text-5xl mb-3">😔</div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">Oops!</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{errorMsg}</p>
-            <button
-              onClick={() => router.push('/generate')}
-              className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl shadow-md"
-            >
-              Try Again
-            </button>
+          <div className="kq-card w-full max-w-sm p-7 text-center">
+            <h2 className="font-display text-2xl text-kq-text">That did not work</h2>
+            <p className="mt-2 text-sm leading-relaxed text-kq-dim">{errorMsg}</p>
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                onClick={() => router.push('/generate')}
+                className="kq-btn-primary"
+              >
+                Try again
+              </button>
+              <button
+                onClick={() => router.push('/library')}
+                className="kq-btn-secondary"
+              >
+                Back to my bookshelf
+              </button>
+            </div>
           </div>
         ) : (
           <GeneratingGame progress={progress} />
         )}
-      </div>
+      </main>
 
-      <footer className="w-full py-3 text-center bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm border-t border-white/30 dark:border-gray-700">
-        <p className="text-xs text-gray-600 dark:text-gray-400">
-          Created with <span className="font-semibold text-purple-600 dark:text-purple-400">Venice.ai</span>
-        </p>
+      <footer className="px-4 pb-6 text-center">
+        <p className="text-xs text-kq-dim">Painted with Venice.ai. Your ideas stay yours.</p>
       </footer>
     </div>
   )

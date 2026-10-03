@@ -206,22 +206,29 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
         {/* ── The sky: something quiet to do with your hands ───────────── */}
         <div className="relative h-40 w-full overflow-hidden rounded-lg border border-kq-line bg-gradient-to-b from-kq-navy to-kq-plum">
           {STARS.map((s, i) => (
+            // The tap target is a comfortable 36px square and the painted dot
+            // sits inside it, so a small hand can find a star that is only a
+            // few pixels of light on the sky.
             <button
               key={s.x}
               type="button"
               onClick={() => lightStar(i)}
               aria-label={lit[i] ? 'A lit star' : 'Light this star'}
-              className={`absolute rounded-[2px] transition-colors duration-300 ${
-                lit[i] ? 'bg-kq-amber' : 'bg-kq-text/30 hover:bg-kq-text/60'
-              } ${!lit[i] && motionOk ? 'animate-twinkle' : ''}`}
-              style={{
-                left: `${s.x}%`,
-                top: `${s.y}%`,
-                width: s.size,
-                height: s.size,
-                animationDelay: s.delay,
-              }}
-            />
+              aria-pressed={lit[i]}
+              className="absolute grid h-9 w-9 -translate-x-1/2 -translate-y-1/2 place-items-center"
+              style={{ left: `${s.x}%`, top: `${s.y}%` }}
+            >
+              <span
+                className={`rounded-[2px] transition-colors duration-300 ${
+                  lit[i] ? 'bg-kq-amber' : 'bg-kq-text/55 hover:bg-kq-text/80'
+                } ${!lit[i] && motionOk ? 'animate-twinkle' : ''}`}
+                style={{
+                  width: s.size + 8,
+                  height: s.size + 8,
+                  animationDelay: s.delay,
+                }}
+              />
+            </button>
           ))}
           <p className="absolute inset-x-3 bottom-2 text-center text-xs text-kq-dim">
             {allLit

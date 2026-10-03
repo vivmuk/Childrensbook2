@@ -74,6 +74,14 @@ h1, h2, h3, .kq-display {
   letter-spacing: -0.01em;
 }
 
+/* Everything below is a component class, and it lives in Tailwind's
+   `components` layer on purpose. Written outside a layer it came after
+   `@tailwind utilities` in the file, which meant a class like
+   `.kq-btn-secondary { width: 100% }` beat `w-auto` on the same element and
+   every utility override on a button was silently ignored. In the components
+   layer the ordinary Tailwind utilities win, which is what a caller expects. */
+@layer components {
+
 /* The app ground: a dusk gradient, never pure black. */
 .kq-ground {
   background:
@@ -399,6 +407,8 @@ textarea.kq-input { resize: none; min-height: 110px; line-height: 1.6; }
   background: var(--kq-navy-mid);
   border: 1px solid var(--kq-line-soft);
 }
+
+} /* end @layer components */
 
 /* ════════════════ Motion ════════════════
    Only transform and opacity, so the compositor does the work and the
