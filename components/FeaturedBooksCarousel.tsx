@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Icon } from '@/components/Icons'
 
 interface Book {
   id: string
@@ -32,6 +33,7 @@ export function FeaturedBooksCarousel() {
     fetchBooks()
   }, [])
 
+  // Move to the next sample every five seconds.
   useEffect(() => {
     if (books.length <= 1) return
     const interval = setInterval(() => {
@@ -42,8 +44,8 @@ export function FeaturedBooksCarousel() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-sm mx-auto h-40 flex items-center justify-center">
-        <div className="animate-kq-spin text-2xl">✨</div>
+      <div className="mx-auto flex h-40 w-full max-w-sm items-center justify-center">
+        <Icon name="auto_awesome" size={28} className="animate-kq-spin text-kq-dim" />
       </div>
     )
   }
@@ -53,80 +55,68 @@ export function FeaturedBooksCarousel() {
   const currentBook = books[currentIndex]
 
   return (
-    <div className="w-full max-w-sm mx-auto">
-      {/* Section label */}
-      <div className="kq-section-label mb-3">⭐ Sample Stories</div>
+    <div className="mx-auto w-full max-w-sm">
+      <div className="kq-eyebrow mb-3">Sample stories</div>
 
       <div className="relative">
-        {/* Main book display */}
-        <div
-          className="relative rounded-2xl overflow-hidden cursor-pointer"
-          style={{
-            aspectRatio: '16/9',
-            border: '2px solid rgba(77,201,255,0.2)',
-            boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-          }}
-        >
-          {currentBook.titlePage?.image ? (
-            <img
-              src={currentBook.titlePage.image}
-              alt={currentBook.title}
-              className="w-full h-full object-cover transition-all duration-500 animate-zoomIn"
-              key={currentIndex}
-            />
-          ) : (
-            <div
-              className="w-full h-full flex items-center justify-center text-5xl"
-              style={{ background: 'linear-gradient(135deg, #1a1a6e, #2d1b5e)' }}
-            >
-              📖
-            </div>
-          )}
+        {/* The sample cover, standing on the shelf */}
+        <div className="kq-cover relative">
+          <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16 / 9' }}>
+            {currentBook.titlePage?.image ? (
+              <img
+                src={currentBook.titlePage.image}
+                alt={currentBook.title}
+                className="h-full w-full animate-bloom-in object-cover"
+                key={currentIndex}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center">
+                <Icon name="menu_book" size={40} className="text-kq-dim" />
+              </div>
+            )}
 
-          {/* Title overlay */}
-          <div
-            className="absolute bottom-0 left-0 right-0 p-3"
-            style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.82))' }}
-          >
-            <div style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1rem', color: '#fefcf5' }}>
-              {currentBook.title}
-            </div>
-            <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.65)', fontWeight: 700, marginTop: 2 }}>
-              Grade {currentBook.ageRange} · {currentBook.illustrationStyle}
+            {/* Title plate over the art */}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-kq-ink/95 to-transparent p-3">
+              <div className="font-display text-base leading-snug text-kq-text">
+                {currentBook.title}
+              </div>
+              <div className="mt-0.5 text-xs text-kq-dim">
+                Grade {currentBook.ageRange} &middot; {currentBook.illustrationStyle}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Prev/Next arrows */}
+        {/* Prev/Next */}
         {books.length > 1 && (
           <>
             <button
               onClick={() => setCurrentIndex((prev) => (prev - 1 + books.length) % books.length)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 kq-icon-btn"
-              aria-label="Previous"
+              className="kq-icon-btn absolute left-2 top-1/2 -translate-y-1/2"
+              aria-label="Previous sample"
             >
-              ←
+              <Icon name="chevron_left" size={18} />
             </button>
             <button
               onClick={() => setCurrentIndex((prev) => (prev + 1) % books.length)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 kq-icon-btn"
-              aria-label="Next"
+              className="kq-icon-btn absolute right-2 top-1/2 -translate-y-1/2"
+              aria-label="Next sample"
             >
-              →
+              <Icon name="chevron_right" size={18} />
             </button>
           </>
         )}
       </div>
 
-      {/* Dot indicators */}
+      {/* Page dots */}
       {books.length > 1 && (
-        <div className="flex justify-center gap-1.5 mt-3">
+        <div className="mt-3 flex justify-center gap-1.5">
           {books.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentIndex(index)}
               className={`kq-page-dot ${index === currentIndex ? 'active' : ''}`}
-              aria-label={`Book ${index + 1}`}
+              aria-label={`Sample ${index + 1}`}
             />
           ))}
         </div>

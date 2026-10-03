@@ -23,6 +23,10 @@ interface Book {
   illustrationStyle: string
 }
 
+/* The PDF view prints A4 pages, so the printed sheet stays plain white paper
+   with black story text. Only the on-screen preview wears the night world:
+   the app ground behind warm cream pages. Fonts come from the app (Fraunces
+   for the story, Inter for the controls); no font CDN is fetched here. */
 export default function PDFViewPage() {
   const params = useParams()
   const searchParams = useSearchParams()
@@ -63,16 +67,16 @@ export default function PDFViewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p>Loading book...</p>
+      <div className="kq-ground-flat flex min-h-screen items-center justify-center px-4">
+        <p className="text-kq-text">Loading book...</p>
       </div>
     )
   }
 
   if (!book) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p>Book not found</p>
+      <div className="kq-ground-flat flex min-h-screen items-center justify-center px-4">
+        <p className="text-kq-text">Book not found</p>
       </div>
     )
   }
@@ -92,49 +96,39 @@ export default function PDFViewPage() {
             right: 20px;
             z-index: 1000;
             display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
             gap: 10px;
+            max-width: calc(100vw - 40px);
           }
-          
+
+          /* The design buttons stretch by default. On this floating bar they
+             should hug their label instead. */
           .print-controls button {
-            padding: 12px 24px;
-            background: #3b82f6;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transition: all 0.2s;
+            width: auto;
+            padding: 12px 20px;
+            font-size: 0.95rem;
           }
-          
-          .print-controls button:hover {
-            background: #2563eb;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-          }
-          
+
           @media print {
             .print-controls {
               display: none;
             }
           }
         `}</style>
-        <button onClick={handleDownload}>
+        <button onClick={handleDownload} className="kq-btn-primary">
           <Icon name="download" size={20} />
           Download PDF
         </button>
-        <button onClick={() => window.print()}>
-          <span style={{ fontSize: '20px' }}>🖨️</span>
+        <button onClick={() => window.print()} className="kq-btn-secondary">
+          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+            print
+          </span>
           Print
         </button>
       </div>
-      
+
       <div className="pdf-container">
-        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <style jsx global>{`
         /* Common styles */
         * {
@@ -142,18 +136,18 @@ export default function PDFViewPage() {
           padding: 0;
           box-sizing: border-box;
         }
-        
+
         body {
-          font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          font-family: var(--kq-font-ui);
         }
-        
+
         /* Print styles - optimized for single page per spread */
         @media print {
           @page {
             size: A4 portrait;
             margin: 0;
           }
-          
+
           html, body {
             width: 210mm;
             height: 297mm;
@@ -161,13 +155,13 @@ export default function PDFViewPage() {
             padding: 0;
             background: white;
           }
-          
+
           .pdf-container {
             width: 100%;
             margin: 0;
             padding: 0;
           }
-          
+
           .page {
             width: 210mm;
             height: 297mm;
@@ -179,11 +173,11 @@ export default function PDFViewPage() {
             flex-direction: column;
             background: white;
           }
-          
+
           .page:last-child {
             page-break-after: auto;
           }
-          
+
           /* Title Page - Full bleed cover */
           .title-page {
             width: 210mm;
@@ -193,13 +187,13 @@ export default function PDFViewPage() {
             justify-content: center;
             padding: 0;
           }
-          
+
           .title-page img {
             width: 100%;
             height: 100%;
             object-fit: cover;
           }
-          
+
           /* Content Pages - Image on top, text below */
           .content-page {
             width: 210mm;
@@ -210,7 +204,7 @@ export default function PDFViewPage() {
             overflow: hidden;
             justify-content: space-between;
           }
-          
+
           .image-container {
             width: 100%;
             height: 190mm;
@@ -219,11 +213,11 @@ export default function PDFViewPage() {
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            background: #f8f9fa;
+            background: white;
             flex-shrink: 0;
             margin-bottom: 6mm;
           }
-          
+
           .page-image {
             max-width: 100%;
             max-height: 100%;
@@ -231,7 +225,7 @@ export default function PDFViewPage() {
             height: auto;
             object-fit: contain;
           }
-          
+
           .text-container {
             flex: 1;
             display: flex;
@@ -242,51 +236,53 @@ export default function PDFViewPage() {
             max-height: 80mm;
             overflow: hidden;
           }
-          
+
           .page-text {
-            font-size: 12pt;
+            font-family: var(--kq-font-display);
+            font-size: 13pt;
             font-weight: 400;
-            line-height: 1.4;
-            color: #1a1a1a;
+            line-height: 1.45;
+            color: black;
             text-align: center;
             overflow: hidden;
             word-wrap: break-word;
           }
-          
+
           .page-number {
             position: absolute;
             bottom: 8mm;
             right: 15mm;
             font-size: 10pt;
             font-weight: 500;
-            color: #999;
+            color: rgb(102, 102, 102);
           }
         }
-        
+
         /* Screen preview styles */
         @media screen {
           body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(170deg, var(--kq-navy) 0%, var(--kq-plum) 100%);
             padding: 40px 20px;
             min-height: 100vh;
           }
-          
+
           .pdf-container {
             max-width: 650px;
             margin: 0 auto;
           }
-          
+
           .page {
-            background: white;
+            background: var(--kq-cream);
+            color: var(--kq-amber-ink);
             margin-bottom: 30px;
-            border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            border-radius: var(--kq-radius-lg);
+            border: 1px solid var(--kq-line-soft);
             overflow: hidden;
             aspect-ratio: 210 / 297;
             display: flex;
             flex-direction: column;
           }
-          
+
           /* Title Page Preview */
           .title-page {
             display: flex;
@@ -295,13 +291,13 @@ export default function PDFViewPage() {
             padding: 0;
             height: 100%;
           }
-          
+
           .title-page img {
             width: 100%;
             height: 100%;
             object-fit: cover;
           }
-          
+
           /* Content Page Preview */
           .content-page {
             padding: 5% 6% 6% 6%;
@@ -310,7 +306,7 @@ export default function PDFViewPage() {
             height: 100%;
             position: relative;
           }
-          
+
           .image-container {
             width: 100%;
             height: 65%;
@@ -318,17 +314,17 @@ export default function PDFViewPage() {
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            border-radius: 8px;
-            background: #f8f9fa;
+            border-radius: var(--kq-radius);
+            background: var(--kq-navy-mid);
             flex-shrink: 0;
           }
-          
+
           .page-image {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
           }
-          
+
           .text-container {
             flex: 1;
             display: flex;
@@ -337,48 +333,48 @@ export default function PDFViewPage() {
             padding: 16px 10px 0 10px;
             min-height: 0;
           }
-          
+
           .page-text {
-            font-size: clamp(12px, 2vw, 16px);
+            font-family: var(--kq-font-display);
+            font-size: clamp(13px, 2vw, 17px);
             font-weight: 400;
             line-height: 1.5;
-            color: #1a1a1a;
+            color: var(--kq-amber-ink);
             text-align: center;
             overflow: hidden;
           }
-          
+
           .page-number {
             position: absolute;
             bottom: 12px;
             right: 20px;
             font-size: 12px;
             font-weight: 500;
-            color: #999;
+            color: var(--kq-dim);
           }
         }
       `}</style>
-      
-      {/* Title Page */}
-      {book.titlePage && (
-        <div className="page title-page">
-          <img src={book.titlePage.image} alt={book.title} />
-        </div>
-      )}
-      
-      {/* Content Pages */}
-      {book.pages.map((page, index) => (
-        <div key={index} className="page content-page">
-          <div className="image-container">
-            <img src={page.image} alt={`Page ${index + 1}`} className="page-image" />
+
+        {/* Title Page */}
+        {book.titlePage && (
+          <div className="page title-page">
+            <img src={book.titlePage.image} alt={book.title} />
           </div>
-          <div className="text-container">
-            <div className="page-text">{page.text}</div>
+        )}
+
+        {/* Content Pages */}
+        {book.pages.map((page, index) => (
+          <div key={index} className="page content-page">
+            <div className="image-container">
+              <img src={page.image} alt={`Page ${index + 1}`} className="page-image" />
+            </div>
+            <div className="text-container">
+              <div className="page-text">{page.text}</div>
+            </div>
+            <div className="page-number">Page {index + 1}</div>
           </div>
-          <div className="page-number">Page {index + 1}</div>
-        </div>
-      ))}
+        ))}
       </div>
     </>
   )
 }
-

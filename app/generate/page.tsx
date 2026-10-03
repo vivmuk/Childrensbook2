@@ -4,41 +4,61 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { GeneratingGame } from '@/components/GeneratingGame'
 import { Header } from '@/components/Header'
+import { Icon } from '@/components/Icons'
+
+/* ════════════════════════════════════════════════════════════════════════
+   New book: the form a parent fills in to make a picture book.
+
+   Plainly structured on purpose (Vivek is a scientist, not a developer):
+     1. static data (the choices on the form)
+     2. shared style recipes and small local components
+     3. localStorage helpers
+     4. the page itself: state, then handlers, then the layout
+
+   Styling rules this file follows, from DESIGN.md:
+     - colour comes from the kq tokens, never a raw hex
+     - rounded rectangles, never pills
+     - one amber action on the screen: the "Make this book" button
+     - no emoji as UI, icons come from components/Icons.tsx
+     - motion is transform and opacity only
+   ════════════════════════════════════════════════════════════════════════ */
 
 // ── Static data ─────────────────────────────────────────────────────────────
 
 const FREE_BOOK_LIMIT = 3
 
 const AGE_RANGES = [
-  { value: 'kindergarten', label: 'Kindergarten (age 5–6)' },
-  { value: '1st', label: '1st Grade (age 6–7)' },
-  { value: '2nd', label: '2nd Grade (age 7–8)' },
-  { value: '3rd', label: '3rd Grade (age 8–9)' },
-  { value: '4th', label: '4th Grade (age 9–10)' },
-  { value: '5th', label: '5th Grade (age 10–11)' },
+  { value: 'kindergarten', label: 'Kindergarten (age 5-6)' },
+  { value: '1st', label: '1st Grade (age 6-7)' },
+  { value: '2nd', label: '2nd Grade (age 7-8)' },
+  { value: '3rd', label: '3rd Grade (age 8-9)' },
+  { value: '4th', label: '4th Grade (age 9-10)' },
+  { value: '5th', label: '5th Grade (age 10-11)' },
 ]
 
+// Each style keeps the long prompt that is sent to the image model. The `icon`
+// is a name from components/Icons.tsx, shown on the option plate.
 const ILLUSTRATION_STYLES = [
-  { value: 'ghibli',          label: 'Anime Watercolor',    emoji: '🌸', prompt: 'Studio Ghibli anime style, soft watercolor backgrounds, detailed hand-drawn characters, warm lighting, magical realism, Hayao Miyazaki inspired, whimsical and dreamy atmosphere' },
-  { value: 'american-classic',label: 'Classic Cartoon',     emoji: '🎨', prompt: 'Classic 1950s American cartoon style, bold outlines, bright primary colors, expressive characters, vintage Disney/Hanna-Barbera inspired, cheerful and nostalgic' },
-  { value: 'watercolor',      label: 'Whimsical Watercolor',emoji: '💧', prompt: 'Soft whimsical watercolor illustration, gentle pastel colors, flowing brushstrokes, dreamy and ethereal, delicate details, storybook illustration style' },
-  { value: 'amar-chitra',     label: 'Indian Illustrated',  emoji: '🏵️', prompt: 'Amar Chitra Katha Indian comic style, bold black outlines, vibrant colors, detailed traditional Indian art elements, expressive faces, classic Indian illustration' },
-  { value: 'chacha-chaudhary',label: 'Retro Bold Comic',    emoji: '💥', prompt: 'Chacha Chaudhary Indian comic style, simple bold lines, flat bright colors, exaggerated expressions, humorous cartoon style, Pran Kumar Sharma inspired' },
-  { value: 'tintin',          label: 'European Comic',      emoji: '🔎', prompt: 'Hergé Tintin clear line style (ligne claire), clean precise outlines, flat colors, detailed backgrounds, European comic book style, adventure illustration' },
+  { value: 'ghibli',           label: 'Anime Watercolor',     icon: 'filter_vintage', prompt: 'Studio Ghibli anime style, soft watercolor backgrounds, detailed hand-drawn characters, warm lighting, magical realism, Hayao Miyazaki inspired, whimsical and dreamy atmosphere' },
+  { value: 'american-classic', label: 'Classic Cartoon',      icon: 'palette',        prompt: 'Classic 1950s American cartoon style, bold outlines, bright primary colors, expressive characters, vintage Disney/Hanna-Barbera inspired, cheerful and nostalgic' },
+  { value: 'watercolor',       label: 'Whimsical Watercolor', icon: 'local_florist',  prompt: 'Soft whimsical watercolor illustration, gentle pastel colors, flowing brushstrokes, dreamy and ethereal, delicate details, storybook illustration style' },
+  { value: 'amar-chitra',      label: 'Indian Illustrated',   icon: 'star',           prompt: 'Amar Chitra Katha Indian comic style, bold black outlines, vibrant colors, detailed traditional Indian art elements, expressive faces, classic Indian illustration' },
+  { value: 'chacha-chaudhary', label: 'Retro Bold Comic',     icon: 'spark',          prompt: 'Chacha Chaudhary Indian comic style, simple bold lines, flat bright colors, exaggerated expressions, humorous cartoon style, Pran Kumar Sharma inspired' },
+  { value: 'tintin',           label: 'European Comic',       icon: 'menu_book',      prompt: 'Hergé Tintin clear line style (ligne claire), clean precise outlines, flat colors, detailed backgrounds, European comic book style, adventure illustration' },
 ]
 
 const STORY_LENGTHS = [
-  { value: '5',  label: 'Quick',    pages: 5,  description: '~1 min' },
-  { value: '8',  label: 'Standard', pages: 8,  description: '~2 min' },
-  { value: '12', label: 'Epic',     pages: 12, description: '~3 min' },
+  { value: '5',  label: 'Quick',    pages: 5,  description: 'about 1 min' },
+  { value: '8',  label: 'Standard', pages: 8,  description: 'about 2 min' },
+  { value: '12', label: 'Epic',     pages: 12, description: 'about 3 min' },
 ]
 
 const CHARACTER_TYPES = [
-  { value: 'animal',  label: '🐾 Animal',           description: 'Furry or feathered' },
-  { value: 'person',  label: '👤 Person',            description: 'Boy, girl, or adult' },
-  { value: 'fantasy', label: '🦄 Fantasy Creature',  description: 'Dragons, unicorns…' },
-  { value: 'robot',   label: '🤖 Robot',             description: 'Mechanical friend' },
-  { value: 'alien',   label: '👽 Alien',             description: 'From another world' },
+  { value: 'animal',  label: 'Animal',           description: 'Furry or feathered' },
+  { value: 'person',  label: 'Person',           description: 'Boy, girl, or adult' },
+  { value: 'fantasy', label: 'Fantasy Creature', description: 'Dragons, unicorns, and more' },
+  { value: 'robot',   label: 'Robot',            description: 'Mechanical friend' },
+  { value: 'alien',   label: 'Alien',            description: 'From another world' },
 ]
 
 const CHARACTER_TRAITS = [
@@ -47,15 +67,15 @@ const CHARACTER_TRAITS = [
 ]
 
 const IMAGE_MODELS = [
-  { value: 'grok-imagine-image', label: 'Grok Imagine',  description: 'Best for cartoon books (default)' },
-  { value: 'flux-2-pro',         label: 'Flux 2 Pro',    description: 'High quality, detailed' },
-  { value: 'recraft-v4',         label: 'Recraft v4',    description: 'Sharp, stylized' },
-  { value: 'qwen-image',         label: 'Qwen Image',    description: 'Strong text rendering' },
+  { value: 'grok-imagine-image', label: 'Grok Imagine', description: 'Best for cartoon books (default)' },
+  { value: 'flux-2-pro',         label: 'Flux 2 Pro',   description: 'High quality, detailed' },
+  { value: 'recraft-v4',         label: 'Recraft v4',   description: 'Sharp, stylized' },
+  { value: 'qwen-image',         label: 'Qwen Image',   description: 'Strong text rendering' },
 ]
 
 const NARRATOR_VOICES = [
-  { value: 'default', label: 'Default',  description: 'Warm and friendly' },
-  { value: 'nova',    label: 'Nova',     description: 'Warm, slightly British' },
+  { value: 'default', label: 'Default', description: 'Warm and friendly' },
+  { value: 'nova',    label: 'Nova',    description: 'Warm, slightly British' },
   { value: 'alloy',   label: 'Alloy',   description: 'Versatile, balanced' },
   { value: 'echo',    label: 'Echo',    description: 'Soft, gentle' },
   { value: 'fable',   label: 'Fable',   description: 'Perfect for storytelling' },
@@ -64,13 +84,13 @@ const NARRATOR_VOICES = [
 ]
 
 const STORY_TEMPLATES = [
-  { id: 'bedtime',      name: '🌙 Bedtime',     description: 'Calm, soothing tales', prompt: 'A gentle bedtime story with a calm, soothing tone. Include soft imagery, peaceful settings, and a comforting ending that helps children relax and feel safe. The story should have a sleepy, dreamlike quality.', example: 'A little cloud who helps the moon put the stars to sleep' },
-  { id: 'adventure',    name: '🗺️ Adventure',   description: 'Exciting journeys',    prompt: 'An exciting adventure story with brave characters, mysterious places to explore, and a quest or mission. Include moments of wonder, discovery, and triumph over challenges.', example: 'A young explorer who discovers a map to a hidden treasure' },
-  { id: 'friendship',   name: '🤝 Friendship',  description: 'Kindness & connection',prompt: 'A heartwarming story about friendship, kindness, and connection. Show characters learning to understand each other, helping one another, and the joy of true friendship.', example: 'Two unlikely animals who become best friends' },
-  { id: 'learning',     name: '📚 Learning',    description: 'Educational fun',      prompt: 'An educational story that teaches a valuable lesson or introduces interesting facts about nature, science, or the world. Make learning fun through engaging characters and situations.', example: 'A curious caterpillar who learns about metamorphosis' },
-  { id: 'ai-adventure', name: '🤖 AI World',    description: 'Learn about AI magically', prompt: 'An educational and imaginative story that introduces children to Artificial Intelligence. Include a friendly AI or robot character who learns from examples, sometimes makes mistakes and improves, and helps people with kindness and creativity. Weave in age-appropriate concepts: AI learns from lots of data, AI can help with creative tasks, and humans and AI work best as partners. Make it magical, inspiring, and show that technology should be used responsibly and with heart.', example: 'A curious little robot named Pixel who learns to paint' },
-  { id: 'birthday',     name: '🎂 Birthday',    description: 'Celebration special!', prompt: 'A festive birthday story full of joy, celebration, and special surprises. Include party elements, gifts, cake, and the magic of birthday wishes coming true.', example: 'A magical birthday party where balloons come to life' },
-  { id: 'custom',       name: '✨ My Idea',      description: 'Your own unique tale', prompt: '', example: 'Write your own story idea below' },
+  { id: 'bedtime',      name: 'Bedtime',    description: 'Calm, soothing tales',    prompt: 'A gentle bedtime story with a calm, soothing tone. Include soft imagery, peaceful settings, and a comforting ending that helps children relax and feel safe. The story should have a sleepy, dreamlike quality.', example: 'A little cloud who helps the moon put the stars to sleep' },
+  { id: 'adventure',    name: 'Adventure',  description: 'Exciting journeys',       prompt: 'An exciting adventure story with brave characters, mysterious places to explore, and a quest or mission. Include moments of wonder, discovery, and triumph over challenges.', example: 'A young explorer who discovers a map to a hidden treasure' },
+  { id: 'friendship',   name: 'Friendship', description: 'Kindness and connection', prompt: 'A heartwarming story about friendship, kindness, and connection. Show characters learning to understand each other, helping one another, and the joy of true friendship.', example: 'Two unlikely animals who become best friends' },
+  { id: 'learning',     name: 'Learning',   description: 'Educational fun',         prompt: 'An educational story that teaches a valuable lesson or introduces interesting facts about nature, science, or the world. Make learning fun through engaging characters and situations.', example: 'A curious caterpillar who learns about metamorphosis' },
+  { id: 'ai-adventure', name: 'AI World',   description: 'Learn about AI magically', prompt: 'An educational and imaginative story that introduces children to Artificial Intelligence. Include a friendly AI or robot character who learns from examples, sometimes makes mistakes and improves, and helps people with kindness and creativity. Weave in age-appropriate concepts: AI learns from lots of data, AI can help with creative tasks, and humans and AI work best as partners. Make it magical, inspiring, and show that technology should be used responsibly and with heart.', example: 'A curious little robot named Pixel who learns to paint' },
+  { id: 'birthday',     name: 'Birthday',   description: 'Celebration special',     prompt: 'A festive birthday story full of joy, celebration, and special surprises. Include party elements, gifts, cake, and the magic of birthday wishes coming true.', example: 'A magical birthday party where balloons come to life' },
+  { id: 'custom',       name: 'My Idea',    description: 'Your own unique tale',    prompt: '', example: 'Write your own story idea below' },
 ]
 
 const RANDOM_PROMPTS = [
@@ -91,20 +111,51 @@ const RANDOM_PROMPTS = [
   'A magical library where books choose their readers',
 ]
 
+// The label is the language's own name, so a reader can find theirs.
 const LANGUAGES = [
-  { value: 'English',    label: '🇬🇧 English' },
-  { value: 'Spanish',    label: '🇪🇸 Español' },
-  { value: 'French',     label: '🇫🇷 Français' },
-  { value: 'German',     label: '🇩🇪 Deutsch' },
-  { value: 'Italian',    label: '🇮🇹 Italiano' },
-  { value: 'Portuguese', label: '🇵🇹 Português' },
-  { value: 'Hindi',      label: '🇮🇳 हिन्दी' },
-  { value: 'Mandarin Chinese', label: '🇨🇳 中文' },
-  { value: 'Japanese',   label: '🇯🇵 日本語' },
-  { value: 'Arabic',     label: '🇸🇦 العربية' },
+  { value: 'English',          label: 'English' },
+  { value: 'Spanish',          label: 'Español' },
+  { value: 'French',           label: 'Français' },
+  { value: 'German',           label: 'Deutsch' },
+  { value: 'Italian',          label: 'Italiano' },
+  { value: 'Portuguese',       label: 'Português' },
+  { value: 'Hindi',            label: 'हिन्दी' },
+  { value: 'Mandarin Chinese', label: '中文' },
+  { value: 'Japanese',         label: '日本語' },
+  { value: 'Arabic',           label: 'العربية' },
 ]
 
+// ── Shared style recipes ─────────────────────────────────────────────────────
+
+/* The design system's .kq-btn-secondary does the same job, but this form needs
+   a couple of smaller sizes, so the quiet button is written out once here and
+   reused. It is still only ever a hairline on the night. */
+const QUIET =
+  'rounded-lg border border-kq-line bg-kq-text/5 text-kq-text transition-colors hover:bg-kq-text/10'
+
+/* A selectable option plate. `on` gives it the same amber tint the design
+   system uses for a chosen chip, so "chosen" looks the same everywhere.
+   The label colours inside each plate are set on the plate's own children. */
+function plateClass(on: boolean, extra = ''): string {
+  return `rounded-lg border transition-colors ${
+    on
+      ? 'border-kq-amber/40 bg-kq-amber/10'
+      : 'border-kq-line bg-kq-text/5 text-kq-dim hover:bg-kq-text/10 hover:text-kq-text'
+  } ${extra}`
+}
+
+/* A quiet caption above a group of fields. Amber is kept for the single
+   action, so these stay in the secondary text colour. */
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2 text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-kq-dim">
+      {children}
+    </div>
+  )
+}
+
 // ── LocalStorage helpers ─────────────────────────────────────────────────────
+// These keys already exist in the wild. Do not rename them.
 
 const LS_BOOK_COUNT = 'kinderquill_free_book_count'
 const LS_API_KEY    = 'kinderquill_venice_api_key'
@@ -151,7 +202,7 @@ function saveBookToLibrary(meta: {
   } catch {}
 }
 
-// ── Venice API Key Modal ─────────────────────────────────────────────────────
+// ── Venice API key modal ─────────────────────────────────────────────────────
 
 interface ApiKeyModalProps {
   onClose: () => void
@@ -161,71 +212,78 @@ interface ApiKeyModalProps {
 
 function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
   const [keyInput, setKeyInput] = useState('')
+
+  // The five steps, kept in one list so the copy is easy to find and edit.
+  const steps: { text: string; link?: string; href?: string; after?: string }[] = [
+    { text: 'Visit ', link: 'venice.ai/chat?ref=yN8qqI', href: 'https://venice.ai/chat?ref=yN8qqI', after: ' and get $10 in free credits.' },
+    { text: 'Create a free account and sign in.' },
+    { text: 'Open your profile, then choose ', link: '"API Keys"', href: 'https://venice.ai/chat?ref=yN8qqI' },
+    { text: 'Choose ', link: '"Create API Key"', after: ' and give it a name.' },
+    { text: 'Copy the key and paste it below.' },
+  ]
+
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div
-        className="rounded-3xl p-5 max-w-sm w-full shadow-2xl max-h-[92vh] overflow-y-auto"
-        style={{ background: '#1a2a5e', border: '2px solid rgba(155,93,229,0.4)' }}
-      >
-        <div className="text-center mb-4">
-          <div className="text-5xl mb-2">🎉</div>
-          <h2 style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.3rem', color: '#fefcf5' }}>
-            {booksUsed >= FREE_BOOK_LIMIT ? `You've used all ${FREE_BOOK_LIMIT} free books!` : 'Add Your Venice API Key'}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-kq-ink/80 p-4 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-xl border border-kq-line bg-kq-card p-5">
+
+        <div className="mb-4 text-center">
+          <h2 className="font-display text-xl leading-snug text-kq-text">
+            {booksUsed >= FREE_BOOK_LIMIT ? `You have used all ${FREE_BOOK_LIMIT} free books` : 'Add your Venice API key'}
           </h2>
-          <p className="text-sm mt-1 leading-relaxed" style={{ color: '#a0b4d6' }}>
-            Get your own Venice AI API key with{' '}
-            <span className="font-bold" style={{ color: '#00e5a0' }}>$10 in free credits</span> and generate unlimited books!
+          <p className="mt-2 text-sm leading-relaxed text-kq-dim">
+            An API key of your own lets you make unlimited books. Venice gives you
+            <span className="text-kq-text"> $10 in free credits</span> to start.
           </p>
         </div>
 
-        <div className="rounded-xl p-3 mb-4" style={{ background: 'rgba(155,93,229,0.1)', border: '1px solid rgba(155,93,229,0.25)' }}>
-          <p className="text-xs leading-relaxed" style={{ color: '#a0b4d6' }}>
-            <span className="font-bold" style={{ color: '#fefcf5' }}>Venice AI</span> is the AI service that powers your story and illustrations.
-            Sign up with our link and get <span className="font-bold" style={{ color: '#00e5a0' }}>$10 in free credits</span> — enough for many books!
+        <div className="mb-4 rounded-lg border border-kq-line px-3 py-2.5">
+          <p className="text-xs leading-relaxed text-kq-dim">
+            <span className="text-kq-text">Venice</span> is the AI service that writes your
+            story and paints the pictures. The key below is stored in your browser.
           </p>
         </div>
 
         <div className="mb-4">
-          <h3 className="text-sm font-bold mb-2 flex items-center gap-1" style={{ color: '#fefcf5' }}>
-            🗝️ How to get your free API key:
-          </h3>
+          <h3 className="mb-2 text-sm font-semibold text-kq-text">How to get your free API key</h3>
           <ol className="space-y-2.5">
-            {[
-              { step: '1', text: 'Visit ', link: 'venice.ai/chat?ref=yN8qqI', href: 'https://venice.ai/chat?ref=yN8qqI', after: ' — get $10 free!' },
-              { step: '2', text: 'Create a free account and sign in', link: '', href: '', after: '' },
-              { step: '3', text: 'Click your profile → ', link: '"API Keys"', href: 'https://venice.ai/chat?ref=yN8qqI', after: '' },
-              { step: '4', text: 'Click ', link: '"Create API Key"', href: '', after: ' and name it' },
-              { step: '5', text: 'Copy your key and paste it below!', link: '', href: '', after: '' },
-            ].map(({ step, text, link, href, after }) => (
-              <li key={step} className="flex gap-2.5 items-start">
-                <span
-                  className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ background: '#9b5de5', color: '#fff' }}
-                >{step}</span>
-                <span className="text-sm" style={{ color: '#a0b4d6' }}>
-                  {text}
-                  {link && href && <a href={href} target="_blank" rel="noopener noreferrer" className="underline font-medium" style={{ color: '#9b5de5' }}>{link}</a>}
-                  {link && !href && <span className="font-medium" style={{ color: '#fefcf5' }}>{link}</span>}
-                  {after}
+            {steps.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border border-kq-line text-xs font-semibold text-kq-dim">
+                  {i + 1}
+                </span>
+                <span className="break-words text-sm text-kq-dim">
+                  {s.text}
+                  {s.link && s.href && (
+                    <a
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-kq-text underline decoration-kq-line underline-offset-4"
+                    >
+                      {s.link}
+                    </a>
+                  )}
+                  {s.link && !s.href && <span className="text-kq-text">{s.link}</span>}
+                  {s.after}
                 </span>
               </li>
             ))}
           </ol>
         </div>
 
-        <div className="flex justify-center mb-4">
-          <a
-            href="https://venice.ai/chat?ref=yN8qqI"
-            target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-xl shadow-md transition-all"
-            style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}
-          >
-            🌐 Get $10 Free Credits on Venice.ai
-          </a>
-        </div>
+        <a
+          href="https://venice.ai/chat?ref=yN8qqI"
+          target="_blank" rel="noopener noreferrer"
+          className={`${QUIET} mb-4 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm`}
+        >
+          <Icon name="arrow_forward" size={16} />
+          Get $10 in free credits on Venice
+        </a>
 
         <div className="mb-4">
-          <label className="block text-sm font-semibold mb-1" style={{ color: '#a0b4d6' }}>Paste Your Venice API Key</label>
+          <label className="mb-1 block text-sm font-semibold text-kq-dim">
+            Paste your Venice API key
+          </label>
           <input
             type="password"
             value={keyInput}
@@ -233,23 +291,23 @@ function VeniceApiKeyModal({ onClose, onSave, booksUsed }: ApiKeyModalProps) {
             placeholder="venice-api-..."
             className="kq-input"
           />
-          <p className="text-xs mt-1.5" style={{ color: '#a0b4d6' }}>
-            🔒 Stored only in your browser — never sent to our servers.
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs text-kq-dim">
+            <Icon name="lock" size={14} />
+            Stored only in your browser, never sent to our servers.
           </p>
         </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors"
-            style={{ border: '2px solid rgba(255,255,255,0.15)', color: '#a0b4d6', background: 'transparent' }}
-          >Cancel</button>
+          <button onClick={onClose} className={`${QUIET} flex-1 px-4 py-2.5 text-sm`}>
+            Cancel
+          </button>
           <button
             onClick={() => { const t = keyInput.trim(); if (!t) { alert('Please enter your Venice API key'); return } onSave(t) }}
             disabled={!keyInput.trim()}
-            className="flex-[2] py-2.5 rounded-xl text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
-            style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}
-          >Save &amp; Generate ✨</button>
+            className="kq-btn-primary flex-[2]"
+          >
+            Save and generate
+          </button>
         </div>
       </div>
     </div>
@@ -263,49 +321,50 @@ function FreeBooksBadge({ used, hasApiKey }: { used: number; hasApiKey: boolean 
 
   if (hasApiKey) {
     return (
-      <div className="w-full mb-3 rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(0,229,160,0.08)', border: '1.5px solid rgba(0,229,160,0.25)' }}>
-        <span className="text-lg">🔑</span>
-        <p className="text-xs font-medium" style={{ color: '#00e5a0' }}>Venice API key active — unlimited books!</p>
+      <div className="mb-3 flex items-center gap-2.5 rounded-lg border border-kq-line bg-kq-text/5 px-3 py-2">
+        <Icon name="star" size={16} className="shrink-0 text-kq-amber" />
+        <p className="text-xs text-kq-dim">Venice API key active. Unlimited books.</p>
       </div>
     )
   }
 
   if (remaining === 0) {
     return (
-      <div className="w-full mb-3 rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(255,82,71,0.08)', border: '1.5px solid rgba(255,82,71,0.3)' }}>
-        <span className="text-lg">⚠️</span>
-        <p className="text-xs" style={{ color: '#ff8a82' }}>
-          <span className="font-bold">All {FREE_BOOK_LIMIT} free books used.</span>{' '}
-          Get your own API key from{' '}
-          <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="underline font-bold">Venice.ai</a>
-          {' '}— includes <span className="font-bold">$10 in free credits</span>!
+      <div className="mb-3 rounded-lg border border-kq-line px-3 py-2">
+        <p className="text-xs text-kq-dim">
+          <span className="text-kq-text">All {FREE_BOOK_LIMIT} free books are used.</span>{' '}
+          Add your own API key from{' '}
+          <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="text-kq-text underline decoration-kq-line underline-offset-4">Venice</a>
+          {' '}to keep going. It comes with $10 in free credits.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="w-full mb-3 rounded-xl px-3 py-2" style={{ background: 'rgba(0,229,160,0.06)', border: '1.5px solid rgba(0,229,160,0.2)' }}>
-      <div className="flex items-center justify-between gap-2 mb-1.5">
+    <div className="mb-3 rounded-lg border border-kq-line bg-kq-text/5 px-3 py-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-lg">🎁</span>
-          <p className="text-xs font-bold" style={{ color: '#00e5a0' }}>
-            {remaining} free {remaining === 1 ? 'book' : 'books'} remaining
+          <Icon name="star" size={16} className="shrink-0 text-kq-amber" />
+          <p className="text-xs text-kq-text">
+            {remaining} free {remaining === 1 ? 'book' : 'books'} left
           </p>
         </div>
-        <span className="text-xs font-semibold" style={{ color: '#a0b4d6' }}>{used}/{FREE_BOOK_LIMIT} used</span>
+        <span className="text-xs text-kq-dim">{used} of {FREE_BOOK_LIMIT} used</span>
       </div>
+      {/* One mark per free book, filled as they are used. */}
       <div className="flex gap-1.5">
         {Array.from({ length: FREE_BOOK_LIMIT }).map((_, i) => (
-          <div key={i} className={`h-2 flex-1 rounded-full transition-all`}
-            style={{ background: i < used ? '#00e5a0' : 'rgba(255,255,255,0.1)' }}
+          <div
+            key={i}
+            className={`h-1.5 flex-1 rounded-[3px] ${i < used ? 'bg-kq-amber' : 'bg-kq-text/10'}`}
           />
         ))}
       </div>
-      <p className="text-xs mt-1" style={{ color: '#a0b4d6' }}>
-        {FREE_BOOK_LIMIT} books free, then get your own API key from{' '}
-        <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="underline font-bold" style={{ color: '#9b5de5' }}>Venice.ai</a>
-        {' '}with <span className="font-bold">$10 in free credits</span>!
+      <p className="mt-2 text-xs text-kq-dim">
+        {FREE_BOOK_LIMIT} books are free. After that, add your own key from{' '}
+        <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="text-kq-text underline decoration-kq-line underline-offset-4">Venice</a>
+        {' '}($10 in free credits).
       </p>
     </div>
   )
@@ -326,7 +385,7 @@ export default function GeneratePage() {
   const [narratorVoice, setNarratorVoice] = useState('default')
   const [imageModel, setImageModel] = useState('grok-imagine-image')
 
-  // Character Builder
+  // Character builder
   const [characterName, setCharacterName] = useState('')
   const [characterType, setCharacterType] = useState('animal')
   const [selectedTraits, setSelectedTraits] = useState<string[]>(['brave', 'curious'])
@@ -350,23 +409,27 @@ export default function GeneratePage() {
   const [isCartoonifying, setIsCartoonifying] = useState(false)
   const [cartoonError, setCartoonError] = useState('')
   const heroFileInputRef = useRef<HTMLInputElement>(null)
-  // Detected/edited hero details (works for a child OR a grown-up)
+  // Detected or edited hero details (works for a child OR a grown-up)
   const [heroIsAdult, setHeroIsAdult] = useState(false)
   const [heroName, setHeroName] = useState('')
   const [heroDescription, setHeroDescription] = useState('')
   const [savedHeroes, setSavedHeroes] = useState<SavedHero[]>([])
   const [heroSaved, setHeroSaved] = useState(false)
 
-  // Story language (#multi-language)
+  // Story language
   const [language, setLanguage] = useState('English')
 
-  // Draw-to-Story: turn a child's drawing into a story idea via a vision model
+  // Draw-to-story: turn a child's drawing into a story idea via a vision model
   const [isReadingDrawing, setIsReadingDrawing] = useState(false)
   const [drawingError, setDrawingError] = useState('')
   const drawingFileInputRef = useRef<HTMLInputElement>(null)
 
+  // The form values used for the book currently being made, so the library
+  // entry matches what was actually sent.
   const pendingMetaRef = useRef<{ ageRange: string; illustrationStyle: string } | null>(null)
 
+  // Read the query string (a story idea can be linked in from the homepage),
+  // then pick up whatever the reader saved last time.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const idea = params.get('idea')
@@ -383,6 +446,8 @@ export default function GeneratePage() {
     setSavedHeroes(getSavedHeroes())
   }, [])
 
+  // Poll the book while it is being made. Unchanged behaviour: every two
+  // seconds, and on completion the book is filed in the library and opened.
   useEffect(() => {
     if (!bookId || !isGenerating) return
     const checkStatus = async () => {
@@ -411,6 +476,8 @@ export default function GeneratePage() {
     return () => clearInterval(interval)
   }, [bookId, isGenerating, router, ageRange, illustrationStyle])
 
+  // A photo has been chosen: show it and forget anything we knew about the
+  // previous one.
   const handleHeroImageLoad = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
     const reader = new FileReader()
@@ -422,6 +489,7 @@ export default function GeneratePage() {
     reader.readAsDataURL(file)
   }, [])
 
+  // Ask the server to turn the photo into a painted character.
   const handleCartoonify = async () => {
     if (!heroPhotoDataUrl) return
     setIsCartoonifying(true); setCartoonError('')
@@ -441,7 +509,7 @@ export default function GeneratePage() {
     } catch (err: any) { setCartoonError(err.message || 'Failed to cartoonify.') } finally { setIsCartoonifying(false) }
   }
 
-  // Reuse a previously saved hero (recurring characters / series)
+  // Reuse a previously saved hero (recurring characters / a series).
   const useSavedHero = (h: SavedHero) => {
     setHeroPhotoDataUrl(h.image)
     setCartoonHeroDataUrl(h.image)
@@ -470,8 +538,8 @@ export default function GeneratePage() {
     setSavedHeroes(getSavedHeroes())
   }
 
-  // Shrink a drawing to a sane size before sending — keeps the upload fast and
-  // well under the vision model's payload limit.
+  // Shrink a drawing to a sane size before sending, which keeps the upload
+  // fast and well under the vision model's payload limit.
   const downscaleImage = (dataUrl: string, maxDim = 1024): Promise<string> =>
     new Promise(resolve => {
       const img = new window.Image()
@@ -490,6 +558,7 @@ export default function GeneratePage() {
       img.src = dataUrl
     })
 
+  // Read a child's drawing and turn it into a story idea.
   const handleDrawingUpload = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
     setIsReadingDrawing(true); setDrawingError('')
@@ -513,6 +582,8 @@ export default function GeneratePage() {
     reader.readAsDataURL(file)
   }, [userApiKey])
 
+  // Build the request and hand it to the server. The server does the writing
+  // and painting; this page then polls for the finished book.
   const doGenerate = async (overrideApiKey?: string) => {
     setIsGenerating(true); setGenerationProgress(0)
     pendingMetaRef.current = { ageRange, illustrationStyle }
@@ -550,7 +621,7 @@ export default function GeneratePage() {
       const msg = err.message || ''
       const isNetworkError = msg === 'fetch failed' || msg === 'Failed to fetch' || msg.includes('network')
       if (isNetworkError) {
-        alert('The connection timed out — your story may still be generating. Wait 30 seconds and check your Library.')
+        alert('The connection timed out. Your story may still be generating. Wait 30 seconds and check your Library.')
       } else { alert(msg || 'Failed to generate book. Please try again.') }
       setIsGenerating(false); setGenerationProgress(0)
     }
@@ -566,29 +637,12 @@ export default function GeneratePage() {
     localStorage.setItem(LS_API_KEY, key); setUserApiKey(key); setShowApiKeyModal(false); doGenerate(key)
   }
 
-  const timeEstimate = storyLength === '5' ? '~1 min' : storyLength === '8' ? '~2 min' : '~3–4 min'
-
-  // ── Shared select style ──
-  const selectStyle: React.CSSProperties = {
-    width: '100%',
-    background: 'rgba(255,255,255,0.06)',
-    border: '2px solid rgba(77,201,255,0.25)',
-    borderRadius: 12,
-    padding: '12px 14px',
-    color: '#fefcf5',
-    fontFamily: 'Nunito, sans-serif',
-    fontSize: '0.9rem',
-    fontWeight: 700,
-    outline: 'none',
-  }
+  const timeEstimate = storyLength === '5' ? 'about 1 minute' : storyLength === '8' ? 'about 2 minutes' : 'about 3 to 4 minutes'
 
   return (
-    <div
-      className="kq-stars-bg relative flex min-h-screen w-full flex-col overflow-x-hidden"
-      style={{ background: 'linear-gradient(160deg, #0d1b3e 0%, #110d2e 100%)' }}
-    >
-      <div className="relative z-10 flex flex-col min-h-screen">
-        <Header title="Create Your Story ✨" />
+    <div className="kq-ground relative flex min-h-screen w-full flex-col overflow-x-hidden">
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <Header title="New book" />
 
         {showApiKeyModal && (
           <VeniceApiKeyModal
@@ -598,481 +652,555 @@ export default function GeneratePage() {
           />
         )}
 
-        <main className="flex grow flex-col items-center justify-start px-4 py-4 max-w-2xl lg:max-w-4xl mx-auto w-full">
+        <main className="mx-auto w-full max-w-content grow px-5 py-6 lg:px-10">
           {isGenerating ? (
-            <div className="flex-1 flex flex-col items-center justify-center w-full py-8">
+            // While the book is being made we show the waiting screen and
+            // nothing else. The form comes back once the book is ready.
+            <div className="flex flex-col items-center justify-center py-10">
               <GeneratingGame progress={generationProgress} />
             </div>
           ) : (
             <>
-              {/* Free books counter */}
-              <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
-
-              {/* API key management */}
-              {userApiKey ? (
-                <div className="w-full mb-3 rounded-xl px-3 py-2 flex items-center justify-between gap-2"
-                  style={{ background: 'rgba(0,229,160,0.06)', border: '1.5px solid rgba(0,229,160,0.2)' }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🔑</span>
-                    <p className="text-xs" style={{ color: '#a0b4d6' }}>Venice API key saved — unlimited books!</p>
-                  </div>
-                  <button
-                    onClick={() => { localStorage.removeItem(LS_API_KEY); setUserApiKey('') }}
-                    className="text-xs underline" style={{ color: '#ff5247' }}
-                  >Remove</button>
-                </div>
-              ) : (
-                <div className="w-full mb-3">
-                  {!showApiKeyInput ? (
-                    <button
-                      onClick={() => setShowApiKeyInput(true)}
-                      className="w-full text-xs border border-dashed rounded-xl px-3 py-2 flex items-center justify-center gap-1.5 transition-colors"
-                      style={{ borderColor: 'rgba(155,93,229,0.4)', color: '#c89dff', background: 'transparent' }}
-                    >
-                      🔑 Have a Venice API key? Add it for unlimited books
-                    </button>
-                  ) : (
-                    <div className="rounded-xl px-3 py-3" style={{ background: 'rgba(155,93,229,0.08)', border: '1px solid rgba(155,93,229,0.25)' }}>
-                      <p className="text-xs mb-2 font-semibold" style={{ color: '#c89dff' }}>
-                        Enter your Venice AI API key.{' '}
-                        <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="underline">
-                          Get one free ($10 credits) →
-                        </a>
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          value={apiKeyInputValue}
-                          onChange={e => setApiKeyInputValue(e.target.value)}
-                          placeholder="venice-api-..."
-                          className="kq-input flex-1"
-                          style={{ padding: '8px 12px', fontSize: '0.82rem' }}
-                        />
-                        <button
-                          onClick={() => { const t = apiKeyInputValue.trim(); if (!t) return; localStorage.setItem(LS_API_KEY, t); setUserApiKey(t); setApiKeyInputValue(''); setShowApiKeyInput(false) }}
-                          disabled={!apiKeyInputValue.trim()}
-                          className="px-3 py-1.5 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-colors"
-                          style={{ background: '#9b5de5' }}
-                        >Save</button>
-                        <button onClick={() => { setShowApiKeyInput(false); setApiKeyInputValue('') }} className="px-2 py-1.5 text-xs" style={{ color: '#a0b4d6' }}>✕</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Desktop: two-column creator (mobile stays single-column) */}
-              <div className="w-full lg:grid lg:grid-cols-2 lg:gap-x-6 lg:items-start">
-              <div className="min-w-0">
-              {/* Story Templates */}
-              <div className="w-full mb-4">
-                <div className="kq-section-label">📖 Story Type</div>
-                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                  {STORY_TEMPLATES.map(template => (
-                    <button
-                      key={template.id}
-                      onClick={() => {
-                        setSelectedTemplate(template.id)
-                        if (template.id !== 'custom' && !storyIdea) setStoryIdea(template.example)
-                      }}
-                      className="flex-shrink-0 px-3 py-2 rounded-full text-xs font-bold transition-all"
-                      style={{
-                        border: `2px solid ${selectedTemplate === template.id ? '#f5d000' : 'rgba(255,255,255,0.12)'}`,
-                        background: selectedTemplate === template.id ? 'rgba(245,208,0,0.1)' : 'rgba(255,255,255,0.04)',
-                        color: selectedTemplate === template.id ? '#f5d000' : '#a0b4d6',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {template.name}
-                    </button>
-                  ))}
-                </div>
-                {selectedTemplate === 'ai-adventure' && (
-                  <div className="mt-2 p-2.5 rounded-xl" style={{ background: 'rgba(77,201,255,0.08)', border: '1px solid rgba(77,201,255,0.2)' }}>
-                    <p className="text-xs" style={{ color: '#4dc9ff' }}>
-                      🤖 <span className="font-semibold">AI Adventure</span> — Teaches kids about AI through a magical story!
-                    </p>
-                  </div>
-                )}
+              {/* A band of real painted art at the top, so the screen a parent
+                  lands on looks like the books it makes rather than a form. */}
+              <div className="relative mb-6 overflow-hidden rounded-[22px] border border-kq-hairline">
+                <img
+                  src="/art/hero-wide.png"
+                  alt="A lantern-lit bedtime scene, painted by hand"
+                  className="h-[168px] w-full object-cover object-[50%_38%] lg:h-[220px]"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-kq-ground to-transparent" />
               </div>
 
-              {/* Story Input */}
-              <div className="w-full mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="kq-section-label mb-0">💡 Your Story Idea</div>
-                  <button
-                    onClick={() => setStoryIdea(RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)])}
-                    className="text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
-                    style={{ background: 'rgba(245,208,0,0.1)', border: '1.5px solid rgba(245,208,0,0.3)', color: '#f5d000' }}
-                  >
-                    🎲 Random
-                  </button>
-                </div>
-                <textarea
-                  value={storyIdea}
-                  onChange={e => setStoryIdea(e.target.value)}
-                  className="kq-input"
-                  rows={3}
-                  placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || 'A brave knight afraid of spiders, or a magical treehouse that travels through time...'}
-                />
-                <input
-                  ref={drawingFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleDrawingUpload(f); e.target.value = '' }}
-                />
-                <button
-                  onClick={() => drawingFileInputRef.current?.click()}
-                  disabled={isReadingDrawing}
-                  className="mt-2 w-full py-2.5 px-3 flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
-                  style={{ background: 'rgba(0,196,180,0.08)', border: '1.5px dashed rgba(0,196,180,0.4)', color: '#4fd6c6' }}
-                >
-                  {isReadingDrawing ? (
-                    <>✨ Reading your drawing…</>
-                  ) : (
-                    <>🎨 Turn a drawing into a story</>
-                  )}
-                </button>
-                {drawingError && (
-                  <p className="mt-1.5 text-xs" style={{ color: '#ff8a8a' }}>{drawingError}</p>
-                )}
+              <div className="mb-5 max-w-2xl">
+                <h1 className="font-display text-2xl text-kq-text lg:text-3xl">Your story starts here</h1>
+                <p className="mt-1.5 text-sm leading-relaxed text-kq-dim">
+                  Say what it is about. We write it and paint every page.
+                </p>
               </div>
 
-              </div>{/* end left column */}
-              {/* Cartoon Hero Section */}
-              <div className="w-full mb-4 rounded-2xl p-4"
-                style={{ background: 'rgba(155,93,229,0.07)', border: '2px solid rgba(155,93,229,0.25)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: '#c89dff', fontFamily: 'Fredoka One, cursive' }}>
-                      ⭐ Make Someone the Hero!
-                    </h3>
-                    <p className="text-xs mt-0.5" style={{ color: '#a0b4d6' }}>
-                      Upload a photo of a child <span className="opacity-70">or a grown-up they love</span> — AI cartoon-ifies them into the story
-                    </p>
-                  </div>
-                </div>
+              <div className="mx-auto w-full max-w-3xl lg:max-w-none">
 
-                {/* Saved heroes — reuse a character across books (series) */}
-                {savedHeroes.length > 0 && (
-                  <div className="mb-3">
-                    <p className="text-xs font-bold mb-1.5" style={{ color: '#a0b4d6' }}>⭐ YOUR HEROES — tap to star them again</p>
-                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                      {savedHeroes.map(h => (
-                        <div key={h.id} className="relative flex-shrink-0 text-center">
-                          <button onClick={() => useSavedHero(h)} title={`Use ${h.name}`}
-                            className="block rounded-xl overflow-hidden transition-all"
-                            style={{ border: `2px solid ${cartoonHeroDataUrl === h.image ? '#00e5a0' : 'rgba(155,93,229,0.4)'}` }}>
-                            <img src={h.image} alt={h.name} className="w-14 h-14 object-cover" />
-                          </button>
-                          <p className="text-[10px] mt-0.5 w-14 truncate" style={{ color: '#c89dff' }}>{h.name}</p>
-                          <button onClick={() => handleRemoveHero(h.id)}
-                            className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-white flex items-center justify-center"
-                            style={{ background: '#ff5247', fontSize: '9px' }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Free books counter */}
+                <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
 
-                {!heroPhotoDataUrl ? (
-                  <button
-                    onClick={() => heroFileInputRef.current?.click()}
-                    className="w-full py-4 px-3 flex items-center justify-center gap-3 cursor-pointer rounded-xl transition-colors"
-                    style={{ border: '2px dashed rgba(155,93,229,0.35)', background: 'rgba(155,93,229,0.04)' }}
-                  >
-                    <span className="text-3xl">📷</span>
-                    <div className="text-left">
-                      <p className="text-sm font-semibold" style={{ color: '#c89dff' }}>Upload a photo of your child</p>
-                      <p className="text-xs" style={{ color: '#a0b4d6' }}>JPG or PNG, portrait works best</p>
+                {/* API key management */}
+                {userApiKey ? (
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-kq-line bg-kq-text/5 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Icon name="lock" size={14} className="shrink-0 text-kq-dim" />
+                      <p className="text-xs text-kq-dim">Venice API key saved. Unlimited books.</p>
                     </div>
-                  </button>
+                    <button
+                      onClick={() => { localStorage.removeItem(LS_API_KEY); setUserApiKey('') }}
+                      className="text-xs text-kq-dim underline decoration-kq-line underline-offset-4 transition-colors hover:text-kq-text"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold mb-1 text-center" style={{ color: '#a0b4d6' }}>Original</p>
-                        <div className="relative">
-                          <img src={heroPhotoDataUrl} alt="Child photo" className="w-full h-36 object-cover rounded-xl" style={{ border: '2px solid rgba(255,255,255,0.1)' }} />
+                  <div className="mb-3">
+                    {!showApiKeyInput ? (
+                      <button
+                        onClick={() => setShowApiKeyInput(true)}
+                        className={`${QUIET} flex w-full items-center justify-center gap-2 border-dashed px-3 py-2.5 text-xs`}
+                      >
+                        <Icon name="lock" size={14} />
+                        Have a Venice API key? Add it for unlimited books
+                      </button>
+                    ) : (
+                      <div className="rounded-lg border border-kq-line px-3 py-3">
+                        <p className="mb-2 text-xs text-kq-dim">
+                          Enter your Venice API key.{' '}
+                          <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="text-kq-text underline decoration-kq-line underline-offset-4">
+                            Get one free
+                          </a>
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="password"
+                            value={apiKeyInputValue}
+                            onChange={e => setApiKeyInputValue(e.target.value)}
+                            placeholder="venice-api-..."
+                            className="kq-input flex-1 !px-3 !py-2 !text-xs"
+                          />
                           <button
-                            onClick={() => { setHeroPhotoDataUrl(null); setCartoonHeroDataUrl(null); setCartoonError('') }}
-                            className="absolute top-1 right-1 w-6 h-6 rounded-full text-white text-xs flex items-center justify-center"
-                            style={{ background: '#ff5247' }}
-                          >✕</button>
+                            onClick={() => { const t = apiKeyInputValue.trim(); if (!t) return; localStorage.setItem(LS_API_KEY, t); setUserApiKey(t); setApiKeyInputValue(''); setShowApiKeyInput(false) }}
+                            disabled={!apiKeyInputValue.trim()}
+                            className={`${QUIET} shrink-0 px-3 py-2 text-xs`}
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => { setShowApiKeyInput(false); setApiKeyInputValue('') }}
+                            aria-label="Close"
+                            className={`${QUIET} shrink-0 px-2.5 py-2 text-xs`}
+                          >
+                            ×
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center pt-5">
-                        <span style={{ color: '#c89dff', fontSize: '1.2rem' }}>→</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Desktop: two-column creator (mobile stays single-column) */}
+                <div className="w-full lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6">
+                  <div className="min-w-0">
+
+                    {/* Story type */}
+                    <div className="mb-5 w-full">
+                      <FieldLabel>Story type</FieldLabel>
+                      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+                        {STORY_TEMPLATES.map(template => {
+                          const on = selectedTemplate === template.id
+                          return (
+                            <button
+                              key={template.id}
+                              onClick={() => {
+                                setSelectedTemplate(template.id)
+                                if (template.id !== 'custom' && !storyIdea) setStoryIdea(template.example)
+                              }}
+                              className={`kq-chip shrink-0 ${on ? 'is-on' : ''}`}
+                            >
+                              {template.name}
+                            </button>
+                          )
+                        })}
                       </div>
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold mb-1 text-center" style={{ color: '#a0b4d6' }}>Cartoon Hero</p>
-                        {cartoonHeroDataUrl ? (
-                          <img src={cartoonHeroDataUrl} alt="Cartoon hero" className="w-full h-36 object-cover rounded-xl" style={{ border: '2px solid rgba(155,93,229,0.5)' }} />
-                        ) : (
-                          <div className="w-full h-36 rounded-xl flex items-center justify-center" style={{ border: '2px dashed rgba(155,93,229,0.3)', background: 'rgba(155,93,229,0.04)' }}>
-                            {isCartoonifying ? (
-                              <div className="text-center">
-                                <div className="text-2xl animate-kq-spin mb-1">🎨</div>
-                                <p className="text-xs" style={{ color: '#c89dff' }}>Drawing...</p>
-                              </div>
+                      {/* The chosen template explains itself, so nobody has to guess. */}
+                      {selectedTemplate !== 'custom' && (
+                        <p className="mt-2 text-xs text-kq-dim">
+                          {STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.description}.
+                          {selectedTemplate === 'ai-adventure' && ' Teaches children how AI learns, through the story itself.'}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Story idea */}
+                    <div className="mb-5 w-full">
+                      <div className="flex items-center justify-between gap-3">
+                        <FieldLabel>Your story idea</FieldLabel>
+                        <button
+                          onClick={() => setStoryIdea(RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)])}
+                          className={`${QUIET} mb-2 flex w-auto shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs`}
+                        >
+                          <Icon name="sync" size={13} />
+                          Surprise me
+                        </button>
+                      </div>
+                      <textarea
+                        value={storyIdea}
+                        onChange={e => setStoryIdea(e.target.value)}
+                        className="kq-input"
+                        rows={3}
+                        placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || 'A brave knight who is afraid of spiders, or a treehouse that travels through time...'}
+                      />
+                      <input
+                        ref={drawingFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleDrawingUpload(f); e.target.value = '' }}
+                      />
+                      <button
+                        onClick={() => drawingFileInputRef.current?.click()}
+                        disabled={isReadingDrawing}
+                        className={`${QUIET} mt-2 flex w-full items-center justify-center gap-2 border-dashed px-3 py-2.5 text-sm disabled:opacity-60`}
+                      >
+                        <Icon name="image" size={16} />
+                        {isReadingDrawing ? 'Reading your drawing' : 'Turn a drawing into a story'}
+                      </button>
+                      {drawingError && (
+                        <p className="mt-1.5 text-xs text-kq-dim">{drawingError}</p>
+                      )}
+                    </div>
+
+                  </div>{/* end left column */}
+
+                  {/* Make someone the hero */}
+                  <div className="mb-5 w-full rounded-xl border border-kq-line bg-kq-card p-4">
+                    <div className="mb-2">
+                      <h3 className="flex items-center gap-2 font-display text-lg text-kq-text">
+                        <Icon name="star" size={16} className="text-kq-amber" />
+                        Make someone the hero
+                      </h3>
+                      <p className="mt-1 text-xs leading-relaxed text-kq-dim">
+                        Upload a photo of a child, or of a grown-up they love. We turn them
+                        into a painted character and put them in the story.
+                      </p>
+                    </div>
+
+                    {/* Saved heroes: reuse a character across books (a series) */}
+                    {savedHeroes.length > 0 && (
+                      <div className="mb-3">
+                        <div className="mb-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-kq-dim">
+                          Your heroes
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+                          {savedHeroes.map(h => (
+                            <div key={h.id} className="relative shrink-0 text-center">
+                              <button
+                                onClick={() => useSavedHero(h)}
+                                title={`Use ${h.name}`}
+                                className={`block overflow-hidden rounded-md border transition-colors ${
+                                  cartoonHeroDataUrl === h.image ? 'border-kq-amber' : 'border-kq-line hover:border-kq-text/30'
+                                }`}
+                              >
+                                <img src={h.image} alt={h.name} className="h-14 w-14 object-cover" />
+                              </button>
+                              <p className="mt-0.5 w-14 truncate text-[10px] text-kq-dim">{h.name}</p>
+                              <button
+                                onClick={() => handleRemoveHero(h.id)}
+                                aria-label={`Remove ${h.name}`}
+                                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-[5px] border border-kq-line bg-kq-navy text-[9px] text-kq-text"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {!heroPhotoDataUrl ? (
+                      <button
+                        onClick={() => heroFileInputRef.current?.click()}
+                        className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-dashed border-kq-line px-3 py-4 transition-colors hover:bg-kq-text/5"
+                      >
+                        <Icon name="image" size={22} className="shrink-0 text-kq-dim" />
+                        <div className="text-left">
+                          <p className="text-sm text-kq-text">Upload a photo</p>
+                          <p className="text-xs text-kq-dim">JPG or PNG, portrait works best</p>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <div className="flex-1">
+                            <p className="mb-1 text-center text-xs text-kq-dim">Original</p>
+                            <div className="relative">
+                              <img src={heroPhotoDataUrl} alt="The uploaded photo" className="h-36 w-full rounded-md border border-kq-line object-cover" />
+                              <button
+                                onClick={() => { setHeroPhotoDataUrl(null); setCartoonHeroDataUrl(null); setCartoonError('') }}
+                                aria-label="Remove the photo"
+                                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-[6px] border border-kq-line bg-kq-navy text-xs text-kq-text"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center pt-5">
+                            <Icon name="arrow_forward" size={18} className="text-kq-dim" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="mb-1 text-center text-xs text-kq-dim">Painted hero</p>
+                            {cartoonHeroDataUrl ? (
+                              <img src={cartoonHeroDataUrl} alt="The painted character" className="h-36 w-full rounded-md border border-kq-amber/40 object-cover" />
                             ) : (
-                              <div className="text-center px-2">
-                                <div className="text-2xl mb-1">🖼️</div>
-                                <p className="text-xs" style={{ color: '#a0b4d6' }}>Click below</p>
+                              <div className="flex h-36 w-full items-center justify-center rounded-md border border-dashed border-kq-line bg-kq-text/5">
+                                {isCartoonifying ? (
+                                  <div className="text-center">
+                                    <Icon name="palette" size={20} className="mx-auto mb-1 animate-kq-spin text-kq-dim" />
+                                    <p className="text-xs text-kq-dim">Painting</p>
+                                  </div>
+                                ) : (
+                                  <div className="px-2 text-center">
+                                    <Icon name="image" size={20} className="mx-auto mb-1 text-kq-dim" />
+                                    <p className="text-xs text-kq-dim">Not painted yet</p>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
+                        </div>
+                        {cartoonError && (
+                          <p className="rounded-md border border-kq-line px-3 py-2 text-xs text-kq-dim">{cartoonError}</p>
+                        )}
+                        {!cartoonHeroDataUrl ? (
+                          <button
+                            onClick={handleCartoonify}
+                            disabled={isCartoonifying}
+                            className={`${QUIET} flex w-full items-center justify-center gap-2 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            <Icon name="palette" size={16} />
+                            {isCartoonifying ? 'Painting the character' : 'Paint the character'}
+                          </button>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 rounded-md border border-kq-line bg-kq-text/5 px-3 py-2">
+                              <Icon name="star" size={14} className="shrink-0 text-kq-amber" />
+                              <p className="text-xs text-kq-dim">The painted hero is ready. The story will be about them.</p>
+                            </div>
+
+                            {/* Hero name, and who this is (a child or a grown-up) */}
+                            <div className="flex flex-wrap gap-2">
+                              <input
+                                type="text"
+                                value={heroName}
+                                onChange={e => { setHeroName(e.target.value); setHeroSaved(false) }}
+                                placeholder="Hero's name"
+                                className="kq-input min-w-[8rem] flex-1 !px-3 !py-2 !text-sm"
+                              />
+                              <div className="flex gap-1 rounded-lg border border-kq-line p-1">
+                                {[{ v: false, label: 'Child' }, { v: true, label: 'Grown-up' }].map(o => (
+                                  <button
+                                    key={String(o.v)}
+                                    onClick={() => { setHeroIsAdult(o.v); setHeroSaved(false) }}
+                                    className={`rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                                      heroIsAdult === o.v ? 'bg-kq-text/10 text-kq-text' : 'text-kq-dim hover:text-kq-text'
+                                    }`}
+                                  >
+                                    {o.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-kq-dim">
+                              {heroIsAdult
+                                ? 'A warm, inspiring story starring this grown-up.'
+                                : 'A fun adventure starring this child.'}
+                            </p>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveHero}
+                                disabled={heroSaved}
+                                className={`${QUIET} flex flex-1 items-center justify-center gap-2 px-3 py-2 text-xs disabled:opacity-60`}
+                              >
+                                <Icon name="star" size={14} />
+                                {heroSaved ? 'Saved to your heroes' : 'Save for next time'}
+                              </button>
+                              <button
+                                onClick={() => { setCartoonHeroDataUrl(null); setCartoonError('') }}
+                                className={`${QUIET} shrink-0 px-3 py-2 text-xs`}
+                              >
+                                Start over
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                    {cartoonError && <p className="text-xs rounded-lg px-3 py-2" style={{ color: '#ff8a82', background: 'rgba(255,82,71,0.08)' }}>{cartoonError}</p>}
-                    {!cartoonHeroDataUrl ? (
-                      <button
-                        onClick={handleCartoonify} disabled={isCartoonifying}
-                        className="w-full py-3 rounded-xl text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                        style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}
-                      >
-                        {isCartoonifying ? <><span className="animate-kq-spin">🎨</span> Creating...</> : <><span>✨</span> Cartoonify!</>}
-                      </button>
-                    ) : (
-                      <div className="space-y-2.5">
-                        <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: 'rgba(0,229,160,0.06)', border: '1px solid rgba(0,229,160,0.2)' }}>
-                          <span>✅</span>
-                          <p className="text-xs font-semibold" style={{ color: '#00e5a0' }}>Cartoon hero ready — the story will be about them!</p>
-                        </div>
+                    )}
+                    <input ref={heroFileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleHeroImageLoad(f) }} />
+                  </div>
 
-                        {/* Hero name + who is this (child / grown-up) */}
-                        <div className="flex gap-2">
+                </div>{/* end two-column creator */}
+
+                {/* Advanced options toggle */}
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="mb-3 flex items-center gap-1.5 text-sm text-kq-dim transition-colors hover:text-kq-text"
+                >
+                  <Icon name={showAdvanced ? 'expand_less' : 'expand_more'} size={18} />
+                  {showAdvanced ? 'Hide advanced options' : 'Show advanced options'}
+                </button>
+
+                {/* Advanced options */}
+                {showAdvanced && (
+                  <div className="mb-5 w-full space-y-5 rounded-xl border border-kq-line bg-kq-card p-4 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0">
+
+                    {/* Character builder */}
+                    <div className="lg:col-span-2">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <FieldLabel>Character builder</FieldLabel>
+                        <div
+                          className={`kq-toggle ${showCharacterBuilder ? 'on' : ''}`}
+                          onClick={() => setShowCharacterBuilder(!showCharacterBuilder)}
+                          role="switch"
+                          aria-checked={showCharacterBuilder}
+                          aria-label="Use the character builder"
+                        />
+                      </div>
+                      {showCharacterBuilder && (
+                        <div className="mt-2 space-y-4 rounded-lg border border-kq-line p-3">
                           <input
-                            type="text" value={heroName} onChange={e => { setHeroName(e.target.value); setHeroSaved(false) }}
-                            placeholder="Hero's name"
-                            className="kq-input flex-1" style={{ padding: '8px 12px', fontSize: '0.82rem' }}
+                            type="text"
+                            value={characterName}
+                            onChange={e => setCharacterName(e.target.value)}
+                            placeholder="Character name (for example Luna, Pixel, Ziggy)"
+                            className="kq-input !py-2.5 !text-sm"
                           />
-                          <div className="flex rounded-xl overflow-hidden" style={{ border: '1.5px solid rgba(155,93,229,0.3)' }}>
-                            {[{ v: false, label: '🧒 Child' }, { v: true, label: '🧑 Grown-up' }].map(o => (
-                              <button key={String(o.v)} onClick={() => { setHeroIsAdult(o.v); setHeroSaved(false) }}
-                                className="px-2.5 py-1.5 text-xs font-bold transition-colors"
-                                style={{ background: heroIsAdult === o.v ? '#9b5de5' : 'transparent', color: heroIsAdult === o.v ? '#fff' : '#a0b4d6' }}>
-                                {o.label}
-                              </button>
-                            ))}
+                          <div>
+                            <FieldLabel>Character type</FieldLabel>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              {CHARACTER_TYPES.map(type => {
+                                const on = characterType === type.value
+                                return (
+                                  <button
+                                    key={type.value}
+                                    onClick={() => setCharacterType(type.value)}
+                                    className={plateClass(on, 'p-2.5')}
+                                  >
+                                    <div className="text-xs font-medium text-kq-text">{type.label}</div>
+                                    <div className="text-xs text-kq-dim">{type.description}</div>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <div>
+                            <FieldLabel>Personality traits (pick up to 4)</FieldLabel>
+                            <div className="flex flex-wrap gap-1.5">
+                              {CHARACTER_TRAITS.map(trait => {
+                                const on = selectedTraits.includes(trait)
+                                return (
+                                  <button
+                                    key={trait}
+                                    onClick={() => {
+                                      if (selectedTraits.includes(trait)) setSelectedTraits(selectedTraits.filter(t => t !== trait))
+                                      else if (selectedTraits.length < 4) setSelectedTraits([...selectedTraits, trait])
+                                    }}
+                                    className={`kq-chip ${on ? 'is-on' : ''}`}
+                                  >
+                                    {trait}
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
                         </div>
-                        <p className="text-[11px]" style={{ color: '#a0b4d6' }}>
-                          {heroIsAdult
-                            ? '✨ A heartwarming, inspiring story starring this grown-up.'
-                            : '✨ A fun adventure starring this child.'}
-                        </p>
+                      )}
+                    </div>
 
-                        <div className="flex gap-2">
-                          <button onClick={handleSaveHero} disabled={heroSaved}
-                            className="flex-1 px-3 py-2 text-xs font-bold rounded-xl disabled:opacity-60 transition-colors"
-                            style={{ background: 'rgba(0,229,160,0.12)', border: '1px solid rgba(0,229,160,0.3)', color: '#00e5a0' }}>
-                            {heroSaved ? '⭐ Saved to Your Heroes' : '⭐ Save Hero for next time'}
-                          </button>
-                          <button onClick={() => { setCartoonHeroDataUrl(null); setCartoonError('') }} className="px-3 py-2 text-xs rounded-xl" style={{ color: '#a0b4d6', border: '1px solid rgba(255,255,255,0.12)', background: 'transparent' }}>Redo</button>
-                        </div>
+                    {/* Story length */}
+                    <div>
+                      <FieldLabel>Story length</FieldLabel>
+                      <div className="flex gap-2">
+                        {STORY_LENGTHS.map(len => {
+                          const on = storyLength === len.value
+                          return (
+                            <button
+                              key={len.value}
+                              onClick={() => setStoryLength(len.value)}
+                              className={plateClass(on, 'flex-1 px-2 py-3 text-center')}
+                            >
+                              <div className="font-display text-2xl">{len.pages}</div>
+                              <div className="text-xs font-medium text-kq-text">{len.label}</div>
+                              <div className="text-xs text-kq-dim">{len.description}</div>
+                            </button>
+                          )
+                        })}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Age range */}
+                    <div>
+                      <FieldLabel>Age range</FieldLabel>
+                      <select
+                        value={ageRange}
+                        onChange={e => setAgeRange(e.target.value)}
+                        className="kq-input"
+                      >
+                        {AGE_RANGES.map(r => (
+                          <option key={r.value} value={r.value} className="bg-kq-navy text-kq-text">{r.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Story language */}
+                    <div>
+                      <FieldLabel>Story language</FieldLabel>
+                      <select
+                        value={language}
+                        onChange={e => setLanguage(e.target.value)}
+                        className="kq-input"
+                      >
+                        {LANGUAGES.map(l => (
+                          <option key={l.value} value={l.value} className="bg-kq-navy text-kq-text">{l.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Illustration style */}
+                    <div>
+                      <FieldLabel>Illustration style</FieldLabel>
+                      <div className="grid grid-cols-3 gap-2">
+                        {ILLUSTRATION_STYLES.map(s => {
+                          const on = illustrationStyle === s.value
+                          return (
+                            <button
+                              key={s.value}
+                              onClick={() => setIllustrationStyle(s.value)}
+                              className={plateClass(on, 'flex flex-col items-center gap-1.5 p-2.5 text-center')}
+                            >
+                              <Icon name={s.icon} size={20} className={on ? 'text-kq-amber' : 'text-kq-dim'} />
+                              <span className="text-xs font-medium leading-tight text-kq-text">{s.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Illustration model */}
+                    <div>
+                      <FieldLabel>Illustration model</FieldLabel>
+                      <div className="grid grid-cols-2 gap-2">
+                        {IMAGE_MODELS.map(m => {
+                          const on = imageModel === m.value
+                          return (
+                            <button
+                              key={m.value}
+                              onClick={() => setImageModel(m.value)}
+                              className={plateClass(on, 'p-2.5')}
+                            >
+                              <div className="text-xs font-medium text-kq-text">{m.label}</div>
+                              <div className="text-xs text-kq-dim">{m.description}</div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Narrator voice */}
+                    <div>
+                      <FieldLabel>Narrator voice</FieldLabel>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {NARRATOR_VOICES.map(v => {
+                          const on = narratorVoice === v.value
+                          return (
+                            <button
+                              key={v.value}
+                              onClick={() => setNarratorVoice(v.value)}
+                              className={plateClass(on, 'p-2.5')}
+                            >
+                              <div className="text-xs font-medium text-kq-text">{v.label}</div>
+                              <div className="text-xs text-kq-dim">{v.description}</div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
-                <input ref={heroFileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleHeroImageLoad(f) }} />
-              </div>
 
-              </div>{/* end two-column creator */}
-              {/* Advanced Options Toggle */}
-              <button
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="mb-3 text-sm font-semibold flex items-center gap-1 transition-colors"
-                style={{ color: '#4dc9ff' }}
-              >
-                <span>{showAdvanced ? '▲' : '▼'}</span>
-                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
-              </button>
-
-              {/* Advanced Options */}
-              {showAdvanced && (
-                <div className="w-full space-y-5 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 kq-card mb-4">
-                  {/* Character Builder */}
-                  <div className="lg:col-span-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="kq-section-label mb-0">🦸 Character Builder</div>
-                      <div
-                        className={`kq-toggle ${showCharacterBuilder ? 'on' : ''}`}
-                        onClick={() => setShowCharacterBuilder(!showCharacterBuilder)}
-                      />
-                    </div>
-                    {showCharacterBuilder && (
-                      <div className="space-y-3 rounded-xl p-3 mt-2" style={{ background: 'rgba(155,93,229,0.08)', border: '1.5px solid rgba(155,93,229,0.2)' }}>
-                        <input
-                          type="text" value={characterName} onChange={e => setCharacterName(e.target.value)}
-                          placeholder="Character name (e.g. Luna, Pixel, Ziggy)"
-                          className="kq-input" style={{ padding: '10px 14px' }}
-                        />
-                        <div>
-                          <div className="text-xs font-bold mb-2" style={{ color: '#a0b4d6' }}>CHARACTER TYPE</div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {CHARACTER_TYPES.map(type => (
-                              <button key={type.value} onClick={() => setCharacterType(type.value)}
-                                className="p-2 rounded-xl text-left transition-all"
-                                style={{
-                                  border: `2px solid ${characterType === type.value ? '#9b5de5' : 'rgba(255,255,255,0.1)'}`,
-                                  background: characterType === type.value ? 'rgba(155,93,229,0.15)' : 'rgba(255,255,255,0.03)',
-                                  color: characterType === type.value ? '#c89dff' : '#a0b4d6',
-                                }}>
-                                <div className="text-xs font-semibold">{type.label}</div>
-                                <div className="text-xs opacity-70">{type.description}</div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold mb-2" style={{ color: '#a0b4d6' }}>PERSONALITY TRAITS (pick up to 4)</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {CHARACTER_TRAITS.map(trait => (
-                              <button key={trait}
-                                onClick={() => {
-                                  if (selectedTraits.includes(trait)) setSelectedTraits(selectedTraits.filter(t => t !== trait))
-                                  else if (selectedTraits.length < 4) setSelectedTraits([...selectedTraits, trait])
-                                }}
-                                className="px-2.5 py-1 rounded-full text-xs font-bold transition-all"
-                                style={{
-                                  background: selectedTraits.includes(trait) ? '#9b5de5' : 'rgba(255,255,255,0.05)',
-                                  border: `2px solid ${selectedTraits.includes(trait) ? '#9b5de5' : 'rgba(255,255,255,0.12)'}`,
-                                  color: selectedTraits.includes(trait) ? '#fff' : '#a0b4d6',
-                                  boxShadow: selectedTraits.includes(trait) ? '0 3px 0 #6b3db5' : 'none',
-                                }}>
-                                {trait}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                {/* The one amber action on this screen */}
+                <div className="w-full pt-1">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={!storyIdea.trim()}
+                    className="kq-btn-primary"
+                  >
+                    <Icon name="auto_awesome" size={20} />
+                    Make this book
+                  </button>
+                  <p className="mt-2 text-center text-xs text-kq-dim">
+                    Story and illustrations are made in {timeEstimate}.
+                    {freeBookCount >= FREE_BOOK_LIMIT && !userApiKey && (
+                      <span className="mt-1 block text-kq-text">
+                        Add your Venice API key to make more books.
+                      </span>
                     )}
-                  </div>
-
-                  {/* Story Length */}
-                  <div>
-                    <div className="kq-section-label">📏 Story Length</div>
-                    <div className="flex gap-2">
-                      {STORY_LENGTHS.map(len => (
-                        <button key={len.value} onClick={() => setStoryLength(len.value)}
-                          className="flex-1 py-3 px-2 rounded-xl text-center transition-all"
-                          style={{
-                            border: `2.5px solid ${storyLength === len.value ? '#4dc9ff' : 'rgba(255,255,255,0.1)'}`,
-                            background: storyLength === len.value ? 'rgba(77,201,255,0.1)' : 'rgba(255,255,255,0.03)',
-                            color: storyLength === len.value ? '#4dc9ff' : '#a0b4d6',
-                          }}>
-                          <div style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.4rem' }}>{len.pages}</div>
-                          <div className="text-xs font-bold">{len.label}</div>
-                          <div className="text-xs opacity-70">{len.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Age Range */}
-                  <div>
-                    <div className="kq-section-label">🎂 Age Range</div>
-                    <select value={ageRange} onChange={e => setAgeRange(e.target.value)} style={selectStyle}>
-                      {AGE_RANGES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Story Language */}
-                  <div>
-                    <div className="kq-section-label">🌍 Story Language</div>
-                    <select value={language} onChange={e => setLanguage(e.target.value)} style={selectStyle}>
-                      {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Illustration Style */}
-                  <div>
-                    <div className="kq-section-label">🖌️ Illustration Style</div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {ILLUSTRATION_STYLES.map(s => (
-                        <button key={s.value} onClick={() => setIllustrationStyle(s.value)}
-                          className="rounded-2xl p-2 text-center transition-all flex flex-col items-center gap-1"
-                          style={{
-                            border: `2.5px solid ${illustrationStyle === s.value ? '#f5d000' : 'rgba(255,255,255,0.1)'}`,
-                            background: illustrationStyle === s.value ? 'rgba(245,208,0,0.08)' : 'rgba(255,255,255,0.03)',
-                          }}>
-                          <div className="text-2xl">{s.emoji}</div>
-                          <div className="text-xs font-bold leading-tight" style={{ color: illustrationStyle === s.value ? '#f5d000' : '#a0b4d6' }}>{s.label}</div>
-                          {illustrationStyle === s.value && <span className="text-xs" style={{ color: '#f5d000' }}>✓</span>}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Image Model */}
-                  <div>
-                    <div className="kq-section-label">🤖 Illustration AI Model</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {IMAGE_MODELS.map(m => (
-                        <button key={m.value} onClick={() => setImageModel(m.value)}
-                          className="p-2.5 rounded-xl text-left transition-all"
-                          style={{
-                            border: `2px solid ${imageModel === m.value ? '#9b5de5' : 'rgba(255,255,255,0.1)'}`,
-                            background: imageModel === m.value ? 'rgba(155,93,229,0.1)' : 'rgba(255,255,255,0.03)',
-                          }}>
-                          <div className="text-xs font-semibold" style={{ color: imageModel === m.value ? '#c89dff' : '#fefcf5' }}>{m.label}</div>
-                          <div className="text-xs" style={{ color: '#a0b4d6' }}>{m.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Narrator Voice */}
-                  <div>
-                    <div className="kq-section-label">🔊 Narrator Voice</div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {NARRATOR_VOICES.map(v => (
-                        <button key={v.value} onClick={() => setNarratorVoice(v.value)}
-                          className="p-2 rounded-xl text-left transition-all"
-                          style={{
-                            border: `2px solid ${narratorVoice === v.value ? '#4dc9ff' : 'rgba(255,255,255,0.1)'}`,
-                            background: narratorVoice === v.value ? 'rgba(77,201,255,0.1)' : 'rgba(255,255,255,0.03)',
-                          }}>
-                          <div className="text-xs font-medium" style={{ color: narratorVoice === v.value ? '#4dc9ff' : '#fefcf5' }}>{v.label}</div>
-                          <div className="text-xs" style={{ color: '#a0b4d6' }}>{v.description}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  </p>
                 </div>
-              )}
-
-              {/* Generate Button */}
-              <div className="w-full pt-2 pb-4">
-                <button
-                  onClick={handleGenerate}
-                  disabled={!storyIdea.trim()}
-                  className="kq-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ fontSize: '1.35rem', padding: '20px 32px' }}
-                >
-                  <span style={{ fontSize: '1.5rem' }}>🚀</span>
-                  Create My Story!
-                  <span style={{ fontSize: '1.5rem' }}>✨</span>
-                </button>
-                <p className="text-center text-xs mt-2" style={{ color: '#a0b4d6' }}>
-                  ✦ Story + AI illustrations generated in {timeEstimate}
-                  {freeBookCount >= FREE_BOOK_LIMIT && !userApiKey && (
-                    <span className="block font-semibold mt-1" style={{ color: '#ff8a82' }}>
-                      Add your Venice API key to generate more books
-                    </span>
-                  )}
-                </p>
               </div>
             </>
           )}
         </main>
 
-        <footer className="w-full py-3 text-center" style={{ borderTop: '1px solid rgba(77,201,255,0.1)', background: 'rgba(10,18,48,0.8)' }}>
-          <p className="text-xs" style={{ color: '#a0b4d6' }}>
-            Created with <span className="font-semibold" style={{ color: '#9b5de5' }}>Venice.ai</span>
+        <footer className="border-t border-kq-line px-5 py-5 text-center lg:px-10">
+          <p className="text-xs text-kq-dim">
+            Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
           </p>
         </footer>
       </div>

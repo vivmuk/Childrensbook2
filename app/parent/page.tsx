@@ -78,192 +78,176 @@ export default function ParentDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50 flex items-center justify-center">
-        <Icon name="auto_awesome" className="animate-spin text-purple-500" size={48} />
+      <div className="kq-ground flex min-h-screen items-center justify-center">
+        <Icon name="auto_awesome" size={40} className="animate-kq-spin text-kq-amber" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-yellow-50">
-      <Header title="Parent Dashboard" />
+    <div className="kq-ground kq-stars-bg relative min-h-screen overflow-x-hidden">
+      <div className="relative z-10">
+        <Header title="Parent Dashboard" />
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {/* Tabs */}
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'overview'
-                ? 'bg-purple-500 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Icon name="dashboard" className="inline mr-2" size={20} />
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'settings'
-                ? 'bg-blue-500 text-white shadow-lg'
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Icon name="settings" className="inline mr-2" size={20} />
-            Settings
-          </button>
-        </div>
-
-        {activeTab === 'overview' ? (
-          <>
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <div className="w-14 h-14 rounded-xl bg-purple-100 flex items-center justify-center mb-4">
-                  <Icon name="menu_book" className="text-purple-600" size={28} />
-                </div>
-                <h3 className="text-gray-500 font-medium mb-1">Books Read</h3>
-                <p className="text-3xl font-bold text-gray-800">{stats?.totalBooksRead || 0}</p>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center mb-4">
-                  <Icon name="schedule" className="text-blue-600" size={28} />
-                </div>
-                <h3 className="text-gray-500 font-medium mb-1">Reading Time</h3>
-                <p className="text-3xl font-bold text-gray-800">{formatTime(stats?.totalReadingTime || 0)}</p>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-lg p-6">
-                <div className="w-14 h-14 rounded-xl bg-pink-100 flex items-center justify-center mb-4">
-                  <Icon name="favorite" className="text-pink-600" size={28} />
-                </div>
-                <h3 className="text-gray-500 font-medium mb-1">Favorites</h3>
-                <p className="text-3xl font-bold text-gray-800">{stats?.favoriteBooks?.length || 0}</p>
-              </div>
-            </div>
-
-            {/* Recent Books */}
-            <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Recently Read</h2>
-              {stats?.recentBooks && stats.recentBooks.length > 0 ? (
-                <div className="space-y-3">
-                  {stats.recentBooks.slice(0, 5).map((book: any) => (
-                    <div
-                      key={book.id}
-                      className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-all"
-                      onClick={() => router.push(`/book/${book.id}`)}
-                    >
-                      <div className="w-16 h-12 bg-purple-200 rounded-lg overflow-hidden">
-                        {book.titlePage ? (
-                          <img src={book.titlePage.image} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Icon name="auto_stories" className="text-purple-400" size={20} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-800">{book.title}</h4>
-                        <p className="text-sm text-gray-500">{book.ageRange} grade</p>
-                      </div>
-                      <Icon name="chevron_right" className="text-gray-400" size={24} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-8">No reading activity yet. Start reading some books!</p>
-              )}
-            </div>
-          </>
-        ) : (
-          /* Settings Tab */
-          <div className="bg-white rounded-2xl shadow-lg p-6 max-w-2xl">
-            <h2 className="text-xl font-bold text-gray-800 mb-6">Parent Settings</h2>
-
-            <div className="space-y-6">
-              {/* Content Filter */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-800">Content Filter</h3>
-                  <p className="text-sm text-gray-500">Ensure age-appropriate content</p>
-                </div>
-                <button
-                  onClick={() => setSettings({ ...settings, contentFilterEnabled: !settings.contentFilterEnabled })}
-                  className={`w-14 h-8 rounded-full transition-all ${
-                    settings.contentFilterEnabled ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all ${
-                    settings.contentFilterEnabled ? 'translate-x-7' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-
-              {/* Max Books Per Day */}
-              <div>
-                <h3 className="font-semibold text-gray-800 mb-2">Max Books Per Day</h3>
-                <p className="text-sm text-gray-500 mb-3">Limit how many books can be created daily</p>
-                <input
-                  type="range"
-                  min="1"
-                  max="50"
-                  value={settings.maxBooksPerDay}
-                  onChange={(e) => setSettings({ ...settings, maxBooksPerDay: parseInt(e.target.value) })}
-                  className="w-full"
-                />
-                <div className="text-center font-semibold text-purple-600 mt-1">
-                  {settings.maxBooksPerDay} books
-                </div>
-              </div>
-
-              {/* Allow Sharing */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-800">Allow Sharing</h3>
-                  <p className="text-sm text-gray-500">Let children share books with others</p>
-                </div>
-                <button
-                  onClick={() => setSettings({ ...settings, allowSharing: !settings.allowSharing })}
-                  className={`w-14 h-8 rounded-full transition-all ${
-                    settings.allowSharing ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all ${
-                    settings.allowSharing ? 'translate-x-7' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-
-              {/* Require Approval */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-gray-800">Require Approval</h3>
-                  <p className="text-sm text-gray-500">Approve books before they&apos;re created</p>
-                </div>
-                <button
-                  onClick={() => setSettings({ ...settings, requireApproval: !settings.requireApproval })}
-                  className={`w-14 h-8 rounded-full transition-all ${
-                    settings.requireApproval ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all ${
-                    settings.requireApproval ? 'translate-x-7' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-
-              <button
-                onClick={saveSettings}
-                className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
-              >
-                Save Settings
-              </button>
-            </div>
+        <main className="mx-auto max-w-6xl px-4 py-6">
+          {/* Tabs */}
+          <div className="mb-6 flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`kq-chip ${activeTab === 'overview' ? 'is-on' : ''}`}
+              style={{ padding: '9px 16px', fontSize: '0.85rem' }}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`kq-chip ${activeTab === 'settings' ? 'is-on' : ''}`}
+              style={{ padding: '9px 16px', fontSize: '0.85rem' }}
+            >
+              Settings
+            </button>
           </div>
-        )}
-      </main>
+
+          {activeTab === 'overview' ? (
+            <>
+              {/* The three numbers live in one card rather than three
+                  identical cards in a row, which the design forbids. */}
+              <section className="kq-card mb-8">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                  <div className="flex items-center gap-3">
+                    <Icon name="menu_book" size={22} className="text-kq-dim" />
+                    <div>
+                      <p className="text-sm text-kq-dim">Books read</p>
+                      <p className="font-display text-2xl text-kq-text">{stats?.totalBooksRead || 0}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Icon name="hourglass_empty" size={22} className="text-kq-dim" />
+                    <div>
+                      <p className="text-sm text-kq-dim">Reading time</p>
+                      <p className="font-display text-2xl text-kq-text">{formatTime(stats?.totalReadingTime || 0)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Icon name="star" size={22} className="text-kq-dim" />
+                    <div>
+                      <p className="text-sm text-kq-dim">Favorites</p>
+                      <p className="font-display text-2xl text-kq-text">{stats?.favoriteBooks?.length || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Recently read */}
+              <section className="kq-card mb-6">
+                <h2 className="mb-4 font-display text-xl text-kq-text">Recently read</h2>
+                {stats?.recentBooks && stats.recentBooks.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {stats.recentBooks.slice(0, 5).map((book: any) => (
+                      <button
+                        key={book.id}
+                        onClick={() => router.push(`/book/${book.id}`)}
+                        className="flex items-center gap-4 rounded-md border border-kq-line bg-kq-navy-mid p-3 text-left transition-transform duration-200 hover:-translate-y-0.5"
+                      >
+                        <span className="kq-cover h-14 w-20 shrink-0 overflow-hidden">
+                          {book.titlePage ? (
+                            <img src={book.titlePage.image} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-kq-dim">
+                              <Icon name="auto_stories" size={20} />
+                            </span>
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-display text-base text-kq-text">{book.title}</span>
+                          <span className="block text-sm text-kq-dim">{book.ageRange} grade</span>
+                        </span>
+                        <Icon name="chevron_right" size={22} className="shrink-0 text-kq-dim" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-8 text-center text-sm text-kq-dim">No reading activity yet. Start reading some books.</p>
+                )}
+              </section>
+            </>
+          ) : (
+            /* Settings */
+            <div className="kq-card max-w-2xl">
+              <h2 className="mb-6 font-display text-xl text-kq-text">Parent settings</h2>
+
+              <div className="flex flex-col gap-6">
+                {/* Content filter */}
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base text-kq-text">Content filter</h3>
+                    <p className="text-sm text-kq-dim">Keep books age appropriate.</p>
+                  </div>
+                  <button
+                    onClick={() => setSettings({ ...settings, contentFilterEnabled: !settings.contentFilterEnabled })}
+                    className={`kq-toggle ${settings.contentFilterEnabled ? 'on' : ''}`}
+                    role="switch"
+                    aria-checked={settings.contentFilterEnabled}
+                    aria-label="Content filter"
+                  />
+                </div>
+
+                {/* Max books per day */}
+                <div>
+                  <h3 className="text-base text-kq-text">Max books per day</h3>
+                  <p className="mb-3 text-sm text-kq-dim">Limit how many books can be made each day.</p>
+                  <input
+                    type="range"
+                    min="1"
+                    max="50"
+                    value={settings.maxBooksPerDay}
+                    onChange={(e) => setSettings({ ...settings, maxBooksPerDay: parseInt(e.target.value) })}
+                    className="w-full accent-kq-amber"
+                  />
+                  <p className="mt-1 text-center text-sm text-kq-dim">{settings.maxBooksPerDay} books</p>
+                </div>
+
+                {/* Allow sharing */}
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base text-kq-text">Allow sharing</h3>
+                    <p className="text-sm text-kq-dim">Let children share books with others.</p>
+                  </div>
+                  <button
+                    onClick={() => setSettings({ ...settings, allowSharing: !settings.allowSharing })}
+                    className={`kq-toggle ${settings.allowSharing ? 'on' : ''}`}
+                    role="switch"
+                    aria-checked={settings.allowSharing}
+                    aria-label="Allow sharing"
+                  />
+                </div>
+
+                {/* Require approval */}
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base text-kq-text">Require approval</h3>
+                    <p className="text-sm text-kq-dim">Approve books before they are made.</p>
+                  </div>
+                  <button
+                    onClick={() => setSettings({ ...settings, requireApproval: !settings.requireApproval })}
+                    className={`kq-toggle ${settings.requireApproval ? 'on' : ''}`}
+                    role="switch"
+                    aria-checked={settings.requireApproval}
+                    aria-label="Require approval"
+                  />
+                </div>
+
+                {/* The one amber action on this screen */}
+                <button onClick={saveSettings} className="kq-btn-primary">
+                  Save settings
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }

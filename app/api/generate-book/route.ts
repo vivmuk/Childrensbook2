@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setBook, getBook, type Book, countUserBooks } from '@/lib/storage'
+import {
+  KQ_STORY_WORLD_BRIEF,
+  buildIllustrationPrompt,
+  buildCoverIllustrationPrompt,
+} from '@/lib/illustration-style'
 
 const LOCAL_USER_ID = 'local-user'
 
@@ -86,6 +91,8 @@ STORY REQUIREMENTS:
 - Each page: ${pageLen}. Match this length to the reading level — do NOT overload young readers.
 - Always positive, hopeful and inspiring — gentle stakes, no scary or sad endings; every story leaves the reader uplifted
 - Write at publication quality — every sentence should delight, teach, or move the reader${refrainBlock}
+- Page 1 must open on something happening: a sound, a movement, a question in the air. Never open on weather, scenery, or a slow introduction.
+- The LAST page must close with one short, warm, open question the grown-up can ask the child. One sentence only. Do not label it, number it, or explain it.
 
 TITLE:
 - Short, evocative and memorable — 6 words or fewer. No "Once upon a time", no generic titles.
@@ -106,6 +113,7 @@ NARRATIVE STRUCTURE:
 - Pages ${Math.ceil(pageCount * 0.6) + 1}–${pageCount - 1}: Climax and emotional peak
 - Page ${pageCount}: Satisfying resolution with a lasting lesson or warm feeling
 
+${KQ_STORY_WORLD_BRIEF}
 VISUAL BIBLE (critical for consistent illustrations):
 - First lock a "visualBible": a precise, reusable description of the MAIN CHARACTER (species/age, hair, eyes, skin tone, exact outfit + colors, size, signature accessory) and a "colorPalette" of 3–5 colors that define the whole book's look.
 - In EVERY imageDescription, paste the main character description from the visualBible VERBATIM (do not rephrase it) so the character looks identical on every page. Do the same for any recurring side character.
@@ -382,7 +390,6 @@ async function generateBookImages(
   const bookSeed = Math.abs(
     Array.from(bookId).reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7),
   ) % 999_999_999
-  const paletteNote = palette ? `Consistent color palette: ${palette}. ` : ''
 
   const charParts: string[] = []
   if (characters?.main) charParts.push(characters.main)
@@ -407,19 +414,26 @@ async function generateBookImages(
 
   const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
 
-  // Shared quality + composition boosters appended to every prompt for a more
-  // polished, professional storybook look (better lighting, depth, framing).
-  const QUALITY = 'masterpiece children\'s book illustration, professional storybook art, rich vivid colors, soft expressive lighting, clean confident linework, balanced composition with clear focal point, depth and atmosphere, warm and inviting, highly detailed'
-
-  // Build all prompts up front
-  const coverPrompt = `${charPrefix}${paletteNote}Beautiful children's book COVER illustration for the title "${book.title}". ${illustrationStyle} style. Eye-catching hero shot of the main character, dynamic and magical, leaves room at the top for a title. Scene: ${pages[0]?.imageDescription || 'A magical adventure scene'}. ${QUALITY}`.substring(0, 2800)
+  // Every prompt is assembled by lib/illustration-style.ts so the whole
+  // catalogue shares one painted world. charPrefix carries the character lock
+  // from the story's visual bible, which is what keeps the hero consistent.
+  const coverPrompt = buildCoverIllustrationPrompt({
+    characters: charPrefix.trim() || undefined,
+    palette: palette || undefined,
+    style: illustrationStyle,
+    title: book.title,
+    scene: pages[0]?.imageDescription || 'A magical adventure scene',
+  })
   imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })
 
   const pagePrompts: string[] = pages.map((page: any, i: number) => {
-    const desc = page.imageDescription || page.text.substring(0, 300)
-    const shot = page.shotType ? `${page.shotType}. ` : ''
-    const basePrompt = `${shot}${desc}. ${illustrationStyle} style. ${QUALITY}`
-    const fullPrompt = `${charPrefix}${paletteNote}${basePrompt}`.substring(0, 2800)
+    const fullPrompt = buildIllustrationPrompt({
+      characters: charPrefix.trim() || undefined,
+      palette: palette || undefined,
+      style: illustrationStyle,
+      shot: page.shotType || undefined,
+      scene: page.imageDescription || page.text.substring(0, 300),
+    })
     imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
     return fullPrompt
   })

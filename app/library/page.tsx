@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Icon } from '@/components/Icons'
 
 interface StoredBook {
   id: string
@@ -15,6 +16,7 @@ interface StoredBook {
 const LS_KEY = 'kinderquill_my_books'
 const FAV_KEY = 'kinderquill_favorites'
 
+// Friendly names for the illustration styles a book can carry.
 const STYLE_LABELS: Record<string, string> = {
   'ghibli':           'Anime Watercolor',
   'american-classic': 'Classic Cartoon',
@@ -61,151 +63,152 @@ export default function LibraryPage() {
     : books
 
   return (
-    <div
-      className="kq-stars-bg relative min-h-screen"
-      style={{ background: 'linear-gradient(160deg, #0d1b3e 0%, #0d2a40 100%)' }}
-    >
-      <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Top bar */}
+    <div className="kq-ground kq-stars-bg relative min-h-[100dvh] w-full">
+      <div className="relative z-10 flex min-h-[100dvh] flex-col">
+        {/* Top bar: the two ways back, the shelf name, and the one amber action. */}
         <div className="kq-top-bar">
           <div className="flex items-center gap-2">
-            <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home">🏠</button>
-            <button onClick={() => router.back()} className="kq-icon-btn" title="Back">←</button>
+            <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home" aria-label="Home">
+              <Icon name="home" size={18} />
+            </button>
+            <button onClick={() => router.back()} className="kq-icon-btn" title="Back" aria-label="Back">
+              <Icon name="arrow_back" size={18} />
+            </button>
           </div>
-          <span style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.2rem', color: '#fefcf5' }}>
-            My Bookshelf 📚
+          <span className="font-display min-w-0 flex-1 truncate px-3 text-center text-lg text-kq-text">
+            My bookshelf
           </span>
+          {/* The single amber action. Sized down for the bar, so the utilities
+              carry !important to beat the full width button class. */}
           <button
             onClick={() => router.push('/generate')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
-            style={{ background: '#f5d000', color: '#0d1b3e', border: 'none', boxShadow: '0 3px 0 #b89f00' }}
+            className="kq-btn-primary !w-auto !px-4 !py-2 !text-sm"
           >
-            ✨ New Story
+            Make a story
           </button>
         </div>
 
-        <main className="flex-1 max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto w-full px-4 py-5">
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="text-center py-3 px-2 rounded-2xl" style={{ background: 'rgba(245,208,0,0.08)', border: '1.5px solid rgba(245,208,0,0.2)' }}>
-              <div style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.8rem', color: '#f5d000' }}>{books.length}</div>
-              <div className="text-xs font-bold" style={{ color: '#a0b4d6' }}>Stories Created</div>
-            </div>
-            <div className="text-center py-3 px-2 rounded-2xl" style={{ background: 'rgba(255,82,71,0.08)', border: '1.5px solid rgba(255,82,71,0.2)' }}>
-              <div style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.8rem', color: '#ff5247' }}>{favorites.length}</div>
-              <div className="text-xs font-bold" style={{ color: '#a0b4d6' }}>Favourites</div>
-            </div>
-            <div className="text-center py-3 px-2 rounded-2xl" style={{ background: 'rgba(77,201,255,0.08)', border: '1.5px solid rgba(77,201,255,0.2)' }}>
-              <div style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.8rem', color: '#4dc9ff' }}>{books.length * 8}</div>
-              <div className="text-xs font-bold" style={{ color: '#a0b4d6' }}>Pages Made</div>
-            </div>
+        <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-5 lg:max-w-6xl xl:max-w-7xl">
+          {/* Real counts only. No invented pages, ratings or praise. */}
+          <p className="mb-4 text-sm text-kq-dim">
+            {books.length} {books.length === 1 ? 'story' : 'stories'} &middot;{' '}
+            {favorites.length} {favorites.length === 1 ? 'favourite' : 'favourites'}
+          </p>
+
+          {/* Filters are chips: rounded rectangles you can select, never pills. */}
+          <div className="mb-5 flex gap-2">
+            <button
+              onClick={() => setActiveTab('all')}
+              aria-pressed={activeTab === 'all'}
+              className={`kq-chip cursor-pointer ${activeTab === 'all' ? 'is-on' : ''}`}
+            >
+              All books ({books.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('favorites')}
+              aria-pressed={activeTab === 'favorites'}
+              className={`kq-chip cursor-pointer ${activeTab === 'favorites' ? 'is-on' : ''}`}
+            >
+              Favourites ({favorites.length})
+            </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-3 mb-5">
-            {(['all', 'favorites'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className="flex-1 py-2.5 rounded-full font-bold text-sm transition-all"
-                style={{
-                  background: activeTab === tab
-                    ? (tab === 'all' ? '#9b5de5' : '#ff5247')
-                    : 'rgba(255,255,255,0.05)',
-                  border: activeTab === tab ? 'none' : '2px solid rgba(255,255,255,0.12)',
-                  color: '#fff',
-                  boxShadow: activeTab === tab
-                    ? (tab === 'all' ? '0 4px 0 #6b3db5' : '0 4px 0 #c22e24')
-                    : 'none',
-                  fontFamily: 'Fredoka One, cursive',
-                }}
-              >
-                {tab === 'all' ? `📚 All Books (${books.length})` : `❤️ Favourites (${favorites.length})`}
-              </button>
-            ))}
-          </div>
-
-          {/* Books grid / empty state */}
           {filteredBooks.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-6xl mb-4 animate-kq-float">{activeTab === 'favorites' ? '💝' : '📚'}</div>
-              <h3 className="text-xl font-bold mb-2" style={{ fontFamily: 'Fredoka One, cursive', color: '#fefcf5' }}>
-                {activeTab === 'favorites' ? 'No favourites yet' : 'No books yet'}
+            <div className="py-10 text-center">
+              {/* A painted panel rather than an empty void: the shelf should
+                  still feel like the inside of a storybook when it is bare. */}
+              <div className="relative mx-auto mb-7 w-full max-w-sm overflow-hidden rounded-[22px] border border-kq-hairline">
+                <img
+                  src="/art/hero-tall.png"
+                  alt="A grown-up and a child reading together under a lamp"
+                  className="h-[300px] w-full object-cover object-[50%_35%]"
+                  loading="lazy"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-kq-ground to-transparent" />
+              </div>
+
+              <h3 className="mb-2 font-display text-2xl text-kq-text">
+                {activeTab === 'favorites' ? 'No favourites yet' : 'Your shelf is empty'}
               </h3>
-              <p className="mb-6 max-w-xs mx-auto" style={{ color: '#a0b4d6' }}>
+              <p className="mx-auto mb-6 max-w-xs text-sm leading-relaxed text-kq-dim">
                 {activeTab === 'favorites'
-                  ? 'Tap the heart on any book to add it to your favourites!'
-                  : 'Create your first magical AI-generated storybook!'}
+                  ? 'Tap the star on a book to keep it here.'
+                  : 'Tell us an idea and we will paint every page of it tonight.'}
               </p>
-              {activeTab === 'all' && (
-                <button onClick={() => router.push('/generate')} className="kq-btn-primary" style={{ maxWidth: 240, margin: '0 auto' }}>
-                  ✨ Create a Story
+              {activeTab !== 'favorites' && (
+                <button
+                  onClick={() => router.push('/generate')}
+                  className="kq-btn-secondary mx-auto w-auto px-5 py-3"
+                >
+                  <Icon name="auto_awesome" size={18} />
+                  Make a story
                 </button>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:gap-5">
               {filteredBooks.map(book => (
                 <div
                   key={book.id}
-                  className="rounded-2xl overflow-hidden group transition-all hover:-translate-y-1"
-                  style={{ background: '#1a2a5e', border: '2px solid rgba(77,201,255,0.15)', boxShadow: '0 4px 24px rgba(0,0,0,0.3)' }}
+                  className="kq-card group flex flex-col !p-0 transition-transform duration-200 hover:-translate-y-1"
                 >
-                  {/* Cover */}
+                  {/* Cover plate */}
                   <div
-                    className="relative cursor-pointer overflow-hidden"
-                    style={{ aspectRatio: '4/3', background: 'linear-gradient(135deg, #1e3a7a, #2d1b5e)' }}
+                    className="relative cursor-pointer overflow-hidden bg-kq-navy-mid"
+                    style={{ aspectRatio: '4 / 3' }}
                     onClick={() => router.push(`/book/${book.id}`)}
                   >
                     {book.titlePageImage ? (
                       <img
                         src={book.titlePageImage} alt={book.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                        <span className="text-5xl">📖</span>
-                        <span className="text-xs font-semibold px-3 text-center" style={{ color: 'rgba(255,255,255,0.6)' }}>{book.title}</span>
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
+                        <Icon name="menu_book" size={34} className="text-kq-dim" />
+                        <span className="text-xs text-kq-dim">{book.title}</span>
                       </div>
                     )}
 
-                    {/* Favourite button */}
+                    {/* Favourite: an indicator, not an action, so it may carry the accent */}
                     <button
                       onClick={e => { e.stopPropagation(); toggleFavorite(book.id) }}
-                      className="absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-md hover:scale-110"
-                      style={{ background: 'rgba(0,0,0,0.55)', border: '1.5px solid rgba(255,255,255,0.15)' }}
+                      className="absolute left-2 top-2 flex h-9 w-9 items-center justify-center rounded border border-kq-line bg-kq-ink/70 transition-transform duration-200 hover:scale-105"
                       title={favorites.includes(book.id) ? 'Remove from favourites' : 'Add to favourites'}
+                      aria-label={favorites.includes(book.id) ? 'Remove from favourites' : 'Add to favourites'}
                     >
-                      <span style={{ fontSize: '0.9rem' }}>{favorites.includes(book.id) ? '❤️' : '🤍'}</span>
+                      <span
+                        className={`material-symbols-outlined text-lg ${favorites.includes(book.id) ? 'text-kq-amber' : 'text-kq-dim'}`}
+                        style={{ fontVariationSettings: favorites.includes(book.id) ? "'FILL' 1" : "'FILL' 0" }}
+                      >
+                        star
+                      </span>
                     </button>
 
-                    {/* Delete button */}
+                    {/* Delete: quiet, always reachable, including on touch screens */}
                     <button
                       onClick={e => { e.stopPropagation(); deleteBook(book.id) }}
-                      className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-md opacity-0 group-hover:opacity-100"
-                      style={{ background: 'rgba(255,82,71,0.7)', border: '1.5px solid rgba(255,82,71,0.5)' }}
+                      className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded border border-kq-line bg-kq-ink/70 text-kq-dim opacity-70 transition-opacity duration-200 hover:text-kq-text hover:opacity-100"
                       title="Remove from library"
+                      aria-label="Remove from library"
                     >
-                      <span style={{ fontSize: '0.75rem' }}>✕</span>
+                      <span className="material-symbols-outlined text-lg">delete</span>
                     </button>
                   </div>
 
-                  {/* Info */}
-                  <div className="p-3" style={{ position: 'relative' }}>
-                    {/* gradient top line */}
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg, #f5d000, #00e5a0, #4dc9ff)', opacity: 0.5 }} />
-                    <h3 className="font-bold truncate text-sm mb-1" style={{ fontFamily: 'Fredoka One, cursive', color: '#fefcf5' }}>{book.title}</h3>
-                    <p className="text-xs mb-3" style={{ color: '#a0b4d6' }}>
-                      Grade {book.ageRange} · {STYLE_LABELS[book.illustrationStyle] || book.illustrationStyle}
+                  {/* Title and the way in */}
+                  <div className="flex flex-1 flex-col p-4">
+                    <h3 className="font-display truncate text-base text-kq-text">{book.title}</h3>
+                    <p className="mb-4 mt-1 text-xs text-kq-dim">
+                      Grade {book.ageRange} &middot; {STYLE_LABELS[book.illustrationStyle] || book.illustrationStyle}
                       <br />
                       {new Date(book.createdAt).toLocaleDateString()}
                     </p>
                     <button
                       onClick={() => router.push(`/book/${book.id}`)}
-                      className="w-full py-2 rounded-xl text-sm font-bold transition-all"
-                      style={{ background: 'rgba(155,93,229,0.2)', border: '1.5px solid rgba(155,93,229,0.35)', color: '#c89dff' }}
+                      className="kq-btn-secondary mt-auto !py-2.5 !text-sm"
                     >
-                      📖 Read Book
+                      Read book
                     </button>
                   </div>
                 </div>
@@ -213,14 +216,14 @@ export default function LibraryPage() {
             </div>
           )}
 
-          <p className="text-center text-xs mt-8" style={{ color: '#a0b4d6' }}>
-            📱 Books are saved locally in your browser. Clearing browser data will remove them.
+          <p className="mt-8 text-center text-xs text-kq-dim">
+            Books are saved in this browser. Clearing browser data removes them.
           </p>
         </main>
 
-        <footer className="py-3 text-center" style={{ borderTop: '1px solid rgba(77,201,255,0.1)', background: 'rgba(10,18,48,0.8)' }}>
-          <p className="text-xs" style={{ color: '#a0b4d6' }}>
-            Created with <span className="font-semibold" style={{ color: '#9b5de5' }}>Venice.ai</span>
+        <footer className="border-t border-kq-line-soft px-4 py-3 text-center">
+          <p className="text-xs text-kq-dim">
+            Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
           </p>
         </footer>
       </div>

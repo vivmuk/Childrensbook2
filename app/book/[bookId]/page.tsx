@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { Icon } from '@/components/Icons'
 
 interface BookPage {
   text: string
@@ -25,6 +26,10 @@ interface Book {
 }
 
 const LS_DYSLEXIA = 'kinderquill_dyslexia_mode'
+
+// The quiet action in the book toolbar: a hairline, sized to its label.
+// The !important utilities beat the full width button class.
+const TOOL_BTN = 'kq-btn-secondary !w-auto !px-3 !py-2 !text-xs'
 
 // Split page prose into sentences for read-along highlighting.
 function splitSentences(text: string): string[] {
@@ -104,7 +109,7 @@ export default function BookViewerPage() {
     if (!readAlong || !book) return
     const hasTitle = !!book.titlePage
     const total = book.pages.length + (hasTitle ? 1 : 0)
-    // Skip the cover during read-along — jump to the first story page.
+    // Skip the cover during read-along and jump to the first story page.
     if (hasTitle && currentPage === 0) { setCurrentPage(1); return }
     const contentIdx = hasTitle ? currentPage - 1 : currentPage
     const pg = book.pages[contentIdx]
@@ -115,7 +120,7 @@ export default function BookViewerPage() {
     let timer: ReturnType<typeof setTimeout>
     const schedule = () => {
       const words = sents[idx].split(/\s+/).filter(Boolean).length
-      const dur = Math.max(1700, words * 360) // ~natural read-aloud pace
+      const dur = Math.max(1700, words * 360) // about the pace of reading aloud
       timer = setTimeout(() => {
         idx++
         if (idx < sents.length) { setHighlightIndex(idx); schedule() }
@@ -188,11 +193,11 @@ export default function BookViewerPage() {
     }
   }
 
-  // Poll for the queued theme song until the audio is ready (give up after ~2 min).
+  // Poll for the queued theme song until the audio is ready (give up after ~3 min).
   useEffect(() => {
     if (!songQueueId) return
     let attempts = 0
-    const maxAttempts = 60 // 60 × 3s = 3 minutes (sung songs take longer)
+    const maxAttempts = 60 // 60 x 3s = 3 minutes (sung songs take longer)
     let interval: ReturnType<typeof setInterval>
     const stop = () => { clearInterval(interval); setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false) }
     const poll = async () => {
@@ -211,7 +216,7 @@ export default function BookViewerPage() {
           alert('The theme song could not be created. Please try again.')
           stop()
         } else if (attempts >= maxAttempts) {
-          console.warn('Theme song timed out after 2 minutes')
+          console.warn('Theme song timed out after 3 minutes')
           alert('The theme song is taking longer than expected. Please try again in a moment.')
           stop()
         }
@@ -237,14 +242,14 @@ export default function BookViewerPage() {
   const handleEmail = () => {
     const shareUrl = `${window.location.origin}/share/${bookId}`
     const subject = encodeURIComponent(`A storybook for you: ${book?.title || 'My KinderQuill Story'}`)
-    const body = encodeURIComponent(`I made this magical storybook with KinderQuill — I hope you love it!\n\n${shareUrl}`)
+    const body = encodeURIComponent(`I made this storybook with KinderQuill. I hope you love it.\n\n${shareUrl}`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
-  // Continue the Adventure — open the generator pre-filled with a sequel idea
+  // Continue the adventure: open the generator pre-filled with a sequel idea
   const handleContinueAdventure = () => {
     if (!book) return
-    const idea = `Continue the adventure from the storybook "${book.title}". Bring back the same beloved hero for a brand-new chapter with a fresh, exciting challenge — keep it positive, warm and inspiring, with a happy ending.`
+    const idea = `Continue the adventure from the storybook "${book.title}". Bring back the same beloved hero for a brand-new chapter with a fresh, exciting challenge. Keep it positive, warm and inspiring, with a happy ending.`
     router.push(`/generate?idea=${encodeURIComponent(idea)}`)
   }
 
@@ -284,23 +289,53 @@ export default function BookViewerPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
   <style>
+    /* The exported book keeps the Cosy Night-Light world: indigo ground,
+       one warm cream reading page, one amber action. Colours live here once. */
+    :root {
+      --kq-navy: rgb(27 29 58);
+      --kq-text: rgb(244 242 236);
+      --kq-cream: rgb(246 231 201);
+      --kq-ink-text: rgb(59 42 30);
+      --kq-line: rgba(244, 242, 236, 0.14);
+      --kq-amber: rgb(224 160 70);
+      --kq-amber-ink: rgb(36 26 18);
+      --kq-serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+      --kq-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: sans-serif; background: linear-gradient(to bottom right, #f3e8ff, #fce7f3, #fef3c7); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-    .book-container { max-width: 800px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px; }
-    .page { display: none; flex-direction: column; gap: 20px; width: 100%; }
+    body {
+      font-family: var(--kq-ui);
+      background: var(--kq-navy);
+      color: var(--kq-text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    .book-container { max-width: 800px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+    .page { display: none; flex-direction: column; gap: 18px; width: 100%; }
     .page.active { display: flex; }
-    .page-image { width: 100%; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-    .page-text { background: rgba(255,255,255,0.9); padding: 24px; border-radius: 16px; font-size: 18px; line-height: 1.8; color: #1f2937; }
-    .header { width: 100%; text-align: center; padding: 20px; background: rgba(255,255,255,0.8); border-radius: 16px; margin-bottom: 20px; }
-    .header h1 { font-size: 28px; font-weight: bold; color: #1f2937; }
-    .navigation { display: flex; justify-content: space-between; width: 100%; gap: 15px; margin-top: 20px; position: sticky; bottom: 20px; }
-    .nav-button { flex: 1; padding: 15px 25px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; }
-    .nav-button.prev { background: #f3f4f6; color: #374151; }
-    .nav-button.next { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; }
-    .nav-button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .page-indicators { display: flex; justify-content: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-    .indicator { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; cursor: pointer; transition: all 0.3s; }
-    .indicator.active { width: 32px; background: #3b82f6; border-radius: 4px; }
+    .page-image { width: 100%; border-radius: 14px; border: 1px solid var(--kq-line); }
+    .page-text {
+      background: var(--kq-cream);
+      color: var(--kq-ink-text);
+      padding: 26px 24px;
+      border-radius: 22px;
+      font-family: var(--kq-serif);
+      font-size: 1.3rem;
+      line-height: 1.7;
+    }
+    .header { width: 100%; text-align: center; padding: 16px; }
+    .header h1 { font-family: var(--kq-serif); font-size: 1.5rem; font-weight: 600; color: var(--kq-text); }
+    .navigation { display: flex; justify-content: space-between; width: 100%; gap: 14px; position: sticky; bottom: 16px; }
+    .nav-button { flex: 1; padding: 14px 22px; border-radius: 14px; font-size: 0.95rem; font-weight: 600; font-family: var(--kq-ui); cursor: pointer; }
+    .nav-button.prev { background: rgba(244, 242, 236, 0.05); border: 1px solid var(--kq-line); color: var(--kq-text); }
+    .nav-button.next { background: var(--kq-amber); border: none; color: var(--kq-amber-ink); }
+    .nav-button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .page-indicators { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    .indicator { width: 8px; height: 8px; border-radius: 2px; background: rgba(244, 242, 236, 0.24); cursor: pointer; }
+    .indicator.active { width: 22px; background: var(--kq-amber); }
   </style>
 </head>
 <body>
@@ -313,8 +348,8 @@ export default function BookViewerPage() {
       ${book.pages.map((_, index) => `<div class="indicator ${!book.titlePage && index === 0 ? 'active' : ''}" onclick="goToPage(${book.titlePage ? index + 1 : index})"></div>`).join('')}
     </div>
     <div class="navigation">
-      <button class="nav-button prev" onclick="previousPage()" id="prevBtn">← Previous</button>
-      <button class="nav-button next" onclick="nextPage()" id="nextBtn">Next →</button>
+      <button class="nav-button prev" onclick="previousPage()" id="prevBtn">Previous</button>
+      <button class="nav-button next" onclick="nextPage()" id="nextBtn">Next</button>
     </div>
   </div>
   <script>
@@ -342,13 +377,13 @@ export default function BookViewerPage() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
   }
 
-  // ── Loading ──
+  // Loading
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
+      <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
         <div className="text-center">
-          <div className="text-6xl animate-kq-spin mb-4">✨</div>
-          <p className="text-lg font-semibold" style={{ color: '#fefcf5', fontFamily: 'Fredoka One, cursive' }}>Loading book...</p>
+          <Icon name="auto_awesome" size={36} className="animate-kq-spin text-kq-amber" />
+          <p className="mt-4 font-display text-lg text-kq-text">Opening the book</p>
         </div>
       </div>
     )
@@ -356,12 +391,15 @@ export default function BookViewerPage() {
 
   if (!book) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
+      <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-lg font-semibold" style={{ color: '#fefcf5' }}>Book not found</p>
-          <button onClick={() => router.push('/generate')} className="mt-4 px-6 py-2 rounded-full text-sm font-bold" style={{ background: '#9b5de5', color: '#fff' }}>
-            Create New Book
-          </button>
+          <h1 className="font-display text-xl text-kq-text">We could not find this book</h1>
+          <p className="mt-2 text-sm text-kq-dim">It may have been removed from this device.</p>
+          <div className="mx-auto mt-5 max-w-xs">
+            <button onClick={() => router.push('/generate')} className="kq-btn-primary">
+              Make a story
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -369,10 +407,10 @@ export default function BookViewerPage() {
 
   if (!book.pages || book.pages.length === 0) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
+      <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-lg font-semibold" style={{ color: '#fefcf5' }}>Book is still being generated...</p>
-          <p className="mt-2 text-sm" style={{ color: '#a0b4d6' }}>Please wait a moment and refresh.</p>
+          <h1 className="font-display text-xl text-kq-text">This book is still being made</h1>
+          <p className="mt-2 text-sm text-kq-dim">Please wait a moment and refresh.</p>
         </div>
       </div>
     )
@@ -384,122 +422,132 @@ export default function BookViewerPage() {
   const contentPageIndex = hasTitlePage ? currentPage - 1 : currentPage
   const page = isTitlePage ? null : book.pages[contentPageIndex]
 
-  // ── Video Modal ──
+  // Video Modal
   const VideoModal = () => {
     if (!showVideoModal || !modalVideoUrl) return null
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(8px)' }} onClick={() => setShowVideoModal(false)}>
-        <div className="relative w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl" style={{ background: '#0d1b3e', border: '2px solid rgba(155,93,229,0.4)' }} onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3" style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}>
-            <div className="flex items-center gap-2 text-white font-bold text-sm">✨ Animated Illustration</div>
-            <button onClick={() => setShowVideoModal(false)} className="text-white/80 hover:text-white text-xl transition-colors">✕</button>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-kq-ink/90 p-4 backdrop-blur"
+        onClick={() => setShowVideoModal(false)}
+      >
+        <div className="kq-card relative w-full max-w-2xl !p-0" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="font-display text-sm text-kq-text">Animated illustration</div>
+            <button onClick={() => setShowVideoModal(false)} className="kq-icon-btn" title="Close" aria-label="Close">
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
           </div>
-          <video src={modalVideoUrl} autoPlay loop controls playsInline className="w-full" style={{ maxHeight: '70vh', objectFit: 'contain', background: '#000' }} />
-          <div className="flex justify-center gap-3 px-4 py-3" style={{ background: '#0d1b3e' }}>
-            <a href={modalVideoUrl} download="animation.mp4" className="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-xl transition-colors" style={{ background: '#9b5de5' }}>⬇ Download MP4</a>
-            <button onClick={() => setShowVideoModal(false)} className="px-4 py-2 text-white text-sm font-medium rounded-xl transition-colors" style={{ background: 'rgba(255,255,255,0.1)' }}>Close</button>
+          <video
+            src={modalVideoUrl} autoPlay loop controls playsInline
+            className="w-full bg-kq-ink"
+            style={{ maxHeight: '70vh', objectFit: 'contain' }}
+          />
+          <div className="flex justify-center gap-3 px-4 py-3">
+            {/* The modal is its own focus surface, so it carries its own single amber action. */}
+            <a href={modalVideoUrl} download="animation.mp4" className="kq-btn-primary !w-auto !px-4 !py-2 !text-sm">
+              <Icon name="download" size={16} /> Download MP4
+            </a>
+            <button onClick={() => setShowVideoModal(false)} className="kq-btn-secondary !w-auto !px-4 !py-2 !text-sm">
+              Close
+            </button>
           </div>
         </div>
       </div>
     )
   }
 
-  // ── Animate Button ──
+  // Animate Button: a small quiet control sitting on the illustration
   const AnimateButton = ({ pageKey, pageIndex }: { pageKey: string; pageIndex: number }) => {
     const video = pageVideos[pageKey]
     const isAnimating = animatingPageKey === pageKey
     const progressPct = animateAvgTime > 0 ? Math.min(99, Math.round((animateElapsed / animateAvgTime) * 100)) : 0
+    const overlay = 'flex items-center gap-1.5 rounded-lg border border-kq-line bg-kq-ink/80 px-3 py-1.5 text-xs text-kq-text backdrop-blur transition-transform duration-200'
     if (video) {
       return (
-        <button onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all hover:scale-105"
-          style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)' }}>
-          ▶ Watch Animation
+        <button
+          onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
+          className={`${overlay} hover:scale-105`}
+        >
+          <span className="material-symbols-outlined text-base">play_arrow</span> Watch animation
         </button>
       )
     }
     if (isAnimating) {
       return (
-        <div className="flex items-center gap-2 px-3 py-1.5 text-white text-xs font-medium rounded-xl" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)' }}>
-          <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-kq-spin" />
-          <span>Animating… {animateQueueId ? `${progressPct}%` : 'starting'}</span>
+        <div className={overlay}>
+          <span className="material-symbols-outlined animate-kq-spin text-base text-kq-dim">progress_activity</span>
+          <span>Animating {animateQueueId ? `${progressPct}%` : 'starting'}</span>
         </div>
       )
     }
     return (
-      <button onClick={() => handleAnimate(pageKey, pageIndex)} disabled={!!animatingPageKey}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-xl shadow-lg transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed"
-        style={{ background: 'rgba(155,93,229,0.65)', border: '1.5px solid rgba(155,93,229,0.5)', backdropFilter: 'blur(8px)' }}>
-        ✨ Animate
+      <button
+        onClick={() => handleAnimate(pageKey, pageIndex)}
+        disabled={!!animatingPageKey}
+        className={`${overlay} hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        <Icon name="auto_awesome" size={14} /> Animate
       </button>
     )
   }
 
-  // ── Top Bar (shared between title page and content pages) ──
+  // Top Bar
   const TopBar = () => (
     <div className="kq-top-bar">
       <div className="flex items-center gap-2">
-        <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home">🏠</button>
-        <button onClick={() => router.back()} className="kq-icon-btn" title="Back">←</button>
+        <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home" aria-label="Home">
+          <Icon name="home" size={18} />
+        </button>
+        <button onClick={() => router.back()} className="kq-icon-btn" title="Back" aria-label="Back">
+          <Icon name="arrow_back" size={18} />
+        </button>
       </div>
-      <div className="flex items-center gap-2 flex-1 justify-center px-2">
-        <span style={{ fontFamily: 'Fredoka One, cursive', fontSize: '0.95rem', color: '#fefcf5' }} className="truncate">
-          {book.title}
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <button onClick={handleShare}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
-          style={{ background: 'rgba(77,201,255,0.15)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
-          title="Share">
-          ↗ <span className="hidden sm:inline">Share</span>
-        </button>
-        <button onClick={handleEmail}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
-          style={{ background: 'rgba(245,208,0,0.15)', border: '1.5px solid rgba(245,208,0,0.3)', color: '#f5d000' }}
-          title="Email this story">
-          ✉ <span className="hidden sm:inline">Email</span>
-        </button>
-        <button onClick={handleDownloadHTML}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
-          style={{ background: 'rgba(0,229,160,0.15)', border: '1.5px solid rgba(0,229,160,0.3)', color: '#00e5a0' }}
-          title="Download HTML">
-          {'</>'} <span className="hidden sm:inline">HTML</span>
-        </button>
-        <button onClick={handleDownloadPDF}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
-          style={{ background: 'rgba(255,82,71,0.15)', border: '1.5px solid rgba(255,82,71,0.3)', color: '#ff8a82' }}
-          title="Download PDF">
-          ⬇ <span className="hidden sm:inline">PDF</span>
-        </button>
-        {book.audioUrl ? (
-          <button onClick={handleDownloadAudio}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold transition-all"
-            style={{ background: 'rgba(155,93,229,0.15)', border: '1.5px solid rgba(155,93,229,0.3)', color: '#c89dff' }}
-            title="Download MP3">
-            🎧 <span className="hidden sm:inline">MP3</span>
-          </button>
-        ) : (
-          <button onClick={handleGenerateAudio} disabled={isGeneratingAudio}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            style={{ background: 'rgba(77,201,255,0.15)', border: '1.5px solid rgba(77,201,255,0.3)', color: '#4dc9ff' }}
-            title="Generate Audiobook">
-            {isGeneratingAudio ? <><span className="animate-kq-spin">🎙</span> <span className="hidden sm:inline">Generating…</span></> : <><span>🎙</span> <span className="hidden sm:inline">Narrate</span></>}
-          </button>
-        )}
-        {!book.songUrl && (
-          <button onClick={handleGenerateSong} disabled={isGeneratingSong}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            style={{ background: 'rgba(0,196,180,0.15)', border: '1.5px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
-            title="Create an original sing-along song for this book">
-            {isGeneratingSong ? <><span className="animate-kq-spin">🎵</span> <span className="hidden sm:inline">Composing…</span></> : <><span>🎵</span> <span className="hidden sm:inline">Sing-Along Song</span></>}
-          </button>
-        )}
-      </div>
+      <span className="font-display min-w-0 flex-1 truncate px-3 text-center text-base text-kq-text">
+        {book.title}
+      </span>
+      <button onClick={handleShare} className="kq-icon-btn" title="Share this book" aria-label="Share this book">
+        <span className="material-symbols-outlined text-lg">share</span>
+      </button>
     </div>
   )
 
-  // ── Page Indicators ──
+  // The quiet book actions, kept out of the reader's way in one row
+  const BookActions = () => (
+    <div className="mx-auto flex w-full max-w-4xl flex-wrap gap-2 px-4 pt-3 lg:max-w-6xl">
+      <button onClick={handleEmail} className={TOOL_BTN} title="Email this story">
+        <span className="material-symbols-outlined text-base">mail</span> Email
+      </button>
+      <button onClick={handleDownloadHTML} className={TOOL_BTN} title="Download as a web page">
+        <Icon name="code" size={16} /> HTML
+      </button>
+      <button onClick={handleDownloadPDF} className={TOOL_BTN} title="Download as a PDF">
+        <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF
+      </button>
+      {book.audioUrl ? (
+        <button onClick={handleDownloadAudio} className={TOOL_BTN} title="Download the audiobook">
+          <span className="material-symbols-outlined text-base">headphones</span> MP3
+        </button>
+      ) : (
+        <button
+          onClick={handleGenerateAudio} disabled={isGeneratingAudio}
+          className={TOOL_BTN} title="Create an audiobook"
+        >
+          <Icon name="volume_up" size={16} /> {isGeneratingAudio ? 'Making audio' : 'Narrate'}
+        </button>
+      )}
+      {!book.songUrl && (
+        <button
+          onClick={handleGenerateSong} disabled={isGeneratingSong}
+          className={TOOL_BTN} title="Create a sing-along song for this book"
+        >
+          <span className="material-symbols-outlined text-base">music_note</span>
+          {isGeneratingSong ? 'Composing' : 'Sing-along'}
+        </button>
+      )}
+    </div>
+  )
+
+  // Page Indicators
   const PageIndicators = () => (
     <div className="flex w-full flex-row items-center justify-center gap-1.5 py-3">
       {Array.from({ length: totalPages }).map((_, index) => (
@@ -513,48 +561,48 @@ export default function BookViewerPage() {
     </div>
   )
 
-  // ── Nav Buttons ──
-  const NavButtons = ({ onPrev, onNext, prevDisabled, nextDisabled }: {
+  // Nav Buttons: the title page's Start reading is its one amber action.
+  const NavButtons = ({ onPrev, onNext, prevDisabled, nextDisabled, accentNext = false, nextLabel = 'Next' }: {
     onPrev: () => void; onNext: () => void; prevDisabled: boolean; nextDisabled: boolean
+    accentNext?: boolean; nextLabel?: string
   }) => (
-    <div className="sticky bottom-0 py-3 px-4" style={{ background: 'rgba(8,15,36,0.95)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(77,201,255,0.1)' }}>
-      <div className="flex justify-between gap-4 max-w-4xl mx-auto">
+    <div className="sticky bottom-0 border-t border-kq-line-soft bg-kq-ink/90 px-4 py-3 backdrop-blur">
+      <div className="mx-auto flex max-w-4xl justify-between gap-4">
         <button
           onClick={onPrev} disabled={prevDisabled}
-          className="flex h-12 items-center justify-center gap-2 px-6 rounded-full font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: 'rgba(255,255,255,0.07)', border: '2px solid rgba(255,255,255,0.15)', color: '#fefcf5' }}
+          className="kq-btn-secondary flex-1 !w-auto !px-3 !text-sm disabled:cursor-not-allowed"
         >
-          ← Previous
+          <Icon name="arrow_back" size={16} /> Previous
         </button>
         <button
           onClick={onNext} disabled={nextDisabled}
-          className="flex h-12 items-center justify-center gap-2 px-6 rounded-full font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: nextDisabled ? 'rgba(255,255,255,0.07)' : '#f5d000', color: nextDisabled ? '#a0b4d6' : '#0d1b3e', border: 'none', boxShadow: nextDisabled ? 'none' : '0 4px 0 #b89f00' }}
+          className={`flex-1 !w-auto !px-3 !text-sm disabled:cursor-not-allowed ${accentNext ? 'kq-btn-primary' : 'kq-btn-secondary'}`}
         >
-          Next →
+          {nextLabel} <Icon name="arrow_forward" size={16} />
         </button>
       </div>
     </div>
   )
 
-  // ── Shared page shell ──
+  // Shared page shell
   const pageShell = (children: React.ReactNode) => (
-    <div className="kq-stars-bg relative flex min-h-screen w-full flex-col" style={{ background: '#080f24' }}>
+    <div className="kq-ground kq-stars-bg relative flex min-h-[100dvh] w-full flex-col">
       <VideoModal />
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex min-h-[100dvh] flex-col">
         {children}
       </div>
     </div>
   )
 
-  // ── Title Page ──
+  // Title Page
   if (isTitlePage && book.titlePage) {
     return pageShell(
       <>
         <TopBar />
-        <main className="flex flex-1 flex-col items-center justify-center px-4 py-6 lg:py-10 max-w-4xl mx-auto w-full">
-          <div className={`relative w-full lg:max-w-3xl rounded-2xl overflow-hidden shadow-2xl mb-4 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-            <img src={book.titlePage.image} alt="Book Cover" className="w-full h-auto object-cover" />
+        <BookActions />
+        <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-6 lg:py-10">
+          <div className={`kq-cover relative mb-4 w-full overflow-hidden transition-[opacity,transform] duration-300 lg:max-w-3xl ${isPageTransitioning ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}>
+            <img src={book.titlePage.image} alt="Book cover" className="h-auto w-full object-cover" />
             <div className="absolute bottom-3 right-3">
               <AnimateButton pageKey="-1" pageIndex={-1} />
             </div>
@@ -564,6 +612,7 @@ export default function BookViewerPage() {
         <NavButtons
           onPrev={() => handlePageChange(0)} onNext={() => handlePageChange(1)}
           prevDisabled={true} nextDisabled={false}
+          accentNext={true} nextLabel="Start reading"
         />
       </>
     )
@@ -571,32 +620,35 @@ export default function BookViewerPage() {
 
   if (!page) {
     return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: '#0d1b3e' }}>
-        <p className="text-lg" style={{ color: '#fefcf5' }}>Invalid page</p>
+      <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
+        <p className="font-display text-lg text-kq-text">This page could not be opened</p>
       </div>
     )
   }
 
-  // ── Content Page ──
+  // Content Page
   return pageShell(
     <>
       <TopBar />
+      <BookActions />
 
-      {/* Page counter badge (mobile only — desktop shows it in the side panel) */}
-      <div className="flex justify-center pt-3 pb-1 lg:hidden">
-        <div className="kq-chip kq-chip-electric">
-          Page {currentPage + 1} of {totalPages}
-        </div>
+      {/* Page counter (phones only; desktop shows it beside the art) */}
+      <div className="flex justify-center pb-1 pt-3 lg:hidden">
+        <div className="kq-chip">Page {currentPage + 1} of {totalPages}</div>
       </div>
 
-      <main className="flex flex-1 flex-col lg:flex-row lg:items-start lg:gap-8 px-4 py-3 lg:py-6 w-full max-w-4xl lg:max-w-6xl mx-auto">
-        {/* Illustration */}
-        <div className={`relative w-full lg:w-3/5 lg:flex-shrink-0 rounded-2xl overflow-hidden shadow-2xl mb-4 lg:mb-0 transition-all duration-300 ${isPageTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-          style={{ border: '2px solid rgba(77,201,255,0.15)' }}>
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-3 lg:max-w-6xl lg:flex-row lg:items-start lg:gap-8 lg:py-6">
+        {/* Illustration: the event itself */}
+        <div className={`kq-cover relative mb-4 w-full overflow-hidden transition-[opacity,transform] duration-300 lg:mb-0 lg:w-3/5 lg:flex-shrink-0 ${isPageTransitioning ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}>
           {page.image ? (
-            <img src={page.image} alt={`Page ${currentPage + 1} illustration`} className="w-full h-auto object-cover animate-fadeIn" key={currentPage} />
+            <img
+              src={page.image} alt={`Page ${currentPage + 1} illustration`}
+              className="h-auto w-full animate-bloom-in object-cover" key={currentPage}
+            />
           ) : (
-            <div className="w-full h-64 lg:h-[60vh] flex items-center justify-center text-6xl" style={{ background: 'linear-gradient(135deg, #1a1a6e, #2d1b5e)' }}>✨</div>
+            <div className="flex h-64 w-full items-center justify-center lg:h-[60vh]">
+              <Icon name="auto_awesome" size={44} className="text-kq-dim" />
+            </div>
           )}
           {page.image && (
             <div className="absolute bottom-3 right-3">
@@ -605,74 +657,56 @@ export default function BookViewerPage() {
           )}
         </div>
 
-        {/* Right panel: text + audio + song (sticks beside the art on desktop) */}
-        <div className="w-full lg:w-2/5 flex flex-col gap-3 lg:sticky lg:top-24">
-          {/* Desktop-only page label */}
-          <div className="hidden lg:flex items-center justify-between">
-            <span style={{ fontFamily: 'Fredoka One, cursive', fontSize: '1.05rem', color: '#fefcf5' }} className="truncate">{book.title}</span>
-            <div className="kq-chip kq-chip-electric shrink-0">Page {currentPage + 1} of {totalPages}</div>
+        {/* Reading column: the cream page, the read-aloud action, the audio */}
+        <div className="flex w-full flex-col gap-3 lg:sticky lg:top-24 lg:w-2/5">
+          {/* Desktop page label */}
+          <div className="hidden items-center justify-between lg:flex">
+            <span className="font-display min-w-0 truncate text-base text-kq-text">{book.title}</span>
+            <div className="kq-chip shrink-0">Page {currentPage + 1} of {totalPages}</div>
           </div>
 
-          {/* Reading controls: read-along + dyslexia-friendly mode */}
-          <div className="flex items-center gap-2">
-            <button onClick={toggleReadAlong}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
-              style={{
-                background: readAlong ? '#f5d000' : 'rgba(245,208,0,0.12)',
-                border: '1.5px solid rgba(245,208,0,0.4)',
-                color: readAlong ? '#0d1b3e' : '#f5d000',
-              }}
-              title="Highlight each sentence as it's read aloud">
-              {readAlong ? '⏸ Stop' : '▶ Read Along'}
-            </button>
-            <button onClick={toggleDyslexia}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all"
-              style={{
-                background: dyslexiaMode ? '#4fd6c6' : 'rgba(0,196,180,0.12)',
-                border: '1.5px solid rgba(0,196,180,0.4)',
-                color: dyslexiaMode ? '#06231f' : '#4fd6c6',
-              }}
-              title="Easy-reading mode: dyslexia-friendly font and spacing">
-              🔤 <span>Easy Read</span>
-            </button>
-          </div>
-
-          {/* Story text */}
-          <div
-            className={`rounded-2xl p-5 lg:p-6 transition-all duration-300 lg:max-h-[58vh] lg:overflow-y-auto ${isPageTransitioning ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
-            style={{
-              background: dyslexiaMode ? '#fbf3da' : 'rgba(26,42,94,0.7)',
-              border: dyslexiaMode ? '1.5px solid rgba(0,0,0,0.08)' : '1.5px solid rgba(77,201,255,0.15)',
-              backdropFilter: 'blur(8px)',
-            }}
+          {/* The one amber action on this screen: Read aloud */}
+          <button
+            onClick={toggleReadAlong}
+            className="kq-btn-primary !py-3 !text-base"
+            title="Highlight each sentence as it is read"
           >
+            {readAlong ? (
+              <>
+                <span className="material-symbols-outlined text-lg">stop</span> Stop reading
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-lg">play_arrow</span> Read aloud
+              </>
+            )}
+          </button>
+
+          {/* Easy Read: a reading preference, so it is a chip and not a second action */}
+          <button
+            onClick={toggleDyslexia}
+            aria-pressed={dyslexiaMode}
+            className={`kq-chip cursor-pointer self-start ${dyslexiaMode ? 'is-on' : ''}`}
+            title="Easy-reading font and spacing"
+          >
+            <span className="material-symbols-outlined text-base">format_size</span> Easy Read
+          </button>
+
+          {/* The page itself, on the warm cream sheet */}
+          <div className={`kq-sheet transition-[opacity,transform] duration-300 lg:max-h-[58vh] lg:overflow-y-auto ${isPageTransitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
             <p
-              className={`text-base lg:text-lg font-medium animate-slideUp ${dyslexiaMode ? '' : 'leading-relaxed'}`}
-              style={{
-                color: dyslexiaMode ? '#2a2410' : '#e8f0ff',
-                fontFamily: dyslexiaMode
-                  ? "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif"
-                  : 'Nunito, sans-serif',
-                letterSpacing: dyslexiaMode ? '0.04em' : undefined,
-                wordSpacing: dyslexiaMode ? '0.12em' : undefined,
-                lineHeight: dyslexiaMode ? 2.1 : undefined,
-                fontSize: dyslexiaMode ? '1.18rem' : undefined,
-              }}
+              style={dyslexiaMode ? {
+                fontFamily: "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif",
+                letterSpacing: '0.04em',
+                wordSpacing: '0.12em',
+                lineHeight: 2.1,
+                fontSize: '1.3rem',
+              } : undefined}
             >
               {splitSentences(page.text).map((sentence, i) => (
                 <span
                   key={i}
-                  style={
-                    readAlong && i === highlightIndex
-                      ? {
-                          background: dyslexiaMode ? '#ffe27a' : 'rgba(245,208,0,0.35)',
-                          color: dyslexiaMode ? '#2a2410' : '#fff7d6',
-                          borderRadius: 6,
-                          boxShadow: '0 0 0 3px ' + (dyslexiaMode ? '#ffe27a' : 'rgba(245,208,0,0.35)'),
-                          transition: 'background 0.2s',
-                        }
-                      : undefined
-                  }
+                  className={readAlong && i === highlightIndex ? 'rounded-sm bg-kq-amber/30 transition-colors' : undefined}
                 >
                   {sentence}{' '}
                 </span>
@@ -680,40 +714,37 @@ export default function BookViewerPage() {
             </p>
           </div>
 
-          {/* Continue the Adventure — sequel starring the same hero (last page only) */}
+          {/* Continue the adventure: last page only */}
           {currentPage === totalPages - 1 && (
-            <button onClick={handleContinueAdventure}
-              className="w-full py-3 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #9b5de5, #ff5247)', color: '#fff', boxShadow: '0 4px 0 #6b3db5' }}>
-              🚀 Continue the Adventure!
+            <button onClick={handleContinueAdventure} className="kq-btn-secondary !text-sm">
+              <Icon name="auto_stories" size={16} /> Continue the adventure
             </button>
           )}
 
-          {/* Audio player row (if audio exists) */}
+          {/* Audiobook player, when the audio exists */}
           {book.audioUrl && (
-            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(77,201,255,0.08)', border: '1px solid rgba(77,201,255,0.2)' }}>
-              <span className="text-lg">🎧</span>
-              <audio ref={setAudioRef} controls className="flex-1 h-8" style={{ minWidth: 0 }}>
+            <div className="flex items-center gap-2 rounded-lg border border-kq-line bg-white/5 p-2">
+              <span className="material-symbols-outlined text-lg text-kq-dim">headphones</span>
+              <audio ref={setAudioRef} controls className="h-8 flex-1" style={{ minWidth: 0 }}>
                 <source src={book.audioUrl} type="audio/mpeg" />
               </audio>
             </div>
           )}
 
-          {/* Theme song player (if a song exists) */}
+          {/* Theme song player, when a song exists */}
           {book.songUrl && (
-            <div className="flex items-center gap-2 p-2 rounded-xl" style={{ background: 'rgba(0,196,180,0.08)', border: '1px solid rgba(0,196,180,0.25)' }}>
-              <span className="text-lg">🎵</span>
-              <audio controls className="flex-1 h-8" style={{ minWidth: 0 }}>
+            <div className="flex items-center gap-2 rounded-lg border border-kq-line bg-white/5 p-2">
+              <span className="material-symbols-outlined text-lg text-kq-dim">music_note</span>
+              <audio controls className="h-8 flex-1" style={{ minWidth: 0 }}>
                 <source src={book.songUrl} />
               </audio>
               <a
                 href={book.songUrl}
                 download={`${(book.title || 'theme-song').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-theme.mp3`}
-                className="shrink-0 px-2 py-1 rounded-lg text-xs font-bold"
-                style={{ background: 'rgba(0,196,180,0.15)', border: '1px solid rgba(0,196,180,0.3)', color: '#4fd6c6' }}
+                className="kq-icon-btn shrink-0"
                 title="Download theme song"
               >
-                ⬇
+                <Icon name="download" size={16} />
               </a>
             </div>
           )}
@@ -728,9 +759,9 @@ export default function BookViewerPage() {
         nextDisabled={currentPage === totalPages - 1}
       />
 
-      <footer className="py-2 text-center" style={{ background: 'rgba(8,15,36,0.9)' }}>
-        <p className="text-xs" style={{ color: '#a0b4d6' }}>
-          Created with <span className="font-semibold" style={{ color: '#9b5de5' }}>Venice.ai</span>
+      <footer className="border-t border-kq-line-soft py-2 text-center">
+        <p className="text-xs text-kq-dim">
+          Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
         </p>
       </footer>
     </>

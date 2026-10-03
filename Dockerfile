@@ -12,9 +12,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ---------------------------------------------------------------------------
 FROM base AS deps
 WORKDIR /app
-# python3/make/g++ let better-sqlite3 compile if no prebuilt binary matches.
+# ca-certificates only: there is no native module to compile any more, so the
+# python3/make/g++ toolchain that better-sqlite3 needed is gone.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates python3 make g++ \
+  && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci
