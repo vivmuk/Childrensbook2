@@ -437,7 +437,7 @@ export default function BookViewerPage() {
           <div className="flex items-center justify-between px-4 py-3">
             <div className="font-display text-sm text-kq-text">Animated illustration</div>
             <button onClick={() => setShowVideoModal(false)} className="kq-icon-btn" title="Close" aria-label="Close">
-              <span className="material-symbols-outlined text-lg">close</span>
+              <Icon name="close" size={20} />
             </button>
           </div>
           <video
@@ -471,14 +471,14 @@ export default function BookViewerPage() {
           onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
           className={`${overlay} hover:scale-105`}
         >
-          <span className="material-symbols-outlined text-base">play_arrow</span> Watch animation
+          <Icon name="play_arrow" size={18} /> Watch animation
         </button>
       )
     }
     if (isAnimating) {
       return (
         <div className={overlay}>
-          <span className="material-symbols-outlined animate-kq-spin text-base text-kq-dim">progress_activity</span>
+          <Icon name="progress_activity" size={18} className="animate-kq-spin text-kq-dim" />
           <span>Animating {animateQueueId ? `${progressPct}%` : 'starting'}</span>
         </div>
       )
@@ -509,7 +509,7 @@ export default function BookViewerPage() {
         {book.title}
       </span>
       <button onClick={handleShare} className="kq-icon-btn" title="Share this book" aria-label="Share this book">
-        <span className="material-symbols-outlined text-lg">share</span>
+        <Icon name="share" size={20} />
       </button>
     </div>
   )
@@ -520,7 +520,7 @@ export default function BookViewerPage() {
     <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-2 px-4 pt-3 lg:max-w-6xl">
       {book.audioUrl ? (
         <button onClick={handleDownloadAudio} className={TOOL_BTN} title="Download the audiobook">
-          <span className="material-symbols-outlined text-base">headphones</span> MP3
+          <Icon name="headphones" size={18} /> MP3
         </button>
       ) : (
         <button
@@ -535,7 +535,7 @@ export default function BookViewerPage() {
           onClick={handleGenerateSong} disabled={isGeneratingSong}
           className={TOOL_BTN} title="Create a sing-along song for this book"
         >
-          <span className="material-symbols-outlined text-base">music_note</span>
+          <Icon name="music_note" size={18} />
           {isGeneratingSong ? 'Composing' : 'Sing-along'}
         </button>
       )}
@@ -550,13 +550,13 @@ export default function BookViewerPage() {
       {showExport && (
         <>
           <button onClick={handleEmail} className={TOOL_BTN} title="Email this story">
-            <span className="material-symbols-outlined text-base">mail</span> Email
+            <Icon name="mail" size={18} /> Email
           </button>
           <button onClick={handleDownloadHTML} className={TOOL_BTN} title="Download as a web page">
             <Icon name="code" size={16} /> Web page
           </button>
           <button onClick={handleDownloadPDF} className={TOOL_BTN} title="Download as a PDF">
-            <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF
+            <Icon name="picture_as_pdf" size={18} /> PDF
           </button>
         </>
       )}
@@ -699,11 +699,11 @@ export default function BookViewerPage() {
           >
             {readAlong ? (
               <>
-                <span className="material-symbols-outlined text-lg">stop</span> Stop reading
+                <Icon name="stop" size={20} /> Stop reading
               </>
             ) : (
               <>
-                <span className="material-symbols-outlined text-lg">play_arrow</span> Read aloud
+                <Icon name="play_arrow" size={20} /> Read aloud
               </>
             )}
           </button>
@@ -715,7 +715,7 @@ export default function BookViewerPage() {
             className={`kq-chip cursor-pointer self-start ${dyslexiaMode ? 'is-on' : ''}`}
             title="Easy-reading font and spacing"
           >
-            <span className="material-symbols-outlined text-base">format_size</span> Easy Read
+            <Icon name="format_size" size={18} /> Easy Read
           </button>
 
           {/* The page itself, on the warm cream sheet */}
@@ -750,7 +750,7 @@ export default function BookViewerPage() {
           {/* Audiobook player, when the audio exists */}
           {book.audioUrl && (
             <div className="flex items-center gap-2 rounded-lg border border-kq-line bg-white/5 p-2">
-              <span className="material-symbols-outlined text-lg text-kq-dim">headphones</span>
+              <Icon name="headphones" size={20} className="text-kq-dim" />
               <audio ref={setAudioRef} controls className="h-8 flex-1" style={{ minWidth: 0 }}>
                 <source src={book.audioUrl} type="audio/mpeg" />
               </audio>
@@ -760,7 +760,7 @@ export default function BookViewerPage() {
           {/* Theme song player, when a song exists */}
           {book.songUrl && (
             <div className="flex items-center gap-2 rounded-lg border border-kq-line bg-white/5 p-2">
-              <span className="material-symbols-outlined text-lg text-kq-dim">music_note</span>
+              <Icon name="music_note" size={20} className="text-kq-dim" />
               <audio controls className="h-8 flex-1" style={{ minWidth: 0 }}>
                 <source src={book.songUrl} />
               </audio>

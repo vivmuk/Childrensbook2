@@ -121,9 +121,7 @@ export default function PDFViewPage() {
           Download PDF
         </button>
         <button onClick={() => window.print()} className="kq-btn-secondary">
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            print
-          </span>
+          <Icon name="print" size={20} />
           Print
         </button>
       </div>

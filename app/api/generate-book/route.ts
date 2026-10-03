@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setBook, getBook, type Book, countUserBooks } from '@/lib/storage'
 import {
-  KQ_STORY_WORLD_BRIEF,
+  buildStoryStyleBrief,
   buildIllustrationPrompt,
   buildCoverIllustrationPrompt,
+  getStyle,
 } from '@/lib/illustration-style'
 
 const LOCAL_USER_ID = 'local-user'
@@ -113,7 +114,7 @@ NARRATIVE STRUCTURE:
 - Pages ${Math.ceil(pageCount * 0.6) + 1}–${pageCount - 1}: Climax and emotional peak
 - Page ${pageCount}: Satisfying resolution with a lasting lesson or warm feeling
 
-${KQ_STORY_WORLD_BRIEF}
+${buildStoryStyleBrief(illustrationStyle)}
 VISUAL BIBLE (critical for consistent illustrations):
 - First lock a "visualBible": a precise, reusable description of the MAIN CHARACTER (species/age, hair, eyes, skin tone, exact outfit + colors, size, signature accessory) and a "colorPalette" of 3–5 colors that define the whole book's look.
 - In EVERY imageDescription, paste the main character description from the visualBible VERBATIM (do not rephrase it) so the character looks identical on every page. Do the same for any recurring side character.
@@ -123,7 +124,7 @@ ILLUSTRATION DESCRIPTIONS:
 - Each imageDescription should be vivid and specific (up to 800 characters), in ENGLISH.
 - Start with the verbatim main-character description, then the setting, lighting, action, mood, and the colorPalette.
 - Vary the camera framing across pages for visual rhythm: use a mix of wide establishing shots, medium shots, and emotional close-ups. State the shot type.
-- Style: ${illustrationStyle}
+- Style: ${getStyle(illustrationStyle).label} — ${getStyle(illustrationStyle).medium}
 
 Respond with ONLY valid JSON — no markdown, no code blocks, no extra text:
 
@@ -421,7 +422,6 @@ async function generateBookImages(
     characters: charPrefix.trim() || undefined,
     palette: palette || undefined,
     style: illustrationStyle,
-    title: book.title,
     scene: pages[0]?.imageDescription || 'A magical adventure scene',
   })
   imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })

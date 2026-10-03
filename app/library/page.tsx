@@ -177,12 +177,12 @@ export default function LibraryPage() {
                       title={favorites.includes(book.id) ? 'Remove from favourites' : 'Add to favourites'}
                       aria-label={favorites.includes(book.id) ? 'Remove from favourites' : 'Add to favourites'}
                     >
-                      <span
-                        className={`material-symbols-outlined text-lg ${favorites.includes(book.id) ? 'text-kq-amber' : 'text-kq-dim'}`}
-                        style={{ fontVariationSettings: favorites.includes(book.id) ? "'FILL' 1" : "'FILL' 0" }}
-                      >
-                        star
-                      </span>
+                      <Icon
+                        name="star"
+                        size={20}
+                        filled={favorites.includes(book.id)}
+                        className={favorites.includes(book.id) ? 'text-kq-amber' : 'text-kq-dim'}
+                      />
                     </button>
 
                     {/* Delete: quiet, always reachable, including on touch screens */}
@@ -192,7 +192,7 @@ export default function LibraryPage() {
                       title="Remove from library"
                       aria-label="Remove from library"
                     >
-                      <span className="material-symbols-outlined text-lg">delete</span>
+                      <Icon name="delete" size={20} />
                     </button>
                   </div>
 

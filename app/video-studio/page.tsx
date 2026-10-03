@@ -357,9 +357,7 @@ export default function VideoStudioPage() {
                       className="kq-icon-btn shrink-0"
                       title="Close"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                        close
-                      </span>
+                      <Icon name="close" size={18} />
                     </button>
                   </div>
                 </div>
@@ -393,9 +391,7 @@ export default function VideoStudioPage() {
                       className="kq-icon-btn absolute right-2 top-2"
                       title="Remove image"
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                        close
-                      </span>
+                      <Icon name="close" size={18} />
                     </button>
                   )}
                 </div>
@@ -564,9 +560,7 @@ export default function VideoStudioPage() {
                       className="kq-btn-secondary"
                       style={{ width: 'auto', flex: 1 }}
                     >
-                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                        add_photo_alternate
-                      </span>
+                      <Icon name="add_photo_alternate" size={18} />
                       Make another
                     </button>
                   </div>
@@ -622,12 +616,7 @@ export default function VideoStudioPage() {
                           title="Play video"
                         >
                           <span className="flex h-12 w-12 items-center justify-center rounded-md border border-kq-line bg-kq-ink/70">
-                            <span
-                              className="material-symbols-outlined text-kq-cream"
-                              style={{ fontSize: '26px' }}
-                            >
-                              play_arrow
-                            </span>
+                            <Icon name="play_arrow" size={26} className="text-kq-cream" />
                           </span>
                         </button>
                       </div>

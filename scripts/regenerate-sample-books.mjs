@@ -71,6 +71,7 @@ const STORIES = [
   {
     id: 'sample_lantern_harbour',
     title: 'The Lantern That Would Not Go Out',
+    style: 'silhouette',
     ageRange: '1st',
     category: 'Courage',
     heroType: 'person',
@@ -130,6 +131,7 @@ const STORIES = [
   {
     id: 'sample_mango_monsoon',
     title: 'Mango and the Monsoon',
+    style: 'watercolor',
     ageRange: '2nd',
     category: 'Kindness',
     heroType: 'person',
@@ -189,6 +191,7 @@ const STORIES = [
   {
     id: 'sample_sleepy_lighthouse',
     title: 'The Sleepy Lighthouse',
+    style: 'gouache',
     ageRange: '1st',
     category: 'Friendship',
     heroType: 'animal',
@@ -248,6 +251,7 @@ const STORIES = [
   {
     id: 'sample_night_bus',
     title: 'Nimbu the Night Bus',
+    style: 'papercut',
     ageRange: '2nd',
     category: 'Adventure',
     heroType: 'object',
@@ -307,6 +311,7 @@ const STORIES = [
   {
     id: 'sample_paper_boat',
     title: 'The Paper Boat That Sailed to the Moon',
+    style: 'crayon',
     ageRange: '1st',
     category: 'Feelings',
     heroType: 'person',
@@ -365,6 +370,7 @@ const STORIES = [
   {
     id: 'sample_starlight_market',
     title: 'Amara and the Starlight Market',
+    style: 'ghibli',
     ageRange: '3rd',
     category: 'Wonder',
     heroType: 'person',
@@ -498,9 +504,9 @@ async function main() {
     let coverUrl = `/sample-books/${story.id}/cover.webp`
     if (!existsSync(coverFile) || FORCE) {
       const prompt = buildCoverIllustrationPrompt({
+        style: story.style,
         characters: story.characters,
         palette: story.palette,
-        title: story.title,
         scene: story.pages[0].scene,
       })
       const b64 = await generateImage(prompt, seedFor(story.id, 'cover'))
@@ -518,6 +524,7 @@ async function main() {
       const file = path.join(dir, `page-${i + 1}.webp`)
       if (!existsSync(file) || FORCE) {
         const prompt = buildIllustrationPrompt({
+          style: story.style,
           characters: story.characters,
           palette: story.palette,
           shot: page.shot,
@@ -541,7 +548,7 @@ async function main() {
       id: story.id,
       title: story.title,
       ageRange: story.ageRange,
-      illustrationStyle: 'Hand painted gouache',
+      illustrationStyle: story.style,
       description: story.description,
       category: story.category,
       heroType: story.heroType,
