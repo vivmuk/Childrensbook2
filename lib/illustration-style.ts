@@ -35,7 +35,8 @@ export const KQ_LIGHT =
 export const KQ_QUALITY =
   'Publication quality children\u2019s book art. Clear single focal point, generous calm space, ' +
   'strong silhouette, readable at thumbnail size, gentle depth so the eye can rest. ' +
-  'Cosy and magical rather than busy or spectacular.'
+  'Cosy and magical rather than busy or spectacular. The painting fills the whole canvas edge ' +
+  'to edge: no paper margin, no white border, no frame and no vignette down the sides.'
 
 /** What must never appear. */
 export const KQ_NEGATIVE_EXTRA =
