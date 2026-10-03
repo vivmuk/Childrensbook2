@@ -1,0 +1,49 @@
+{
+  "id": "sample_starlight_market",
+  "title": "Amara and the Starlight Market",
+  "ageRange": "3rd",
+  "illustrationStyle": "Hand painted gouache",
+  "description": "A girl is given one jar of starlight and has to decide what it is really for.",
+  "category": "Wonder",
+  "heroType": "person",
+  "setting": "A night market under the stars",
+  "expectedPages": 6,
+  "titlePage": {
+    "image": "/sample-books/sample_starlight_market/cover.webp",
+    "title": "Amara and the Starlight Market"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "text": "Once a year, on the night the stars come down low, the market opens behind the last house on Amara’s street.",
+      "image": "/sample-books/sample_starlight_market/page-1.webp"
+    },
+    {
+      "pageNumber": 2,
+      "text": "The stalls sold ordinary things — spoons, fish, buttons — and one stall sold light. In jars. Very neatly.",
+      "image": "/sample-books/sample_starlight_market/page-2.webp"
+    },
+    {
+      "pageNumber": 3,
+      "text": "The old seller looked at Amara for a long moment and said, “One jar. Not two. Choose what you need, not what you want.”",
+      "image": "/sample-books/sample_starlight_market/page-3.webp"
+    },
+    {
+      "pageNumber": 4,
+      "text": "Amara wanted to keep it. She thought of her shelf, and how beautiful the jar would look on it, glowing, all hers.",
+      "image": "/sample-books/sample_starlight_market/page-4.webp"
+    },
+    {
+      "pageNumber": 5,
+      "text": "Then she heard her neighbour’s baby crying in the dark, because their lamp had gone out. So she gave them the jar instead.",
+      "image": "/sample-books/sample_starlight_market/page-5.webp"
+    },
+    {
+      "pageNumber": 6,
+      "text": "The seller saw. And so Amara got her jar after all, filled twice as full. What would you have done with yours?",
+      "image": "/sample-books/sample_starlight_market/page-6.webp"
+    }
+  ],
+  "status": "completed",
+  "createdAt": "2026-10-03T15:50:25.618Z"
+}

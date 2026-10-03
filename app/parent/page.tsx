@@ -87,7 +87,7 @@ export default function ParentDashboardPage() {
   return (
     <div className="kq-ground kq-stars-bg relative min-h-screen overflow-x-hidden">
       <div className="relative z-10">
-        <Header title="Parent Dashboard" />
+        <Header title="For parents" />
 
         <main className="mx-auto max-w-6xl px-4 py-6">
           {/* Tabs */}

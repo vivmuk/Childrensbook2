@@ -1,0 +1,49 @@
+{
+  "id": "sample_mango_monsoon",
+  "title": "Mango and the Monsoon",
+  "ageRange": "2nd",
+  "illustrationStyle": "Hand painted gouache",
+  "description": "A boy shares the last mango of the summer with a soaked street dog, and the rain turns into a friend.",
+  "category": "Kindness",
+  "heroType": "person",
+  "setting": "A village in the first rain",
+  "expectedPages": 6,
+  "titlePage": {
+    "image": "/sample-books/sample_mango_monsoon/cover.webp",
+    "title": "Mango and the Monsoon"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "text": "The last mango of the summer sat in Aarav’s hands, warm as a lamp. He had been saving it for three whole days.",
+      "image": "/sample-books/sample_mango_monsoon/page-1.webp"
+    },
+    {
+      "pageNumber": 2,
+      "text": "Then the sky turned the colour of an old coin, and the first rain of the monsoon came down all at once.",
+      "image": "/sample-books/sample_mango_monsoon/page-2.webp"
+    },
+    {
+      "pageNumber": 3,
+      "text": "Under the neem tree sat a thin dog, soaked through, with one white ear stuck flat to its head. It looked at the mango. It did not beg.",
+      "image": "/sample-books/sample_mango_monsoon/page-3.webp"
+    },
+    {
+      "pageNumber": 4,
+      "text": "Aarav crouched down and broke the mango in half. The juice ran over his fingers and the rain washed it off.",
+      "image": "/sample-books/sample_mango_monsoon/page-4.webp"
+    },
+    {
+      "pageNumber": 5,
+      "text": "The dog ate it in three bites, then shook itself all over Aarav, and the two of them laughed in the rain like it was a warm day.",
+      "image": "/sample-books/sample_mango_monsoon/page-5.webp"
+    },
+    {
+      "pageNumber": 6,
+      "text": "Every monsoon after that, when the first rain came, a dog with one white ear was waiting under the neem tree. And if you had a mango, would you break it in half?",
+      "image": "/sample-books/sample_mango_monsoon/page-6.webp"
+    }
+  ],
+  "status": "completed",
+  "createdAt": "2026-10-03T15:37:09.786Z"
+}

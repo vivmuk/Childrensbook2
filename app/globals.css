@@ -203,7 +203,9 @@ h1, h2, h3, .kq-display {
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--kq-amber);
+  /* Dim cream, not amber: amber belongs to the one action on the screen, and a
+     section label wearing it flattens the hierarchy. */
+  color: var(--kq-dim);
 }
 
 /* Legacy section label, remapped to the quiet eyebrow. */

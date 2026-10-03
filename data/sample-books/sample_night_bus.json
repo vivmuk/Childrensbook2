@@ -1,0 +1,49 @@
+{
+  "id": "sample_night_bus",
+  "title": "Nimbu the Night Bus",
+  "ageRange": "2nd",
+  "illustrationStyle": "Hand painted gouache",
+  "description": "A small green night bus quietly collects the city’s tired animals and takes every one of them home.",
+  "category": "Adventure",
+  "heroType": "object",
+  "setting": "A sleeping city",
+  "expectedPages": 6,
+  "titlePage": {
+    "image": "/sample-books/sample_night_bus/cover.webp",
+    "title": "Nimbu the Night Bus"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "text": "At midnight, when the street lamps leaned over and yawned, the little green bus called Nimbu started its engine. It had never once been late.",
+      "image": "/sample-books/sample_night_bus/page-1.webp"
+    },
+    {
+      "pageNumber": 2,
+      "text": "First stop: the library steps, where a tabby cat was asleep on the returns box with its tail hanging down.",
+      "image": "/sample-books/sample_night_bus/page-2.webp"
+    },
+    {
+      "pageNumber": 3,
+      "text": "Next stop: the park fence, where an owl in round glasses was waiting, and pretending it had not been waiting long.",
+      "image": "/sample-books/sample_night_bus/page-3.webp"
+    },
+    {
+      "pageNumber": 4,
+      "text": "The hedgehog climbed in backwards, as hedgehogs do, and the tortoise took the whole evening to get up the last step. Nimbu waited. Nimbu always waited.",
+      "image": "/sample-books/sample_night_bus/page-4.webp"
+    },
+    {
+      "pageNumber": 5,
+      "text": "So it went, up the hill and down the hill, until the last passenger was home and the city was quiet.",
+      "image": "/sample-books/sample_night_bus/page-5.webp"
+    },
+    {
+      "pageNumber": 6,
+      "text": "If you were awake at midnight and heard a gentle engine outside, would you come for a ride? Where would you ask to go?",
+      "image": "/sample-books/sample_night_bus/page-6.webp"
+    }
+  ],
+  "status": "completed",
+  "createdAt": "2026-10-03T15:52:37.141Z"
+}

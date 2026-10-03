@@ -21,15 +21,25 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// The compiled twin of lib/illustration-style.ts (see the build step in the
-// header of this repo's scripts/README.md). One source of truth for the look.
-import {
-  buildCoverIllustrationPrompt,
-  buildIllustrationPrompt,
-  KQ_PALETTE,
-} from '../.kq-build/illustration-style.js'
-
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+// lib/illustration-style.ts is the one source of truth for the look, but this
+// is a plain Node script, so it imports a compiled copy. Compile it on the fly
+// if it is missing, so a fresh clone can just run this file.
+const BUILT = path.join(ROOT, '.kq-build', 'illustration-style.js')
+if (!existsSync(BUILT)) {
+  const { execFileSync } = await import('node:child_process')
+  console.log('compiling lib/illustration-style.ts once ...')
+  execFileSync(
+    'npx',
+    ['tsc', 'lib/illustration-style.ts', '--outDir', '.kq-build', '--module', 'esnext',
+     '--target', 'es2020', '--moduleResolution', 'bundler', '--skipLibCheck'],
+    { cwd: ROOT, stdio: 'inherit' },
+  )
+}
+
+const { buildCoverIllustrationPrompt, buildIllustrationPrompt, KQ_PALETTE } =
+  await import(BUILT)
 const ART_DIR = path.join(ROOT, 'public', 'sample-books')
 const DATA_DIR = path.join(ROOT, 'data', 'sample-books')
 

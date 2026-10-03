@@ -251,12 +251,20 @@ export default function VideoStudioPage() {
       <div className="kq-stars-bg pointer-events-none absolute inset-0" />
 
       <div className="relative z-10 flex flex-1 flex-col">
-        <Header title="Video Studio" />
+        <Header title="Animate" />
 
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 lg:py-12">
           {/* ══════════ The promise ══════════ */}
+          <div className="mb-8 overflow-hidden rounded-[22px] border border-kq-hairline">
+            <img
+              src="/art/hero-wide.png"
+              alt="A painted evening scene, ready to be brought to life"
+              className="h-[150px] w-full object-cover object-[50%_62%] sm:h-[190px]"
+            />
+          </div>
+
           <div className="mb-8 max-w-xl">
-            <div className="kq-eyebrow mb-3">Video studio</div>
+            <div className="kq-eyebrow mb-3">Animate a picture</div>
             <h1 className="kq-hero-title text-3xl sm:text-4xl">Bring a picture to life</h1>
             <p className="mt-4 text-base leading-relaxed text-kq-dim">
               Upload a picture, describe how it should move, and the studio paints the motion frame

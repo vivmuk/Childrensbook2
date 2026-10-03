@@ -161,8 +161,12 @@ export default function WelcomePage() {
 
           <div className="flex-1" />
 
-          {/* The one amber action, plus the ways back in */}
-          <div className="mx-auto w-full max-w-md pb-6">
+          {/* The one amber action, plus the ways back in. The bottom padding
+              keeps the last row clear of the home bar on a modern phone. */}
+          <div
+            className="mx-auto w-full max-w-md"
+            style={{ paddingBottom: 'calc(2.25rem + env(safe-area-inset-bottom))' }}
+          >
             <button
               onClick={() => router.push('/generate')}
               className="kq-btn-primary text-lg"

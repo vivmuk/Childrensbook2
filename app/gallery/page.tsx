@@ -23,6 +23,16 @@ interface GalleryBook {
 // The sample covers are painted artwork, so they are shown big and framed
 // like pictures rather than shrunk into small thumbnails. The grid therefore
 // stays at one or two columns, never four.
+/**
+ * A book's page count, whichever way it is stored: generated books carry
+ * `pages`, sample books also carry `expectedPages`, and the reader used to read
+ * a `pageCount` field that never existed, which is why the cards printed the
+ * word "pages" with no number in front of it.
+ */
+function pageCountOf(book: any): number {
+  return book?.pages?.length || book?.expectedPages || book?.pageCount || 0
+}
+
 export default function GalleryPage() {
   const router = useRouter()
   const [books, setBooks] = useState<GalleryBook[]>([])
@@ -146,7 +156,7 @@ export default function GalleryPage() {
                     {filteredBooks[0].title}
                   </span>
                   <span className="mt-1 block text-xs text-kq-dim">
-                    {filteredBooks[0].category} · Grade {filteredBooks[0].ageRange} · {filteredBooks[0].pageCount} pages
+                    {filteredBooks[0].category} · Grade {filteredBooks[0].ageRange} · {pageCountOf(filteredBooks[0])} pages
                   </span>
                 </span>
               </button>
@@ -179,7 +189,7 @@ export default function GalleryPage() {
                         </span>
                       )}
                       <span className="absolute right-3 top-3 rounded bg-kq-ink/80 px-2 py-0.5 text-xs text-kq-text">
-                        {book.pageCount} pages
+                        {pageCountOf(book)} pages
                       </span>
                     </span>
 

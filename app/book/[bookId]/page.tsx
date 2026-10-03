@@ -43,6 +43,9 @@ export default function BookViewerPage() {
   const params = useParams()
   const bookId = params.bookId as string
   const [book, setBook] = useState<Book | null>(null)
+  // Email / HTML / PDF are things a parent does once, not while reading, so
+  // they stay folded away until asked for.
+  const [showExport, setShowExport] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
@@ -511,18 +514,10 @@ export default function BookViewerPage() {
     </div>
   )
 
-  // The quiet book actions, kept out of the reader's way in one row
+  // The reading screen stays a reading screen: listening and singing belong
+  // here, exporting does not. One tap folds the rest out when it is wanted.
   const BookActions = () => (
-    <div className="mx-auto flex w-full max-w-4xl flex-wrap gap-2 px-4 pt-3 lg:max-w-6xl">
-      <button onClick={handleEmail} className={TOOL_BTN} title="Email this story">
-        <span className="material-symbols-outlined text-base">mail</span> Email
-      </button>
-      <button onClick={handleDownloadHTML} className={TOOL_BTN} title="Download as a web page">
-        <Icon name="code" size={16} /> HTML
-      </button>
-      <button onClick={handleDownloadPDF} className={TOOL_BTN} title="Download as a PDF">
-        <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF
-      </button>
+    <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-2 px-4 pt-3 lg:max-w-6xl">
       {book.audioUrl ? (
         <button onClick={handleDownloadAudio} className={TOOL_BTN} title="Download the audiobook">
           <span className="material-symbols-outlined text-base">headphones</span> MP3
@@ -543,6 +538,27 @@ export default function BookViewerPage() {
           <span className="material-symbols-outlined text-base">music_note</span>
           {isGeneratingSong ? 'Composing' : 'Sing-along'}
         </button>
+      )}
+      <button
+        onClick={() => setShowExport(v => !v)}
+        className={TOOL_BTN}
+        aria-expanded={showExport}
+        title="Save or share this book"
+      >
+        <Icon name="share" size={16} /> {showExport ? 'Hide' : 'Save and share'}
+      </button>
+      {showExport && (
+        <>
+          <button onClick={handleEmail} className={TOOL_BTN} title="Email this story">
+            <span className="material-symbols-outlined text-base">mail</span> Email
+          </button>
+          <button onClick={handleDownloadHTML} className={TOOL_BTN} title="Download as a web page">
+            <Icon name="code" size={16} /> Web page
+          </button>
+          <button onClick={handleDownloadPDF} className={TOOL_BTN} title="Download as a PDF">
+            <span className="material-symbols-outlined text-base">picture_as_pdf</span> PDF
+          </button>
+        </>
       )}
     </div>
   )

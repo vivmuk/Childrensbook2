@@ -1,0 +1,49 @@
+{
+  "id": "sample_paper_boat",
+  "title": "The Paper Boat That Sailed to the Moon",
+  "ageRange": "1st",
+  "illustrationStyle": "Hand painted gouache",
+  "description": "A girl folds her worry into a paper boat and lets the river carry it all the way up to the moon.",
+  "category": "Feelings",
+  "heroType": "person",
+  "setting": "A river at dusk",
+  "expectedPages": 6,
+  "titlePage": {
+    "image": "/sample-books/sample_paper_boat/cover.webp",
+    "title": "The Paper Boat That Sailed to the Moon"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "text": "Sana had a worry. It was not a big worry, but it would not go to sleep, and so neither could she.",
+      "image": "/sample-books/sample_paper_boat/page-1.webp"
+    },
+    {
+      "pageNumber": 2,
+      "text": "So she folded a boat out of paper, the way her grandmother had shown her, with the corners tucked in tight.",
+      "image": "/sample-books/sample_paper_boat/page-2.webp"
+    },
+    {
+      "pageNumber": 3,
+      "text": "She put it in the river and whispered the worry into it, and the river took the boat away.",
+      "image": "/sample-books/sample_paper_boat/page-3.webp"
+    },
+    {
+      "pageNumber": 4,
+      "text": "The boat sailed past the sleeping boats and the sleeping trees, and the moon came down low to have a look at it.",
+      "image": "/sample-books/sample_paper_boat/page-4.webp"
+    },
+    {
+      "pageNumber": 5,
+      "text": "The moon kept the worry, which is what moons are for, and sent back a small white feather instead.",
+      "image": "/sample-books/sample_paper_boat/page-5.webp"
+    },
+    {
+      "pageNumber": 6,
+      "text": "Sana found the feather on the windowsill in the morning, and she could not remember what the worry had been. What would you put in your paper boat?",
+      "image": "/sample-books/sample_paper_boat/page-6.webp"
+    }
+  ],
+  "status": "completed",
+  "createdAt": "2026-10-03T15:47:14.376Z"
+}

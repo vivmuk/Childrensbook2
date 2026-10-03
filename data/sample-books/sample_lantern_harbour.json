@@ -1,0 +1,49 @@
+{
+  "id": "sample_lantern_harbour",
+  "title": "The Lantern That Would Not Go Out",
+  "ageRange": "1st",
+  "illustrationStyle": "Hand painted gouache",
+  "description": "A small girl keeps one small light burning on a windy night, and brings every fishing boat home.",
+  "category": "Courage",
+  "heroType": "person",
+  "setting": "A small harbour at night",
+  "expectedPages": 6,
+  "titlePage": {
+    "image": "/sample-books/sample_lantern_harbour/cover.webp",
+    "title": "The Lantern That Would Not Go Out"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "text": "Every evening, Mira lit the little lantern in the window of the harbour house. It was not a big light. It was only as big as a jar of honey.",
+      "image": "/sample-books/sample_lantern_harbour/page-1.webp"
+    },
+    {
+      "pageNumber": 2,
+      "text": "But one night the wind came down from the hills and pushed the fishing boats far out to sea. The harbour went dark, and the boats could not find their way home.",
+      "image": "/sample-books/sample_lantern_harbour/page-2.webp"
+    },
+    {
+      "pageNumber": 3,
+      "text": "So Mira put on her coat, took the lantern in both hands, and climbed the hill above the harbour. The wind pulled at her hat. The little flame stayed lit.",
+      "image": "/sample-books/sample_lantern_harbour/page-3.webp"
+    },
+    {
+      "pageNumber": 4,
+      "text": "One by one, the boats turned in the dark and followed the small warm light, like moths following a kitchen window.",
+      "image": "/sample-books/sample_lantern_harbour/page-4.webp"
+    },
+    {
+      "pageNumber": 5,
+      "text": "Her father was the last one in. He lifted her up, and the lantern glowed between them like a small sun.",
+      "image": "/sample-books/sample_lantern_harbour/page-5.webp"
+    },
+    {
+      "pageNumber": 6,
+      "text": "That is why the harbour light is never turned off, even now. And what would you have done, if you had been the one holding the lantern?",
+      "image": "/sample-books/sample_lantern_harbour/page-6.webp"
+    }
+  ],
+  "status": "completed",
+  "createdAt": "2026-10-03T15:34:04.219Z"
+}

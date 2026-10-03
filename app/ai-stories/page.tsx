@@ -124,7 +124,7 @@ export default function AIStoriesPage() {
 
   return (
     <div className="kq-ground kq-stars-bg relative flex min-h-screen w-full flex-col overflow-x-hidden">
-      <Header title="AI Stories for Kids" />
+      <Header title="AI stories" />
 
       <main className="relative z-10 mx-auto flex w-full max-w-5xl grow flex-col px-4 py-6">
         {/* Page intro */}

@@ -1,0 +1,49 @@
+{
+  "id": "sample_sleepy_lighthouse",
+  "title": "The Sleepy Lighthouse",
+  "ageRange": "1st",
+  "illustrationStyle": "Hand painted gouache",
+  "description": "A lighthouse keeps falling asleep on the job, until a small girl finds out what it really needs.",
+  "category": "Friendship",
+  "heroType": "animal",
+  "setting": "A windy coast",
+  "expectedPages": 6,
+  "titlePage": {
+    "image": "/sample-books/sample_sleepy_lighthouse/cover.webp",
+    "title": "The Sleepy Lighthouse"
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "text": "The lighthouse on Windy Point had one job: to stay awake. But lately, every night at nine, its light slid shut and it began to snore.",
+      "image": "/sample-books/sample_sleepy_lighthouse/page-1.webp"
+    },
+    {
+      "pageNumber": 2,
+      "text": "That was a problem, because the fishing boats came past Windy Point in the dark, and they needed someone awake to show them the way.",
+      "image": "/sample-books/sample_sleepy_lighthouse/page-2.webp"
+    },
+    {
+      "pageNumber": 3,
+      "text": "Nell lived in the keeper’s cottage at the bottom of the point. She put on her green raincoat, climbed one hundred and twelve steps, and listened.",
+      "image": "/sample-books/sample_sleepy_lighthouse/page-3.webp"
+    },
+    {
+      "pageNumber": 4,
+      "text": "The lighthouse yawned and said, in a voice like a door opening, that nobody had ever told it a story. Everyone just told it to stay awake.",
+      "image": "/sample-books/sample_sleepy_lighthouse/page-4.webp"
+    },
+    {
+      "pageNumber": 5,
+      "text": "So every night at nine, Nell climbed the stairs and told it a story. And the light stayed on, all the way out to sea.",
+      "image": "/sample-books/sample_sleepy_lighthouse/page-5.webp"
+    },
+    {
+      "pageNumber": 6,
+      "text": "The boats still pass Windy Point at night. And what story would you tell, if you were the one climbing the stairs?",
+      "image": "/sample-books/sample_sleepy_lighthouse/page-6.webp"
+    }
+  ],
+  "status": "completed",
+  "createdAt": "2026-10-03T15:40:37.356Z"
+}
