@@ -115,6 +115,47 @@ Generated books must look like they belong to this world: painted gouache illust
 indigo and plum nights, one warm amber lamp light, moon white highlights. See
 `lib/illustration-style.ts` for the single shared style brief every image prompt must use.
 
+## Which model paints, and why it is per style
+
+`lib/illustration-style.ts` is the only place a style's machine is chosen, through
+`styleModel(value)` and the optional `model` field on a style. Do not send a model name from
+a page, a route or a script. The picker's default option is Automatic, which means this file
+decides.
+
+**The house painter is `flux-2-max`, and it stays the house painter.** A cheaper graphic model
+was tested as a general replacement by painting ten styles twice and comparing the pairs. It
+lost eight of ten: it collapses every brief into a single look (graded sky, atmospheric depth,
+full colour rendering) and cannot hold a flat palette, a uniform line weight, a limited
+palette, or any real drawing medium. Crayon came back as digital painting with a noise
+overlay, silhouette came back fully lit and in colour, and the flat Nordic style came back with
+gradients and perspective. A model with one house style is not a painter, it is a filter.
+
+Cost is not the tie-breaker here. The cheap model is three cents against nine, and it is still
+the wrong buy when the medium is the thing the parent chose. What follows is routed in only
+where it was measured to win:
+
+- `papercut`, torn paper collage: `gpt-image-2-5-flare`. It is the only model measured that
+  builds the picture out of layered torn shapes. The house painter returns an ordinary painting
+  sitting inside a torn paper border, which is a frame, not a collage.
+- `amar-chitra` and `chacha-chaudhary`: `qwen-image-3`. Both are densely printed comic styles,
+  and this one commits to packed ornament, heavy line and flat printed colour where the house
+  painter returns a soft storybook painting.
+
+Everything else uses the house painter. Never promote a model into this file on reputation and
+never on price alone.
+
+**The medium leads the prompt.** In `buildIllustrationPrompt` and
+`buildCoverIllustrationPrompt`, `style.medium` is the first clause and the generic
+"hand made picture book illustration" line follows it. This was measured, not chosen for
+style: with the medium third, torn paper collage came back as a smooth digital painting
+inside a torn paper border, and with the medium first the same model and clause produced a
+convincing collage. When a style stops landing, reorder the prompt before blaming the model.
+
+Two traps are recorded in the build history and cost real time: newer models reject
+`width`/`height` and want `aspect_ratio` instead, so the request falls back on that 400, and
+prompt length is a hard per-model limit, so prompts are capped by one `PROMPT_LIMIT` constant
+held below the smallest limit of any routed model.
+
 ## Before you call it done
 
 - `npx tsc --noEmit` is clean.

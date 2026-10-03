@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
+import { ILLUSTRATION_STYLES, getStyle, stylePlate } from '@/lib/illustration-style'
 
 interface GalleryBook {
   id: string
@@ -31,6 +32,41 @@ interface GalleryBook {
  */
 function pageCountOf(book: any): number {
   return book?.pages?.length || book?.expectedPages || book?.pageCount || 0
+}
+
+/**
+ * One painted style plate: a single scene rendered in one illustration style.
+ *
+ * The plates are painted by scripts/generate-style-plates.mjs and may not all
+ * exist yet, so this never leaves a broken image icon or a hole in the grid. A
+ * painted dusk panel sits behind the artwork; if the file is missing the panel
+ * is what the visitor sees, and it also covers the moment before a plate loads.
+ */
+function StylePlate({ value, label }: { value: string; label: string }) {
+  const [missing, setMissing] = useState(false)
+
+  return (
+    <div className="kq-cover relative w-full overflow-hidden" style={{ aspectRatio: '4 / 3' }}>
+      <div
+        className="absolute inset-0 bg-gradient-to-br from-kq-plum-soft via-kq-navy-mid to-kq-ink"
+        aria-hidden="true"
+      />
+      {missing ? (
+        <div className="absolute inset-0 flex items-center justify-center text-kq-dim">
+          <Icon name="palette" size={28} />
+        </div>
+      ) : (
+        <img
+          src={stylePlate(value)}
+          alt={`One scene painted in ${label}`}
+          loading="lazy"
+          decoding="async"
+          onError={() => setMissing(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
+    </div>
+  )
 }
 
 export default function GalleryPage() {
@@ -156,7 +192,7 @@ export default function GalleryPage() {
                     {filteredBooks[0].title}
                   </span>
                   <span className="mt-1 block text-xs text-kq-dim">
-                    {filteredBooks[0].category} · Grade {filteredBooks[0].ageRange} · {pageCountOf(filteredBooks[0])} pages
+                    {filteredBooks[0].category} · Grade {filteredBooks[0].ageRange} · {getStyle(filteredBooks[0].illustrationStyle).label} · {pageCountOf(filteredBooks[0])} pages
                   </span>
                 </span>
               </button>
@@ -199,6 +235,10 @@ export default function GalleryPage() {
                       <span className="mt-3 flex flex-wrap gap-1.5">
                         <span className="kq-chip">{book.category}</span>
                         <span className="kq-chip">Grade {book.ageRange}</span>
+                        {/* The style the book was painted in. getStyle tolerates a
+                            value that is missing or from before the style list
+                            existed, so this never prints "undefined". */}
+                        <span className="kq-chip">{getStyle(book.illustrationStyle).label}</span>
                         {book.heroType && <span className="kq-chip">{book.heroType}</span>}
                       </span>
                       <span className="mt-2 block text-xs text-kq-dim">Set in {book.setting}</span>
@@ -208,6 +248,28 @@ export default function GalleryPage() {
               </div>
             </section>
           )}
+          {/* Every style in the registry, painted. One plate per style, each one
+              the same scene rendered a different way, so the comparison is
+              honest and a visitor can see a style without making a book.
+              Rendered straight from ILLUSTRATION_STYLES, so a new style shows up
+              here with no change to this file. */}
+          <section className="mt-16">
+            <h2 className="font-display text-2xl text-kq-text">Every style, painted</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-kq-dim">
+              One scene, painted {ILLUSTRATION_STYLES.length} ways. Find the look you want for your own book.
+            </p>
+            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {ILLUSTRATION_STYLES.map((style) => (
+                <article key={style.value} className="kq-card flex min-w-0 flex-col gap-3">
+                  <StylePlate value={style.value} label={style.label} />
+                  <div className="min-w-0">
+                    <h3 className="font-display text-lg leading-snug text-kq-text">{style.label}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-kq-dim">{style.blurb}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
         </main>
 
         <footer className="border-t border-kq-line px-4 py-5 text-center">

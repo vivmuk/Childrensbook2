@@ -36,11 +36,12 @@ if (!existsSync(BUILT)) {
   )
 }
 
-const { ILLUSTRATION_STYLES, buildIllustrationPrompt } = await import(BUILT)
+const { ILLUSTRATION_STYLES, buildIllustrationPrompt, styleModel } = await import(BUILT)
 
-const OUT_DIR = path.join(ROOT, 'public', 'styles')
+const OUT_DIR = process.env.KQ_OUT_DIR ? path.resolve(process.env.KQ_OUT_DIR) : path.join(ROOT, 'public', 'styles')
 const API_KEY = process.env.VENICE_API_KEY
-const MODEL = process.env.KQ_IMAGE_MODEL || 'flux-2-max'
+// The style decides the machine; KQ_IMAGE_MODEL forces one model for the whole run.
+const MODEL_OVERRIDE = process.env.KQ_IMAGE_MODEL || null
 const WIDTH = 1024
 const HEIGHT = 1024
 
@@ -70,9 +71,12 @@ const CHARACTERS =
   'The squirrel: small, russet brown, one white ear, a fluffy tail. ' +
   'Keep both exactly the same across every picture.'
 
+let useAspectRatio = false
+const ASPECT = process.env.KQ_ASPECT || '1:1'
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function generateImage(prompt, seed, attemptMax = 4) {
+async function generateImage(prompt, seed, model, attemptMax = 4) {
   for (let attempt = 1; attempt <= attemptMax; attempt++) {
     try {
       const res = await fetch('https://api.venice.ai/api/v1/image/generate', {
@@ -82,10 +86,9 @@ async function generateImage(prompt, seed, attemptMax = 4) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: MODEL,
+          model,
           prompt,
-          width: WIDTH,
-          height: HEIGHT,
+          ...(useAspectRatio ? { aspect_ratio: ASPECT } : { width: WIDTH, height: HEIGHT }),
           format: 'webp',
           steps: 20,
           seed,
@@ -103,6 +106,11 @@ async function generateImage(prompt, seed, attemptMax = 4) {
       } else {
         const body = (await res.text()).slice(0, 160)
         console.error(`  http ${res.status} (attempt ${attempt}): ${body}`)
+        if (res.status === 400 && !useAspectRatio && /width|height|aspect/i.test(body)) {
+          // Newer models dropped width/height for aspect_ratio. Ask again their way.
+          useAspectRatio = true
+          continue
+        }
         if (res.status === 401 || res.status === 402 || res.status === 400) return null
       }
     } catch (err) {
@@ -150,7 +158,7 @@ async function main() {
       scene: SCENE,
     })
 
-    const b64 = await generateImage(prompt, seedFor(style.value))
+    const b64 = await generateImage(prompt, seedFor(style.value), MODEL_OVERRIDE || styleModel(style.value))
     if (!b64) {
       console.error(`  ${style.value.padEnd(18)} FAILED`)
       continue

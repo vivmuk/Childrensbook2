@@ -2,7 +2,7 @@
   "id": "sample_starlight_market",
   "title": "Amara and the Starlight Market",
   "ageRange": "3rd",
-  "illustrationStyle": "Hand painted gouache",
+  "illustrationStyle": "ghibli",
   "description": "A girl is given one jar of starlight and has to decide what it is really for.",
   "category": "Wonder",
   "heroType": "person",
@@ -45,5 +45,5 @@
     }
   ],
   "status": "completed",
-  "createdAt": "2026-10-03T15:50:25.618Z"
+  "createdAt": "2026-10-03T16:27:05.458Z"
 }

@@ -2,7 +2,7 @@
   "id": "sample_mango_monsoon",
   "title": "Mango and the Monsoon",
   "ageRange": "2nd",
-  "illustrationStyle": "Hand painted gouache",
+  "illustrationStyle": "watercolor",
   "description": "A boy shares the last mango of the summer with a soaked street dog, and the rain turns into a friend.",
   "category": "Kindness",
   "heroType": "person",
@@ -45,5 +45,5 @@
     }
   ],
   "status": "completed",
-  "createdAt": "2026-10-03T15:37:09.786Z"
+  "createdAt": "2026-10-03T16:35:02.940Z"
 }

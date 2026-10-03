@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { GeneratingGame } from '@/components/GeneratingGame'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icons'
+import { ILLUSTRATION_STYLES, getStyle, stylePlate } from '@/lib/illustration-style'
 
 /* ════════════════════════════════════════════════════════════════════════
    New book: the form a parent fills in to make a picture book.
@@ -36,16 +37,8 @@ const AGE_RANGES = [
   { value: '5th', label: '5th Grade (age 10-11)' },
 ]
 
-// Each style keeps the long prompt that is sent to the image model. The `icon`
-// is a name from components/Icons.tsx, shown on the option plate.
-const ILLUSTRATION_STYLES = [
-  { value: 'ghibli',           label: 'Anime Watercolor',     icon: 'filter_vintage', prompt: 'Studio Ghibli anime style, soft watercolor backgrounds, detailed hand-drawn characters, warm lighting, magical realism, Hayao Miyazaki inspired, whimsical and dreamy atmosphere' },
-  { value: 'american-classic', label: 'Classic Cartoon',      icon: 'palette',        prompt: 'Classic 1950s American cartoon style, bold outlines, bright primary colors, expressive characters, vintage Disney/Hanna-Barbera inspired, cheerful and nostalgic' },
-  { value: 'watercolor',       label: 'Whimsical Watercolor', icon: 'local_florist',  prompt: 'Soft whimsical watercolor illustration, gentle pastel colors, flowing brushstrokes, dreamy and ethereal, delicate details, storybook illustration style' },
-  { value: 'amar-chitra',      label: 'Indian Illustrated',   icon: 'star',           prompt: 'Amar Chitra Katha Indian comic style, bold black outlines, vibrant colors, detailed traditional Indian art elements, expressive faces, classic Indian illustration' },
-  { value: 'chacha-chaudhary', label: 'Retro Bold Comic',     icon: 'spark',          prompt: 'Chacha Chaudhary Indian comic style, simple bold lines, flat bright colors, exaggerated expressions, humorous cartoon style, Pran Kumar Sharma inspired' },
-  { value: 'tintin',           label: 'European Comic',       icon: 'menu_book',      prompt: 'Hergé Tintin clear line style (ligne claire), clean precise outlines, flat colors, detailed backgrounds, European comic book style, adventure illustration' },
-]
+// The illustration styles come from one shared registry, lib/illustration-style.ts,
+// so the picker, the painter and the gallery all agree. Add a style there, not here.
 
 const STORY_LENGTHS = [
   { value: '5',  label: 'Quick',    pages: 5,  description: 'about 1 min' },
@@ -66,11 +59,18 @@ const CHARACTER_TRAITS = [
   'adventurous', 'gentle', 'mischievous', 'loyal', 'creative', 'determined',
 ]
 
+/**
+ * Leaving this on automatic is the right answer for almost everyone: the style
+ * knows which machine paints it well, and the automatic choice was measured
+ * against the alternatives on cost and on the brief. These stay for anyone who
+ * wants to override that.
+ */
 const IMAGE_MODELS = [
-  { value: 'grok-imagine-image', label: 'Grok Imagine', description: 'Best for cartoon books (default)' },
-  { value: 'flux-2-pro',         label: 'Flux 2 Pro',   description: 'High quality, detailed' },
-  { value: 'recraft-v4',         label: 'Recraft v4',   description: 'Sharp, stylized' },
-  { value: 'qwen-image',         label: 'Qwen Image',   description: 'Strong text rendering' },
+  { value: '',                   label: 'Automatic',       description: 'The style picks the best model' },
+  { value: 'gpt-image-2-5-flare', label: 'GPT Image 2.5',  description: 'Paint and lettering' },
+  { value: 'qwen-image-3',       label: 'Qwen Image 3',    description: 'Dense, printed detail' },
+  { value: 'ideogram-v4-5',      label: 'Ideogram 4.5',    description: 'Strongest with words' },
+  { value: 'flux-2-max',         label: 'Flux 2 Max',      description: 'Soft art painting' },
 ]
 
 const NARRATOR_VOICES = [
@@ -142,6 +142,38 @@ function plateClass(on: boolean, extra = ''): string {
       ? 'border-kq-amber/40 bg-kq-amber/10'
       : 'border-kq-line bg-kq-text/5 text-kq-dim hover:bg-kq-text/10 hover:text-kq-text'
   } ${extra}`
+}
+
+/* One painted example of a style, used inside the picker. The plate files in
+   public/styles are painted separately, so a missing one falls back to the
+   app's own dusk gradient instead of showing a broken image icon. */
+function StylePlate({ value, selected }: { value: string; selected: boolean }) {
+  const [failed, setFailed] = useState(false)
+
+  return (
+    <div className="relative h-20 w-full overflow-hidden bg-gradient-to-br from-kq-plum to-kq-navy">
+      {!failed && (
+        <img
+          src={stylePlate(value)}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      )}
+      {failed && (
+        <div className="flex h-full w-full items-center justify-center">
+          <Icon name="palette" size={22} className={selected ? 'text-kq-amber' : 'text-kq-dim'} />
+        </div>
+      )}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-kq-navy/60 to-transparent" />
+      {selected && (
+        <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-[6px] bg-kq-amber text-kq-amber-ink">
+          <Icon name="check" size={13} />
+        </span>
+      )}
+    </div>
+  )
 }
 
 /* A quiet caption above a group of fields. Amber is kept for the single
@@ -383,7 +415,7 @@ export default function GeneratePage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [narratorVoice, setNarratorVoice] = useState('default')
-  const [imageModel, setImageModel] = useState('grok-imagine-image')
+  const [imageModel, setImageModel] = useState('')
 
   // Character builder
   const [characterName, setCharacterName] = useState('')
@@ -437,7 +469,10 @@ export default function GeneratePage() {
     const style = params.get('illustrationStyle')
     if (idea) setStoryIdea(idea)
     if (age) setAgeRange(age)
-    if (style) setIllustrationStyle(style)
+    // Links made before the shared registry may carry a full prompt string.
+    // getStyle maps a value, a label or a legacy prompt onto this picker's
+    // value and never throws, so nothing old lands on an unknown style.
+    if (style) setIllustrationStyle(getStyle(style).value)
     const lang = params.get('language')
     if (lang) setLanguage(lang)
     const savedKey = localStorage.getItem(LS_API_KEY)
@@ -598,7 +633,7 @@ export default function GeneratePage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storyIdea: fullStoryIdea, ageRange,
-          illustrationStyle: ILLUSTRATION_STYLES.find(s => s.value === illustrationStyle)?.prompt || illustrationStyle,
+          illustrationStyle,
           storyLength: parseInt(storyLength), narratorVoice, imageModel,
           userVeniceApiKey: effectiveApiKey || undefined,
           cartoonHeroImage: cartoonHeroDataUrl || undefined,
@@ -1112,20 +1147,25 @@ export default function GeneratePage() {
                       </select>
                     </div>
 
-                    {/* Illustration style */}
+                    {/* Illustration style: every style in the shared registry,
+                        each with a painted plate of its own. */}
                     <div>
                       <FieldLabel>Illustration style</FieldLabel>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {ILLUSTRATION_STYLES.map(s => {
                           const on = illustrationStyle === s.value
                           return (
                             <button
                               key={s.value}
                               onClick={() => setIllustrationStyle(s.value)}
-                              className={plateClass(on, 'flex flex-col items-center gap-1.5 p-2.5 text-center')}
+                              aria-pressed={on}
+                              className={plateClass(on, 'overflow-hidden p-0 text-left')}
                             >
-                              <Icon name={s.icon} size={20} className={on ? 'text-kq-amber' : 'text-kq-dim'} />
-                              <span className="text-xs font-medium leading-tight text-kq-text">{s.label}</span>
+                              <StylePlate value={s.value} selected={on} />
+                              <div className="p-2.5">
+                                <div className="text-xs font-medium leading-tight text-kq-text">{s.label}</div>
+                                <div className="mt-0.5 text-[11px] leading-snug text-kq-dim">{s.blurb}</div>
+                              </div>
                             </button>
                           )
                         })}

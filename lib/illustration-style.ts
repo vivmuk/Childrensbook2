@@ -13,6 +13,8 @@
  *     cartoon should look like a classic cartoon and not like the app's own
  *     night colours.
  *
+ * 3. THE MODEL — which machine paints the medium. Measured per style.
+ *
  * Before this file existed the medium was hard-coded to "thick gouache" for
  * every style, so choosing Retro Bold Comic still produced a gouache painting.
  * The house rules are now the constant and the style is the variable.
@@ -30,6 +32,15 @@ export interface IllustrationStyle {
   palette: string
   /** Things that ruin this particular style. */
   avoid: string
+  /**
+   * The model that paints this style. Omitted means the house painter.
+   *
+   * One model for every style was the wrong shape: a fine-art painting model
+   * cannot assemble a picture out of torn paper, and a graphic model cannot
+   * leave gouache matte. Each of these was chosen by painting the same scene
+   * with each candidate and looking at the result, never by reputation.
+   */
+  model?: string
 }
 
 /**
@@ -59,8 +70,9 @@ export const ILLUSTRATION_STYLES: IllustrationStyle[] = [
       'paper grain, clean delicate ink lines over the paint, expressive simple faces, enormous ' +
       'luminous skies, small charming background detail everywhere.',
     palette:
-      'Luminous skies in cerulean and pale gold, soft greens, warm lamplight at dusk, gentle ' +
-      'pastel shadows rather than black.',
+      'Luminous skies in cerulean and pale gold, soft greens, warm lamplight, gentle pastel ' +
+      'shadows rather than black. Keep the hour the scene describes: if the scene is at dusk or ' +
+      'night, the sky stays dusk or night, however bright the style usually is.',
     avoid: 'heavy black outlines, harsh contrast, digital cel shading, photorealism',
   },
   {
@@ -103,35 +115,52 @@ export const ILLUSTRATION_STYLES: IllustrationStyle[] = [
     label: 'Indian Illustrated',
     blurb: 'Rich panels, bold ink, vivid colour',
     medium:
-      'Indian comic book illustration of the classic era: bold black ink outlines, rich saturated ' +
-      'colour blocked in flat, careful traditional detail in clothing and ornament, expressive ' +
-      'faces, decorative backgrounds.',
+      'Indian comic book illustration of the classic era, as printed on cheap newsprint: heavy ' +
+      'black ink keylines of varying thickness that hold every shape shut, colour printed slightly ' +
+      'out of register so it slips a little outside the line, dense traditional detail in clothing, ' +
+      'jewellery and ornament, richly patterned textiles and carved architecture in the background, ' +
+      'faces drawn with large expressive eyes. Poster-flat colour inside the lines, no shading ' +
+      'except a hard-edged ink shadow. Dense, decorated and slightly gaudy rather than clean.',
     palette:
       'Marigold, vermilion, deep peacock blue, leaf green, earth ochre, with strong black line.',
-    avoid: 'muted washed colour, sketchy or vague linework, western cartoon proportions',
+    avoid:
+      'clean modern flat vector cartoon, minimal or empty backgrounds, soft shading, muted washed ' +
+      'colour, sketchy or vague linework, western cartoon proportions',
+    model: 'qwen-image-3',
   },
   {
     value: 'chacha-chaudhary',
     label: 'Retro Bold Comic',
     blurb: 'Simple lines, big laughs',
     medium:
-      'Retro Indian comic book cartooning: very simple bold outlines, flat bright colour, no ' +
-      'shading, exaggerated funny expressions, loose energetic shapes, small visual jokes in the ' +
-      'background.',
+      'Retro Indian comic strip cartooning from a cheap weekly: a thick, slightly wobbly black ' +
+      'brush outline around everything, flat unshaded poster colour, characters built from very ' +
+      'simple round shapes with big expressive faces, and a busy hand-lettered-looking background ' +
+      'of walls, crowds and small comic detail. Rough printed feel, slightly uneven inking, ' +
+      'as if printed quickly on cheap paper.',
     palette:
       'Bright flat primaries and secondaries: yellow, red, blue, green, with heavy black line.',
-    avoid: 'realistic proportions, subtle colour, detailed rendering, shading',
+    avoid:
+      'smooth clean vector cartoon, soft rounded preschool style, realistic proportions, subtle ' +
+      'colour, detailed rendering, shading',
+    model: 'qwen-image-3',
   },
   {
     value: 'papercut',
     label: 'Torn Paper Collage',
     blurb: 'Torn paper, painted texture, bold shapes',
     medium:
-      'Collage: shapes torn from hand-painted paper and glued down. Every edge is a torn, ragged, ' +
-      'slightly fibrous paper edge, every layer casts a small soft shadow onto the layer beneath, ' +
-      'and the painted texture of the paper shows inside each flat shape.',
+      'A flat paper collage, and nothing else: the ENTIRE picture is built from pieces of ' +
+      'hand-painted paper torn out and glued down, so the child, the animal, the stump, the light ' +
+      'and even the sky are each their own torn paper shape. Every edge in the picture is a torn, ' +
+      'ragged, slightly fibrous paper edge. Each layer casts a small soft shadow onto the layer ' +
+      'underneath, so the picture has real depth made of stacked paper. The painted texture of the ' +
+      'paper is visible inside each shape. There is no painted scene underneath and no drawn lines.',
     palette: 'Bold simple colour fields: sunflower, scarlet, deep blue, leaf green, cream paper.',
-    avoid: 'smooth digital shapes, gradient fills, drawn outlines, photographic texture',
+    avoid:
+      'an ordinary painting placed inside a torn paper border, a paper frame or mat around the ' +
+      'picture, smooth digital shapes, gradient fills, drawn outlines, photographic texture',
+    model: 'gpt-image-2-5-flare',
   },
   {
     value: 'crayon',
@@ -201,6 +230,22 @@ export function getStyle(value: string | undefined): IllustrationStyle {
 }
 
 /** One painted example of each style, made by scripts/generate-style-plates.mjs. */
+/**
+ * The model that paints a style, and the default for the whole book.
+ *
+ * The cheap graphic models were tested as a general replacement for this one by
+ * painting ten styles twice and comparing. They lost eight of ten: they collapse
+ * every brief into a single house look (graded sky, atmospheric depth, full
+ * colour) and cannot hold a flat palette, a line weight or a real drawing
+ * medium. So the house painter stays the one that performs the medium, and the
+ * cheaper models are routed in only where they measurably win.
+ */
+export const HOUSE_IMAGE_MODEL = 'flux-2-max'
+
+export function styleModel(value: string | undefined): string {
+  return getStyle(value).model || HOUSE_IMAGE_MODEL
+}
+
 export function stylePlate(value: string): string {
   return `/styles/${getStyle(value).value}.webp`
 }
@@ -208,6 +253,17 @@ export function stylePlate(value: string): string {
 /* ─────────────────────────────── House rules ───────────────────────────────
    True for every style. These are the lines that make a picture ours, and the
    lines that stop image models doing the things they like to do. */
+
+/**
+ * Hard ceiling on every prompt we assemble.
+ *
+ * flux-2-max rejects anything over 3000 characters, and it does it with a 400
+ * in the middle of a book, which is exactly how the Nimbu the Night Bus sample
+ * lost its paintings: the torn-paper recipe pushed the assembled prompt over the
+ * line. Every image model here allows at least this much, so one number keeps us
+ * inside all of them with room to spare.
+ */
+export const PROMPT_LIMIT = 2800
 
 const HOUSE_COMPOSITION =
   'Clear single focal point the eye lands on first, generous calm space around it, strong ' +
@@ -249,17 +305,20 @@ export interface IllustrationParts {
 }
 
 /**
- * Assemble one illustration prompt. Order matters to image models: the medium
- * and the character come first, the scene in the middle, the rules last.
+ * Assemble one illustration prompt. Order matters to image models, and this was
+ * measured rather than guessed: the medium leads, because the medium is what the
+ * parent chose. It was tried third behind a generic "picture book illustration"
+ * line and the medium lost to it every time, which is how torn paper collage kept
+ * coming back as a smooth digital painting wearing a torn paper border.
  */
 export function buildIllustrationPrompt(parts: IllustrationParts): string {
   const style = getStyle(parts.style)
   const { characters, palette, shot, scene } = parts
 
   return [
+    style.medium,
     characters ? `${characters}.` : '',
     'Hand made children\u2019s picture book illustration.',
-    style.medium,
     `Palette: ${style.palette}`,
     palette ? `Continue the book\u2019s own palette: ${palette}.` : '',
     scene,
@@ -269,11 +328,16 @@ export function buildIllustrationPrompt(parts: IllustrationParts): string {
     HOUSE_CHILD_SAFE,
     HOUSE_FULL_BLEED,
     `Avoid: ${style.avoid}.`,
+    // The medium is repeated as the last instruction. A long page brief in the
+    // middle was drowning it: the same collage clause produced a real collage on
+    // its own and a smooth painting inside a book, purely because the book prompt
+    // is longer and the scene fills the space between.
+    `Remember: the whole picture is made as ${style.medium.split('.')[0]}.`,
     HOUSE_CLEAN,
   ]
     .filter(Boolean)
     .join(' ')
-    .substring(0, 3200)
+    .substring(0, PROMPT_LIMIT)
 }
 
 /** Composition rule for a cover, so the title can be set over it in real type. */
@@ -286,14 +350,14 @@ export const KQ_COVER_RULE =
 export function buildCoverIllustrationPrompt(parts: IllustrationParts): string {
   const style = getStyle(parts.style)
   return [
+    style.medium,
     'Front cover illustration for a picture book. The title is set separately in real type, so ' +
       'leave the upper third as quiet, empty painted space.',
     KQ_COVER_RULE,
-    style.medium,
     buildIllustrationPrompt(parts),
   ]
     .join(' ')
-    .substring(0, 3200)
+    .substring(0, PROMPT_LIMIT)
 }
 
 /**

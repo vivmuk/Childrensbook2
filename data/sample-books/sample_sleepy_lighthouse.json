@@ -2,7 +2,7 @@
   "id": "sample_sleepy_lighthouse",
   "title": "The Sleepy Lighthouse",
   "ageRange": "1st",
-  "illustrationStyle": "Hand painted gouache",
+  "illustrationStyle": "gouache",
   "description": "A lighthouse keeps falling asleep on the job, until a small girl finds out what it really needs.",
   "category": "Friendship",
   "heroType": "animal",
@@ -45,5 +45,5 @@
     }
   ],
   "status": "completed",
-  "createdAt": "2026-10-03T15:40:37.356Z"
+  "createdAt": "2026-10-03T16:38:06.102Z"
 }

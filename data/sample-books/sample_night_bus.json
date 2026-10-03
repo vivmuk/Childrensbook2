@@ -2,7 +2,7 @@
   "id": "sample_night_bus",
   "title": "Nimbu the Night Bus",
   "ageRange": "2nd",
-  "illustrationStyle": "Hand painted gouache",
+  "illustrationStyle": "clay",
   "description": "A small green night bus quietly collects the city’s tired animals and takes every one of them home.",
   "category": "Adventure",
   "heroType": "object",
@@ -45,5 +45,5 @@
     }
   ],
   "status": "completed",
-  "createdAt": "2026-10-03T15:52:37.141Z"
+  "createdAt": "2026-10-03T17:18:31.118Z"
 }

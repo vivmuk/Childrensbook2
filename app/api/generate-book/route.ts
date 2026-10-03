@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { setBook, getBook, type Book, countUserBooks } from '@/lib/storage'
-import {
-  buildStoryStyleBrief,
-  buildIllustrationPrompt,
-  buildCoverIllustrationPrompt,
-  getStyle,
-} from '@/lib/illustration-style'
+import { buildStoryStyleBrief, buildIllustrationPrompt, buildCoverIllustrationPrompt, getStyle, styleModel } from '@/lib/illustration-style'
 
 const LOCAL_USER_ID = 'local-user'
 
@@ -168,7 +163,7 @@ export async function POST(request: NextRequest) {
       illustrationStyle,
       storyLength = 8,
       narratorVoice = 'default',
-      imageModel = 'grok-imagine-image',
+      imageModel: requestedModel,
       character,
       userVeniceApiKey,
       cartoonHeroImage,
@@ -351,7 +346,7 @@ export async function POST(request: NextRequest) {
 
     // Fire-and-forget image generation (pass the resolved API key)
     const palette = storyData.visualBible?.colorPalette || ''
-    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, imageModel, cartoonHeroImage, heroContext, palette).catch(
+    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, requestedModel, cartoonHeroImage, heroContext, palette).catch(
       async err => {
         console.error(`[${bookId}] Image generation error:`, err)
         const b = await getBook(bookId)
@@ -377,13 +372,17 @@ async function generateBookImages(
   illustrationStyle: string,
   characters: { main?: string; others?: string[] } | undefined,
   apiKey: string,
-  imageModel: string = 'grok-imagine-image',
+  imageModel: string | undefined,
   cartoonHeroImage?: string,
   hero?: HeroContext,
   palette: string = '',
 ) {
   const book = await getBook(bookId)
   if (!book) return
+
+  // Which model paints is a property of the style, decided in one place. A model
+  // passed in here is an override, not the norm.
+  const painter = imageModel || styleModel(illustrationStyle)
 
   // One fixed seed for the whole book → far more consistent character, style and
   // palette across the cover and every page. Derived deterministically from the
@@ -458,11 +457,11 @@ async function generateBookImages(
     () =>
       heroBase64
         ? editImage(coverPrompt, heroBase64, '16:9', apiKey)
-        : generateImage(coverPrompt, imageModel, 1280, 720, apiKey, bookSeed).then(img => (img ? { data: img, isPng: false } : null)),
+        : generateImage(coverPrompt, painter, 1280, 720, apiKey, bookSeed).then(img => (img ? { data: img, isPng: false } : null)),
     ...pagePrompts.map((prompt: string, i: number) => () =>
       heroBase64
         ? editImage(prompt, heroBase64, '3:2', apiKey)
-        : generateImage(prompt, imageModel, 1024, 768, apiKey, (bookSeed + i + 1) % 999_999_999).then(img => (img ? { data: img, isPng: false } : null)),
+        : generateImage(prompt, painter, 1024, 768, apiKey, (bookSeed + i + 1) % 999_999_999).then(img => (img ? { data: img, isPng: false } : null)),
     ),
   ]
 
@@ -550,6 +549,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
 const NEGATIVE_PROMPT =
   'text, words, letters, captions, signature, watermark, logo, extra fingers, extra limbs, deformed hands, fused fingers, distorted face, mutated, disfigured, duplicate characters, cloned face, blurry, lowres, jpeg artifacts, grainy, scary, creepy, gore, dark, gloomy, horror, nsfw'
 
+/** The nearest of the ratios the image API accepts. */
+function closestAspect(width: number, height: number): string {
+  const target = width / height
+  const options: [string, number][] = [
+    ['1:1', 1], ['3:2', 1.5], ['2:3', 0.667], ['16:9', 1.778], ['9:16', 0.5625], ['4:3', 1.333],
+  ]
+  return options.reduce((best, o) => (Math.abs(o[1] - target) < Math.abs(best[1] - target) ? o : best))[0]
+}
+
 async function generateImage(
   prompt: string,
   model: string,
@@ -559,6 +567,11 @@ async function generateImage(
   seed: number,
   maxAttempts = 3,
 ): Promise<string | null> {
+  // Newer models dropped width and height and want an aspect ratio instead. Ask
+  // the modern way once we are told so, then remember it for the rest of the book.
+  let wantAspectRatio = false
+  const aspectRatio = closestAspect(width, height)
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const res = await fetchWithTimeout(
@@ -569,8 +582,7 @@ async function generateImage(
           body: JSON.stringify({
             model,
             prompt,
-            width,
-            height,
+            ...(wantAspectRatio ? { aspect_ratio: aspectRatio } : { width, height }),
             format: 'webp',
             steps: 20,
             seed,                       // fixed per book → consistent look across pages
@@ -588,7 +600,12 @@ async function generateImage(
         const img = data.images?.[0]
         if (img) return img
       } else {
-        console.error(`Image generation error (attempt ${attempt}): ${res.status} — ${(await res.text()).slice(0, 200)}`)
+        const body = (await res.text()).slice(0, 200)
+        console.error(`Image generation error (attempt ${attempt}): ${res.status} — ${body}`)
+        if (res.status === 400 && !wantAspectRatio && /width|height|aspect/i.test(body)) {
+          wantAspectRatio = true
+          continue
+        }
         // Don't retry auth/validation errors — they won't recover.
         if (res.status === 401 || res.status === 400) return null
       }

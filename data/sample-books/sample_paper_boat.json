@@ -2,7 +2,7 @@
   "id": "sample_paper_boat",
   "title": "The Paper Boat That Sailed to the Moon",
   "ageRange": "1st",
-  "illustrationStyle": "Hand painted gouache",
+  "illustrationStyle": "crayon",
   "description": "A girl folds her worry into a paper boat and lets the river carry it all the way up to the moon.",
   "category": "Feelings",
   "heroType": "person",
@@ -45,5 +45,5 @@
     }
   ],
   "status": "completed",
-  "createdAt": "2026-10-03T15:47:14.376Z"
+  "createdAt": "2026-10-03T16:27:05.456Z"
 }

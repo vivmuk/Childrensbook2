@@ -3,7 +3,7 @@
     "id": "sample_lantern_harbour",
     "title": "The Lantern That Would Not Go Out",
     "ageRange": "1st",
-    "illustrationStyle": "Hand painted gouache",
+    "illustrationStyle": "silhouette",
     "description": "A small girl keeps one small light burning on a windy night, and brings every fishing boat home.",
     "category": "Courage",
     "heroType": "person",
@@ -46,13 +46,13 @@
       }
     ],
     "status": "completed",
-    "createdAt": "2026-10-03T15:34:04.219Z"
+    "createdAt": "2026-10-03T16:27:05.439Z"
   },
   {
     "id": "sample_mango_monsoon",
     "title": "Mango and the Monsoon",
     "ageRange": "2nd",
-    "illustrationStyle": "Hand painted gouache",
+    "illustrationStyle": "watercolor",
     "description": "A boy shares the last mango of the summer with a soaked street dog, and the rain turns into a friend.",
     "category": "Kindness",
     "heroType": "person",
@@ -95,13 +95,13 @@
       }
     ],
     "status": "completed",
-    "createdAt": "2026-10-03T15:37:09.786Z"
+    "createdAt": "2026-10-03T16:27:05.444Z"
   },
   {
     "id": "sample_sleepy_lighthouse",
     "title": "The Sleepy Lighthouse",
     "ageRange": "1st",
-    "illustrationStyle": "Hand painted gouache",
+    "illustrationStyle": "gouache",
     "description": "A lighthouse keeps falling asleep on the job, until a small girl finds out what it really needs.",
     "category": "Friendship",
     "heroType": "animal",
@@ -144,13 +144,13 @@
       }
     ],
     "status": "completed",
-    "createdAt": "2026-10-03T15:40:37.356Z"
+    "createdAt": "2026-10-03T16:27:05.452Z"
   },
   {
     "id": "sample_night_bus",
     "title": "Nimbu the Night Bus",
     "ageRange": "2nd",
-    "illustrationStyle": "Hand painted gouache",
+    "illustrationStyle": "clay",
     "description": "A small green night bus quietly collects the city’s tired animals and takes every one of them home.",
     "category": "Adventure",
     "heroType": "object",
@@ -193,13 +193,13 @@
       }
     ],
     "status": "completed",
-    "createdAt": "2026-10-03T15:52:37.141Z"
+    "createdAt": "2026-10-03T17:18:31.118Z"
   },
   {
     "id": "sample_paper_boat",
     "title": "The Paper Boat That Sailed to the Moon",
     "ageRange": "1st",
-    "illustrationStyle": "Hand painted gouache",
+    "illustrationStyle": "crayon",
     "description": "A girl folds her worry into a paper boat and lets the river carry it all the way up to the moon.",
     "category": "Feelings",
     "heroType": "person",
@@ -242,13 +242,13 @@
       }
     ],
     "status": "completed",
-    "createdAt": "2026-10-03T15:47:14.376Z"
+    "createdAt": "2026-10-03T16:27:05.456Z"
   },
   {
     "id": "sample_starlight_market",
     "title": "Amara and the Starlight Market",
     "ageRange": "3rd",
-    "illustrationStyle": "Hand painted gouache",
+    "illustrationStyle": "ghibli",
     "description": "A girl is given one jar of starlight and has to decide what it is really for.",
     "category": "Wonder",
     "heroType": "person",
@@ -291,6 +291,6 @@
       }
     ],
     "status": "completed",
-    "createdAt": "2026-10-03T15:50:25.618Z"
+    "createdAt": "2026-10-03T16:27:05.458Z"
   }
 ]
