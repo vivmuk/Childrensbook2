@@ -623,6 +623,16 @@ export default function BookViewerPage() {
               <AnimateButton pageKey="-1" pageIndex={-1} />
             </div>
           </div>
+          {/* The covers are painted without lettering on purpose, and the top
+              bar truncates a long title, so the book says its own name here. */}
+          <div className="w-full text-center lg:max-w-3xl">
+            <h1 className="font-display text-2xl leading-tight text-kq-text lg:text-3xl">
+              {book.title}
+            </h1>
+            <p className="mt-2 text-xs uppercase tracking-[0.16em] text-kq-dim">
+              {`${book.pages.length} pages`}
+            </p>
+          </div>
         </main>
         <PageIndicators />
         <NavButtons
