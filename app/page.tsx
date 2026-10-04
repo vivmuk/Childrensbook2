@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { FeaturedBooksCarousel } from '@/components/FeaturedBooksCarousel'
 import { HowItWorksModal } from '@/components/HowItWorksModal'
 import NightLightBookScene from '@/components/NightLightBookScene'
+import BottomBar from '@/components/BottomBar'
+import { getStyle } from '@/lib/illustration-style'
 
 // A fresh story prompt every day (rotates by day-of-year, same for everyone).
 const DAILY_PROMPTS = [
@@ -30,7 +32,33 @@ function dayOfYear(d: Date): number {
 }
 
 const LS_STREAK = 'kinderquill_streak'
+/** Where they stopped reading, per book. Written by the reading screen. */
+const LS_LAST = 'kinderquill_last_read'
 
+interface StoredBook {
+  id: string
+  title: string
+  ageRange?: string
+  illustrationStyle?: string
+  createdAt?: string
+  titlePageImage?: string | null
+  expectedPages?: number
+}
+
+interface LastRead {
+  page: number
+  total: number
+}
+
+/**
+ * The home screen is a STAGE, not a landing page.
+ *
+ * A parent opening this at bedtime should see the book they are in the middle
+ * of, filling the glass, with one warm button under it. The promise, the three
+ * steps and the samples still exist, but they live below the fold: someone who
+ * already has a book does not need to be sold the product again, and someone
+ * who does not yet have one gets the promise instead.
+ */
 export default function WelcomePage() {
   const router = useRouter()
   const [showHowItWorks, setShowHowItWorks] = useState(false)
@@ -39,9 +67,26 @@ export default function WelcomePage() {
   // Defaults to portrait: the person holding this app is usually holding a
   // phone, and we would rather not flash the wrong crop at them on load.
   const [portrait, setPortrait] = useState(true)
+  const [books, setBooks] = useState<StoredBook[]>([])
+  const [last, setLast] = useState<LastRead | null>(null)
+  // With an empty shelf the promise still needs a painting behind it, and a
+  // sample book is a truer picture of the product than a generic hero.
+  const [sampleCover, setSampleCover] = useState<string | null>(null)
 
   const today = new Date()
   const dailyPrompt = DAILY_PROMPTS[dayOfYear(today) % DAILY_PROMPTS.length]
+
+  // The newest book that actually has a painted cover. A book that is still
+  // being painted has no cover yet, and an empty stage is worse than no stage.
+  const featured = useMemo(
+    () => books.find((b) => !!b.titlePageImage) || null,
+    [books],
+  )
+
+  const styleLabel = useMemo(
+    () => (featured?.illustrationStyle ? getStyle(featured.illustrationStyle).label : ''),
+    [featured],
+  )
 
   // Track a simple daily visit streak to encourage a reading habit.
   useEffect(() => {
@@ -84,115 +129,199 @@ export default function WelcomePage() {
     return () => mq.removeEventListener('change', on)
   }, [])
 
+  // What is on the shelf. Summaries only, so this stays a small request.
+  useEffect(() => {
+    let alive = true
+    fetch('/api/my-books')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return
+        setBooks(Array.isArray(d?.books) ? d.books : [])
+      })
+      .catch(() => { /* an empty shelf is a fine state to be in */ })
+    return () => { alive = false }
+  }, [])
+
+  // Nothing on the shelf yet: borrow a finished book for the stage art.
+  useEffect(() => {
+    if (books.length > 0) return
+    let alive = true
+    fetch('/api/sample-books')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return
+        const cover = d?.books?.[0]?.titlePage?.image
+        if (typeof cover === 'string') setSampleCover(cover)
+      })
+      .catch(() => { /* the painted hero is a fine fallback */ })
+    return () => { alive = false }
+  }, [books.length])
+
+  // Where they stopped, if they have ever stopped. No stored position means we
+  // say nothing rather than inventing a page number.
+  useEffect(() => {
+    if (!featured) return
+    try {
+      const raw = localStorage.getItem(LS_LAST)
+      const all = raw ? JSON.parse(raw) : {}
+      const mine = all?.[featured.id]
+      if (mine && typeof mine.page === 'number' && typeof mine.total === 'number') {
+        setLast({ page: mine.page, total: mine.total })
+      } else {
+        setLast(null)
+      }
+    } catch { /* ignore */ }
+  }, [featured])
+
+  const canContinue = !!(last && last.total > 1 && last.page > 0 && last.page < last.total)
+
   return (
-    <div className="relative min-h-[100dvh] w-full overflow-x-hidden bg-kq-ink">
-      {/* ══════════ The hero: the promise, in the first viewport ══════════ */}
+    <div className="kq-has-tabbar relative min-h-[100dvh] w-full overflow-x-hidden bg-kq-ink">
+      {/* The stage: the book they are in, filling the glass */}
       <section className="relative min-h-[100dvh] w-full overflow-hidden">
-        {/* The painting, moving. The still goes down first so the hero is
-            never an empty box, and the film fades in over it. */}
-        <img
-          src={portrait ? '/art/hero-tall.png' : '/art/hero-wide.png'}
-          alt=""
-          aria-hidden="true"
-          className="kq-hero-media"
-          style={{ objectPosition: portrait ? 'center 45%' : '74% center' }}
-        />
-        {motionOk && (
-          <video
-            key={portrait ? 'tall' : 'wide'}
-            className="kq-hero-media"
-            poster={portrait ? '/art/hero-tall.png' : '/art/hero-wide.png'}
-            style={{ objectPosition: portrait ? 'center 45%' : '74% center' }}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
+        {featured?.titlePageImage ? (
+          /* Their own painted cover. This is the point of the screen. */
+          <img
+            src={featured.titlePageImage}
+            alt=""
             aria-hidden="true"
-          >
-            <source
-              src={portrait ? '/art/hero-loop-tall.mp4' : '/art/hero-loop.mp4'}
-              type="video/mp4"
+            className="kq-hero-media"
+            style={{ objectPosition: 'center 20%' }}
+          />
+        ) : sampleCover ? (
+          <img
+            src={sampleCover}
+            alt=""
+            aria-hidden="true"
+            className="kq-hero-media"
+            style={{ objectPosition: 'center 20%' }}
+          />
+        ) : (
+          <>
+            <img
+              src={portrait ? '/art/hero-tall.png' : '/art/hero-wide.png'}
+              alt=""
+              aria-hidden="true"
+              className="kq-hero-media"
+              style={{ objectPosition: portrait ? 'center 45%' : '74% center' }}
             />
-          </video>
+            {motionOk && (
+              <video
+                key={portrait ? 'tall' : 'wide'}
+                className="kq-hero-media"
+                poster={portrait ? '/art/hero-tall.png' : '/art/hero-wide.png'}
+                style={{ objectPosition: portrait ? 'center 45%' : '74% center' }}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                aria-hidden="true"
+              >
+                <source
+                  src={portrait ? '/art/hero-loop-tall.mp4' : '/art/hero-loop.mp4'}
+                  type="video/mp4"
+                />
+              </video>
+            )}
+          </>
         )}
 
-        <div className="kq-scrim-top z-[2]" />
-        <div className="kq-scrim-bottom z-[2]" />
+        {/* One scrim, not two: stacking the old top scrim on this one turned the
+            top third of the painting black and the hero read as a small picture
+            in a void. This one stays light up top and goes solid before the
+            first line of type, so the title never lands on the painted subject. */}
+        <div className="kq-stage-scrim absolute inset-0 z-[2]" aria-hidden="true" />
 
-        <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-content flex-col px-5 py-6 lg:px-10">
+        <div
+          className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-content flex-col px-5 py-6 lg:px-10"
+          style={{ paddingBottom: 'calc(104px + env(safe-area-inset-bottom))' }}
+        >
           {/* Top bar */}
           <header className="flex items-center justify-between">
-            <div className="flex items-baseline gap-2">
-              <span className="font-display text-2xl font-semibold tracking-tight text-kq-text">
-                KinderQuill
-              </span>
-              <span className="hidden text-[0.75rem] text-kq-dim sm:inline">
-                painted with Venice
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {streak > 0 && (
-                <div
-                  className="hidden items-center gap-1 whitespace-nowrap rounded-md border border-kq-line px-3 py-1.5 text-xs text-kq-dim sm:flex"
-                  title={`You have visited ${streak} day${streak === 1 ? '' : 's'} in a row`}
-                >
-                  {streak} day{streak === 1 ? '' : 's'} reading
-                </div>
-              )}
-              <button
-                onClick={() => router.push('/library')}
-                className="kq-btn-secondary w-auto px-4 py-2 text-sm"
+            <span className="font-display text-2xl font-semibold tracking-tight text-kq-text">
+              KinderQuill
+            </span>
+            {streak > 0 && (
+              <div
+                className="hidden items-center gap-1 whitespace-nowrap rounded-md border border-kq-line px-3 py-1.5 text-xs text-kq-dim sm:flex"
+                title={`You have visited ${streak} day${streak === 1 ? '' : 's'} in a row`}
               >
-                My books
-              </button>
-            </div>
+                {streak} day{streak === 1 ? '' : 's'} reading
+              </div>
+            )}
           </header>
-
-          {/* The promise */}
-          <div className="mt-14 max-w-xl lg:mt-20">
-            <h1 className="kq-hero-title text-[2.6rem] leading-[1.06] sm:text-6xl lg:text-[4.2rem]">
-              Make a picture book tonight
-            </h1>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-kq-dim lg:text-lg">
-              Say what the story is about. Every page is painted fresh for you.
-            </p>
-          </div>
 
           <div className="flex-1" />
 
-          {/* The one amber action, plus the ways back in. The bottom padding
-              keeps the last row clear of the home bar on a modern phone. */}
-          <div
-            className="mx-auto w-full max-w-md"
-            style={{ paddingBottom: 'calc(2.25rem + env(safe-area-inset-bottom))' }}
-          >
-            <button
-              onClick={() => router.push('/generate')}
-              className="kq-btn-primary text-lg"
-            >
-              Make a book
-            </button>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => router.push('/library')}
-                className="kq-btn-secondary text-sm"
-              >
-                Your library
-              </button>
-              <button
-                onClick={() => router.push('/gallery')}
-                className="kq-btn-secondary text-sm"
-              >
-                See samples
-              </button>
-            </div>
+          {/* What is on the stage, and the one thing to do about it */}
+          <div className="mx-auto w-full max-w-md">
+            {featured ? (
+              <>
+                {canContinue && (
+                  <div className="mb-3">
+                    <p className="mb-2 text-[0.82rem] text-kq-amber">
+                      You left off on page {last!.page}
+                    </p>
+                    <div className="kq-progress-line w-40">
+                      <i style={{ width: `${Math.round((last!.page / last!.total) * 100)}%` }} />
+                    </div>
+                  </div>
+                )}
+                <div className="kq-eyebrow mb-2">
+                  {canContinue ? 'Tonight’s book' : 'Your newest book'}
+                </div>
+                <h1 className="font-display text-[2.1rem] leading-[1.08] text-kq-text">
+                  {featured.title}
+                </h1>
+                <p className="mt-2.5 text-sm text-kq-text-soft">
+                  {[
+                    featured.expectedPages ? `${featured.expectedPages} pages` : null,
+                    styleLabel ? `Painted in ${styleLabel}` : null,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+                <button
+                  onClick={() => router.push(`/book/${featured.id}`)}
+                  className="kq-btn-primary mt-5 text-lg"
+                >
+                  {canContinue ? 'Read together' : 'Open this book'}
+                </button>
+                <button
+                  onClick={() => router.push('/generate')}
+                  className="kq-btn-secondary mt-3 text-sm"
+                >
+                  Make a new book
+                </button>
+              </>
+            ) : (
+              <>
+                <h1 className="kq-hero-title text-[2.1rem] leading-[1.08] sm:text-5xl lg:text-[4.2rem]">
+                  Make a picture book tonight
+                </h1>
+                <p className="mt-4 max-w-md text-base leading-relaxed text-kq-text-soft lg:text-lg">
+                  Say what the story is about. Every page is painted fresh for you.
+                </p>
+                <button
+                  onClick={() => router.push('/generate')}
+                  className="kq-btn-primary mt-6 text-lg"
+                >
+                  Make your first book
+                </button>
+                {sampleCover && (
+                  <button
+                    onClick={() => router.push('/gallery')}
+                    className="kq-btn-secondary mt-3 text-sm"
+                  >
+                    Read a finished one
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
-
       </section>
 
-      {/* ══════════ Below the fold ══════════ */}
+      {/* ══════════ Below the fold: still there, out of the way ══════════ */}
       <div className="kq-ground relative">
         <div className="mx-auto w-full max-w-content px-5 py-14 lg:px-10 lg:py-20">
           {/* Story of the day */}
@@ -297,6 +426,8 @@ export default function WelcomePage() {
         isOpen={showHowItWorks}
         onClose={() => setShowHowItWorks(false)}
       />
+
+      <BottomBar active="read" />
     </div>
   )
 }

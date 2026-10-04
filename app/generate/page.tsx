@@ -19,7 +19,8 @@ import { ILLUSTRATION_STYLES, getStyle, stylePlate } from '@/lib/illustration-st
    Styling rules this file follows, from DESIGN.md:
      - colour comes from the kq tokens, never a raw hex
      - rounded rectangles, never pills
-     - one amber action on the screen: the "Make this book" button
+     - one amber action on the screen: the step 1 action that carries a parent
+       from the painted style into the story itself
      - no emoji as UI, icons come from components/Icons.tsx
      - motion is transform and opacity only
    ════════════════════════════════════════════════════════════════════════ */
@@ -402,6 +403,58 @@ function FreeBooksBadge({ used, hasApiKey }: { used: number; hasApiKey: boolean 
   )
 }
 
+// ── The rest of the styles ───────────────────────────────────────────────────
+// The strip on step 1 shows three styles; this sheet holds every one of them,
+// so the round chevron and the quiet "compare" link have somewhere real to go.
+
+interface AllStylesSheetProps {
+  current: string
+  onPick: (value: string) => void
+  onClose: () => void
+}
+
+function AllStylesSheet({ current, onPick, onClose }: AllStylesSheetProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-kq-ink/80 p-4 backdrop-blur-sm sm:items-center">
+      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-xl border border-kq-line bg-kq-card p-4">
+
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg text-kq-text">
+            All {ILLUSTRATION_STYLES.length} styles
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-kq-line bg-kq-text/5 text-kq-text transition-colors hover:bg-kq-text/10"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {ILLUSTRATION_STYLES.map(s => {
+            const on = current === s.value
+            return (
+              <button
+                key={s.value}
+                onClick={() => onPick(s.value)}
+                aria-pressed={on}
+                className={plateClass(on, 'overflow-hidden p-0 text-left')}
+              >
+                <StylePlate value={s.value} selected={on} />
+                <div className="p-2.5">
+                  <div className="text-xs font-medium leading-tight text-kq-text">{s.label}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-kq-dim">{s.blurb}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page component ──────────────────────────────────────────────────────
 
 export default function GeneratePage() {
@@ -414,6 +467,9 @@ export default function GeneratePage() {
   const [storyLength, setStoryLength] = useState('8')
   const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  // The full style sheet, opened by the round chevron on the strip and by the
+  // quiet link under the step-1 action.
+  const [showStyleSheet, setShowStyleSheet] = useState(false)
   const [narratorVoice, setNarratorVoice] = useState('default')
   const [imageModel, setImageModel] = useState('')
 
@@ -455,6 +511,8 @@ export default function GeneratePage() {
   const [isReadingDrawing, setIsReadingDrawing] = useState(false)
   const [drawingError, setDrawingError] = useState('')
   const drawingFileInputRef = useRef<HTMLInputElement>(null)
+  // "Next: who is in the story" brings the story idea box into view.
+  const storyIdeaRef = useRef<HTMLTextAreaElement>(null)
 
   // The form values used for the book currently being made, so the library
   // entry matches what was actually sent.
@@ -672,18 +730,44 @@ export default function GeneratePage() {
     localStorage.setItem(LS_API_KEY, key); setUserApiKey(key); setShowApiKeyModal(false); doGenerate(key)
   }
 
+  // Step 1's action carries a parent down to the story itself. On one page,
+  // "next" means bringing the story idea box into view and putting the cursor
+  // in it. The jump is instant: the design rules keep motion off layout, and a
+  // smooth scroll is unreliable on some engines.
+  const goToStoryStep = () => {
+    const el = storyIdeaRef.current
+    if (!el) return
+    el.scrollIntoView({ block: 'center' })
+    el.focus({ preventScroll: true })
+  }
+
+  // Step 1 shows the chosen style large, then three whole alternatives. The
+  // three are the next styles in registry order, wrapping, so they always
+  // follow the one that is currently chosen.
+  const selectedStyle = getStyle(illustrationStyle)
+  const styleIndex = Math.max(0, ILLUSTRATION_STYLES.findIndex(s => s.value === selectedStyle.value))
+  const otherStyles = [1, 2, 3].map(step => ILLUSTRATION_STYLES[(styleIndex + step) % ILLUSTRATION_STYLES.length])
+
   const timeEstimate = storyLength === '5' ? 'about 1 minute' : storyLength === '8' ? 'about 2 minutes' : 'about 3 to 4 minutes'
 
   return (
-    <div className="kq-ground relative flex min-h-screen w-full flex-col overflow-x-hidden">
+    <div className="kq-ground kq-has-tabbar relative flex min-h-screen w-full flex-col overflow-x-hidden">
       <div className="relative z-10 flex min-h-screen flex-col">
-        <Header title="New book" />
+        <Header title="New book" showBack={false} />
 
         {showApiKeyModal && (
           <VeniceApiKeyModal
             onClose={() => setShowApiKeyModal(false)}
             onSave={handleApiKeySave}
             booksUsed={freeBookCount}
+          />
+        )}
+
+        {showStyleSheet && (
+          <AllStylesSheet
+            current={selectedStyle.value}
+            onPick={(value) => { setIllustrationStyle(value); setShowStyleSheet(false) }}
+            onClose={() => setShowStyleSheet(false)}
           />
         )}
 
@@ -696,25 +780,106 @@ export default function GeneratePage() {
             </div>
           ) : (
             <>
-              {/* A band of real painted art at the top, so the screen a parent
-                  lands on looks like the books it makes rather than a form. */}
-              <div className="relative mb-6 overflow-hidden rounded-[22px] border border-kq-hairline">
-                <img
-                  src="/art/hero-wide.png"
-                  alt="A lantern-lit bedtime scene, painted by hand"
-                  className="h-[168px] w-full object-cover object-[50%_38%] lg:h-[220px]"
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-kq-ground to-transparent" />
-              </div>
-
-              <div className="mb-5 max-w-2xl">
-                <h1 className="font-display text-2xl text-kq-text lg:text-3xl">Your story starts here</h1>
-                <p className="mt-1.5 text-sm leading-relaxed text-kq-dim">
-                  Say what it is about. We write it and paint every page.
-                </p>
-              </div>
-
               <div className="mx-auto w-full max-w-3xl lg:max-w-none">
+
+                {/* ══ Step 1: how it is painted ══════════════════════════════
+                    The most delightful choice in the product, so it opens the
+                    page instead of hiding in advanced options: the chosen
+                    style as a big painted plate, three whole alternatives
+                    beneath it, a round way to the rest, and the one amber
+                    action on the screen. */}
+                <section className="mx-auto mb-6 w-full max-w-md">
+
+                  {/* Step header: the way back, and where you are. */}
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <button
+                      onClick={() => router.back()}
+                      className="flex items-center gap-1 text-sm text-kq-text/85 transition-colors hover:text-kq-text"
+                    >
+                      <Icon name="chevron_left" size={18} />
+                      Back
+                    </button>
+                    <span className="text-xs text-kq-dim">Step 1 of 3</span>
+                  </div>
+
+                  <h1 className="font-display text-2xl leading-snug text-kq-text lg:text-3xl">
+                    How should it be painted?
+                  </h1>
+                  <p className="mt-1.5 text-sm leading-relaxed text-kq-dim">
+                    Pick the medium. Every page of your book is painted in it.
+                  </p>
+
+                  {/* The chosen style, as a big painted plate with its name and
+                      blurb on a scrim so the picture still dominates. */}
+                  <div className="relative mt-4 overflow-hidden rounded-xl border-2 border-kq-amber bg-kq-navy-mid">
+                    <img
+                      src={stylePlate(selectedStyle.value)}
+                      alt={`${selectedStyle.label}, painted example`}
+                      className="block aspect-[4/3] min-h-[240px] w-full object-cover"
+                    />
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-kq-ink via-kq-ink/70 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-4">
+                      <div className="font-display text-xl text-kq-text">{selectedStyle.label}</div>
+                      <div className="mt-0.5 text-sm leading-snug text-kq-dim">{selectedStyle.blurb}</div>
+                    </div>
+                    <span className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-kq-amber px-2 py-1 text-[11px] font-semibold text-kq-amber-ink">
+                      <Icon name="check" size={13} />
+                      Selected
+                    </span>
+                  </div>
+
+                  {/* Three whole alternatives, never sliced, and a round way
+                      to the rest. The chevron is the one circular control the
+                      owner approved on the comp. */}
+                  <div className="mt-4 flex items-stretch gap-3">
+                    {otherStyles.map(s => (
+                      <button
+                        key={s.value}
+                        onClick={() => setIllustrationStyle(s.value)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span className="block overflow-hidden rounded-md border border-kq-line">
+                          <img
+                            src={stylePlate(s.value)}
+                            alt=""
+                            loading="lazy"
+                            className="block aspect-[4/3] w-full object-cover"
+                          />
+                        </span>
+                        <span className="mt-2 block min-h-[26px] break-words font-display text-[11px] leading-[1.2] text-kq-text">
+                          {s.label}
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setShowStyleSheet(true)}
+                      aria-label={`See all ${ILLUSTRATION_STYLES.length} styles`}
+                      className="ml-1 grid h-10 w-10 shrink-0 self-center place-items-center rounded-full border border-kq-line bg-kq-text/10 text-kq-text transition-colors hover:bg-kq-text/20"
+                    >
+                      <Icon name="chevron_right" size={18} />
+                    </button>
+                  </div>
+
+                  {/* The one amber action on this screen, and a quieter way to
+                      compare the styles side by side. */}
+                  <div className="mt-5">
+                    <button
+                      onClick={goToStoryStep}
+                      className={storyIdea.trim() ? 'kq-btn-secondary' : 'kq-btn-primary'}
+                    >
+                      Next: who is in the story
+                      <Icon name="arrow_forward" size={18} />
+                    </button>
+                    <div className="mt-2 text-center">
+                      <button
+                        onClick={() => setShowStyleSheet(true)}
+                        className="text-xs text-kq-dim underline decoration-kq-line underline-offset-4 transition-colors hover:text-kq-text"
+                      >
+                        Not sure? Compare them side by side
+                      </button>
+                    </div>
+                  </div>
+                </section>
 
                 {/* Free books counter */}
                 <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
@@ -825,6 +990,7 @@ export default function GeneratePage() {
                         </button>
                       </div>
                       <textarea
+                        ref={storyIdeaRef}
                         value={storyIdea}
                         onChange={e => setStoryIdea(e.target.value)}
                         className="kq-input"
@@ -1147,31 +1313,6 @@ export default function GeneratePage() {
                       </select>
                     </div>
 
-                    {/* Illustration style: every style in the shared registry,
-                        each with a painted plate of its own. */}
-                    <div>
-                      <FieldLabel>Illustration style</FieldLabel>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {ILLUSTRATION_STYLES.map(s => {
-                          const on = illustrationStyle === s.value
-                          return (
-                            <button
-                              key={s.value}
-                              onClick={() => setIllustrationStyle(s.value)}
-                              aria-pressed={on}
-                              className={plateClass(on, 'overflow-hidden p-0 text-left')}
-                            >
-                              <StylePlate value={s.value} selected={on} />
-                              <div className="p-2.5">
-                                <div className="text-xs font-medium leading-tight text-kq-text">{s.label}</div>
-                                <div className="mt-0.5 text-[11px] leading-snug text-kq-dim">{s.blurb}</div>
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-
                     {/* Illustration model */}
                     <div>
                       <FieldLabel>Illustration model</FieldLabel>
@@ -1214,12 +1355,15 @@ export default function GeneratePage() {
                   </div>
                 )}
 
-                {/* The one amber action on this screen */}
+                {/* The one amber action moves to whichever control is the next
+                    real step: step 1 while the story box is empty, and this one
+                    once there is a story to make. Two ambers on one screen would
+                    split the attention the amber is supposed to focus. */}
                 <div className="w-full pt-1">
                   <button
                     onClick={handleGenerate}
                     disabled={!storyIdea.trim()}
-                    className="kq-btn-primary"
+                    className={`${storyIdea.trim() ? 'kq-btn-primary' : 'kq-btn-secondary'} disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     <Icon name="auto_awesome" size={20} />
                     Make this book

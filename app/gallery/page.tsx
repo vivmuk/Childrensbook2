@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { ILLUSTRATION_STYLES, getStyle, stylePlate } from '@/lib/illustration-style'
+import BottomBar from '@/components/BottomBar'
 
 interface GalleryBook {
   id: string
@@ -114,14 +115,11 @@ export default function GalleryPage() {
   }
 
   return (
-    <div className="kq-ground kq-stars-bg relative min-h-screen overflow-x-hidden">
+    <div className="kq-ground kq-stars-bg kq-has-tabbar relative min-h-screen overflow-x-hidden">
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Top bar */}
         <div className="kq-top-bar">
-          <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home" aria-label="Home">
-            <Icon name="home" size={20} />
-          </button>
-          <span className="hidden font-display text-lg text-kq-text sm:inline">Story Gallery</span>
+          <span className="font-display text-lg text-kq-text">Story Gallery</span>
           {/* The one amber action on this screen. Sized with a style rule
               because .kq-btn-primary is full width by default. */}
           <button
@@ -278,6 +276,8 @@ export default function GalleryPage() {
           </p>
         </footer>
       </div>
+
+      <BottomBar active="discover" />
     </div>
   )
 }

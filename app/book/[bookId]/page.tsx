@@ -47,6 +47,20 @@ export default function BookViewerPage() {
   // they stay folded away until asked for.
   const [showExport, setShowExport] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
+  /* Where they stopped, so the stage on the home screen can say "you left off
+     on page 3" instead of guessing. Written here because this is the only place
+     that knows. One small key, one entry per book, and failures are ignored:
+     private browsing must not break the reader. */
+  useEffect(() => {
+    if (!book || !book.pages?.length) return
+    const total = book.pages.length + (book.titlePage ? 1 : 0)
+    try {
+      const raw = localStorage.getItem('kinderquill_last_read')
+      const all = raw ? JSON.parse(raw) : {}
+      all[bookId] = { page: Math.min(currentPage + 1, total), total, at: Date.now() }
+      localStorage.setItem('kinderquill_last_read', JSON.stringify(all))
+    } catch { /* ignore */ }
+  }, [book, bookId, currentPage])
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
   const [isPageTransitioning, setIsPageTransitioning] = useState(false)
@@ -504,6 +518,9 @@ export default function BookViewerPage() {
         <button onClick={() => router.back()} className="kq-icon-btn" title="Back" aria-label="Back">
           <Icon name="arrow_back" size={18} />
         </button>
+        <button onClick={() => router.push('/library')} className="kq-icon-btn" title="Back to the shelf" aria-label="Back to the shelf">
+          <Icon name="shelf" size={18} />
+        </button>
       </div>
       <span className="font-display min-w-0 flex-1 truncate px-3 text-center text-base text-kq-text">
         {book.title}
@@ -563,40 +580,24 @@ export default function BookViewerPage() {
     </div>
   )
 
-  // Page Indicators
-  const PageIndicators = () => (
-    <div className="flex w-full flex-row items-center justify-center gap-1.5 py-3">
+  // Page position: one tappable dot per page. On the cream sheet the resting
+  // dots take an ink tint, because moon white vanishes against the cream.
+  const PageIndicators = ({ onSheet = false }: { onSheet?: boolean }) => (
+    <div className="flex w-full flex-row flex-wrap items-center justify-center gap-1">
       {Array.from({ length: totalPages }).map((_, index) => (
         <button
           key={index}
           onClick={() => handlePageChange(index)}
-          className={`kq-page-dot ${index === currentPage ? 'active' : ''}`}
           aria-label={`Go to page ${index + 1}`}
-        />
+          aria-current={index === currentPage ? 'page' : undefined}
+          className="flex h-11 w-8 items-center justify-center rounded-md"
+        >
+          <span
+            className={`kq-page-dot ${index === currentPage ? 'active' : ''}`}
+            style={onSheet && index !== currentPage ? { background: 'var(--kq-navy)', opacity: 0.35 } : undefined}
+          />
+        </button>
       ))}
-    </div>
-  )
-
-  // Nav Buttons: the title page's Start reading is its one amber action.
-  const NavButtons = ({ onPrev, onNext, prevDisabled, nextDisabled, accentNext = false, nextLabel = 'Next' }: {
-    onPrev: () => void; onNext: () => void; prevDisabled: boolean; nextDisabled: boolean
-    accentNext?: boolean; nextLabel?: string
-  }) => (
-    <div className="sticky bottom-0 border-t border-kq-line-soft bg-kq-ink/90 px-4 py-3 backdrop-blur">
-      <div className="mx-auto flex max-w-4xl justify-between gap-4">
-        <button
-          onClick={onPrev} disabled={prevDisabled}
-          className="kq-btn-secondary flex-1 !w-auto !px-3 !text-sm disabled:cursor-not-allowed"
-        >
-          <Icon name="arrow_back" size={16} /> Previous
-        </button>
-        <button
-          onClick={onNext} disabled={nextDisabled}
-          className={`flex-1 !w-auto !px-3 !text-sm disabled:cursor-not-allowed ${accentNext ? 'kq-btn-primary' : 'kq-btn-secondary'}`}
-        >
-          {nextLabel} <Icon name="arrow_forward" size={16} />
-        </button>
-      </div>
     </div>
   )
 
@@ -610,36 +611,43 @@ export default function BookViewerPage() {
     </div>
   )
 
-  // Title Page
+  // Title Page: the painted cover fills the top of the glass, the book says
+  // its own name under it, and Start reading is its one amber action.
   if (isTitlePage && book.titlePage) {
     return pageShell(
       <>
-        <TopBar />
-        <BookActions />
-        <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-6 lg:py-10">
-          <div className={`kq-cover relative mb-4 w-full overflow-hidden transition-[opacity,transform] duration-300 lg:max-w-3xl ${isPageTransitioning ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}>
-            <img src={book.titlePage.image} alt="Book cover" className="h-auto w-full object-cover" />
-            <div className="absolute bottom-3 right-3">
-              <AnimateButton pageKey="-1" pageIndex={-1} />
-            </div>
+        <div className="relative w-full overflow-hidden">
+          <img
+            src={book.titlePage.image} alt="Book cover"
+            className={`h-[46vh] min-h-[230px] w-full object-cover transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'scale-105 opacity-0' : 'scale-100 opacity-100'}`}
+          />
+          <div className="absolute inset-x-0 top-0 z-20">
+            <TopBar />
           </div>
-          {/* The covers are painted without lettering on purpose, and the top
-              bar truncates a long title, so the book says its own name here. */}
-          <div className="w-full text-center lg:max-w-3xl">
-            <h1 className="font-display text-2xl leading-tight text-kq-text lg:text-3xl">
+          <div className="absolute bottom-8 right-3 z-20">
+            <AnimateButton pageKey="-1" pageIndex={-1} />
+          </div>
+        </div>
+
+        <main className="relative z-10 -mt-5 flex flex-1 flex-col items-center px-3 pb-6 sm:px-4">
+          <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 text-center">
+            {/* The covers are painted without lettering on purpose, and the top
+                bar truncates a long title, so the book says its own name here. */}
+            <h1 className="font-display mt-2 text-2xl leading-tight text-kq-text lg:text-3xl">
               {book.title}
             </h1>
-            <p className="mt-2 text-xs uppercase tracking-[0.16em] text-kq-dim">
-              {`${book.pages.length} pages`}
-            </p>
+            <p className="kq-eyebrow">{`${book.pages.length} pages`}</p>
+            <PageIndicators />
+            <div className="w-full">
+              <button
+                onClick={() => handlePageChange(1)}
+                className="kq-btn-primary !py-3 !text-base"
+              >
+                Start reading <Icon name="arrow_forward" size={20} />
+              </button>
+            </div>
           </div>
         </main>
-        <PageIndicators />
-        <NavButtons
-          onPrev={() => handlePageChange(0)} onNext={() => handlePageChange(1)}
-          prevDisabled={true} nextDisabled={false}
-          accentNext={true} nextLabel="Start reading"
-        />
       </>
     )
   }
@@ -652,43 +660,71 @@ export default function BookViewerPage() {
     )
   }
 
-  // Content Page
+  // Content Page: a book fills the glass. The painted page is the hero at the
+  // top of the screen, the words sit on the warm cream sheet under it, and one
+  // amber action reads the page aloud.
   return pageShell(
     <>
-      <TopBar />
-      <BookActions />
-
-      {/* Page counter (phones only; desktop shows it beside the art) */}
-      <div className="flex justify-center pb-1 pt-3 lg:hidden">
-        <div className="kq-chip">Page {currentPage + 1} of {totalPages}</div>
+      {/* The painted page, full bleed at the top of the screen */}
+      <div className="relative w-full overflow-hidden">
+        {page.image ? (
+          <img
+            src={page.image} alt={`Page ${currentPage + 1} illustration`}
+            className={`h-[46vh] min-h-[230px] w-full animate-bloom-in object-cover transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'scale-105 opacity-0' : 'scale-100 opacity-100'}`}
+            key={currentPage}
+          />
+        ) : (
+          <div className="flex h-[46vh] min-h-[230px] w-full items-center justify-center">
+            <Icon name="auto_awesome" size={44} className="text-kq-dim" />
+          </div>
+        )}
+        {/* The way back rides on the painting, so the picture reaches the top edge. */}
+        <div className="absolute inset-x-0 top-0 z-20">
+          <TopBar />
+        </div>
+        {page.image && (
+          <div className="absolute bottom-8 right-3 z-20">
+            <AnimateButton pageKey={String(contentPageIndex)} pageIndex={contentPageIndex} />
+          </div>
+        )}
       </div>
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-3 lg:max-w-6xl lg:flex-row lg:items-start lg:gap-8 lg:py-6">
-        {/* Illustration: the event itself */}
-        <div className={`kq-cover relative mb-4 w-full overflow-hidden transition-[opacity,transform] duration-300 lg:mb-0 lg:w-3/5 lg:flex-shrink-0 ${isPageTransitioning ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}>
-          {page.image ? (
-            <img
-              src={page.image} alt={`Page ${currentPage + 1} illustration`}
-              className="h-auto w-full animate-bloom-in object-cover" key={currentPage}
-            />
-          ) : (
-            <div className="flex h-64 w-full items-center justify-center lg:h-[60vh]">
-              <Icon name="auto_awesome" size={44} className="text-kq-dim" />
-            </div>
-          )}
-          {page.image && (
-            <div className="absolute bottom-3 right-3">
-              <AnimateButton pageKey={String(contentPageIndex)} pageIndex={contentPageIndex} />
-            </div>
-          )}
-        </div>
+      <main
+        className="relative z-10 -mt-5 flex-1 px-3 sm:px-4"
+        /* Room for the phone's own bar at the bottom, or the last row of
+           controls gets sliced by the viewport edge. */
+        style={{ paddingBottom: 'calc(2.5rem + env(safe-area-inset-bottom))' }}
+      >
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          {/* The warm cream reading sheet, tucked under the picture */}
+          <div className={`kq-sheet transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
+            <p
+              className="font-display"
+              style={dyslexiaMode ? {
+                fontFamily: "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif",
+                letterSpacing: '0.04em',
+                wordSpacing: '0.12em',
+                lineHeight: 2,
+                fontSize: '1.24rem',
+              } : {
+                fontSize: '1.28rem',
+                lineHeight: 1.72,
+              }}
+            >
+              {splitSentences(page.text).map((sentence, i) => (
+                <span
+                  key={i}
+                  className={readAlong && i === highlightIndex ? 'rounded-sm bg-kq-amber/30 transition-colors' : undefined}
+                >
+                  {sentence}{' '}
+                </span>
+              ))}
+            </p>
 
-        {/* Reading column: the cream page, the read-aloud action, the audio */}
-        <div className="flex w-full flex-col gap-3 lg:sticky lg:top-24 lg:w-2/5">
-          {/* Desktop page label */}
-          <div className="hidden items-center justify-between lg:flex">
-            <span className="font-display min-w-0 truncate text-base text-kq-text">{book.title}</span>
-            <div className="kq-chip shrink-0">Page {currentPage + 1} of {totalPages}</div>
+            {/* Page position: dots along the bottom of the sheet */}
+            <div className="mt-6 border-t border-kq-ink/10 pt-2">
+              <PageIndicators onSheet />
+            </div>
           </div>
 
           {/* The one amber action on this screen: Read aloud */}
@@ -712,33 +748,11 @@ export default function BookViewerPage() {
           <button
             onClick={toggleDyslexia}
             aria-pressed={dyslexiaMode}
-            className={`kq-chip cursor-pointer self-start ${dyslexiaMode ? 'is-on' : ''}`}
+            className={`kq-chip cursor-pointer self-center ${dyslexiaMode ? 'text-kq-text' : ''}`}
             title="Easy-reading font and spacing"
           >
             <Icon name="format_size" size={18} /> Easy Read
           </button>
-
-          {/* The page itself, on the warm cream sheet */}
-          <div className={`kq-sheet transition-[opacity,transform] duration-300 lg:max-h-[58vh] lg:overflow-y-auto ${isPageTransitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
-            <p
-              style={dyslexiaMode ? {
-                fontFamily: "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif",
-                letterSpacing: '0.04em',
-                wordSpacing: '0.12em',
-                lineHeight: 2.1,
-                fontSize: '1.3rem',
-              } : undefined}
-            >
-              {splitSentences(page.text).map((sentence, i) => (
-                <span
-                  key={i}
-                  className={readAlong && i === highlightIndex ? 'rounded-sm bg-kq-amber/30 transition-colors' : undefined}
-                >
-                  {sentence}{' '}
-                </span>
-              ))}
-            </p>
-          </div>
 
           {/* Continue the adventure: last page only */}
           {currentPage === totalPages - 1 && (
@@ -774,18 +788,13 @@ export default function BookViewerPage() {
               </a>
             </div>
           )}
+
+          {/* Export stays reachable but quiet, folded behind one control */}
+          <BookActions />
         </div>
       </main>
 
-      <PageIndicators />
-      <NavButtons
-        onPrev={() => handlePageChange(Math.max(0, currentPage - 1))}
-        onNext={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
-        prevDisabled={currentPage === 0}
-        nextDisabled={currentPage === totalPages - 1}
-      />
-
-      <footer className="border-t border-kq-line-soft py-2 text-center">
+      <footer className="border-t border-kq-line py-2 text-center">
         <p className="text-xs text-kq-dim">
           Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
         </p>

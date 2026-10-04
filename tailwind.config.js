@@ -23,6 +23,11 @@ module.exports = {
         'kq-text': '#F4F2EC',
         'kq-dim': '#A9A5CC',
         'kq-line': 'rgba(244,242,236,0.14)',
+        /* Faint hairline used for panels inside panels. It was referenced by a
+           handful of screens while never existing as a Tailwind colour, so
+           `border-kq-line-soft` silently drew no border at all. The CSS variable
+           of the same name already existed; this is the class catching up. */
+        'kq-line-soft': 'rgba(244,242,236,0.07)',
 
         /* The single accent, used once per screen */
         'kq-amber': '#E0A046',
