@@ -511,7 +511,7 @@ export default function BookViewerPage() {
   // Top Bar
   const TopBar = () => (
     <div className="kq-top-bar">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home" aria-label="Home">
           <Icon name="home" size={18} />
         </button>
@@ -522,7 +522,7 @@ export default function BookViewerPage() {
           <Icon name="shelf" size={18} />
         </button>
       </div>
-      <span className="font-display min-w-0 flex-1 truncate px-3 text-center text-base text-kq-text">
+      <span className="font-display min-w-0 flex-1 truncate px-1.5 text-center text-base text-kq-text">
         {book.title}
       </span>
       <button onClick={handleShare} className="kq-icon-btn" title="Share this book" aria-label="Share this book">
@@ -619,7 +619,7 @@ export default function BookViewerPage() {
         <div className="relative w-full overflow-hidden">
           <img
             src={book.titlePage.image} alt="Book cover"
-            className={`h-[46vh] min-h-[230px] w-full object-cover transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'scale-105 opacity-0' : 'scale-100 opacity-100'}`}
+            className={`h-[36vh] min-h-[200px] w-full object-cover transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'scale-105 opacity-0' : 'scale-100 opacity-100'}`}
           />
           <div className="absolute inset-x-0 top-0 z-20">
             <TopBar />
@@ -674,7 +674,7 @@ export default function BookViewerPage() {
             key={currentPage}
           />
         ) : (
-          <div className="flex h-[46vh] min-h-[230px] w-full items-center justify-center">
+          <div className="flex h-[36vh] min-h-[200px] w-full items-center justify-center">
             <Icon name="auto_awesome" size={44} className="text-kq-dim" />
           </div>
         )}
@@ -695,7 +695,7 @@ export default function BookViewerPage() {
            controls gets sliced by the viewport edge. */
         style={{ paddingBottom: 'calc(2.5rem + env(safe-area-inset-bottom))' }}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
           {/* The warm cream reading sheet, tucked under the picture */}
           <div className={`kq-sheet transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
             <p
