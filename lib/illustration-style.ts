@@ -6,7 +6,9 @@
  *  1. HOUSE RULES — what makes any KinderQuill picture recognisable as ours no
  *     matter which style a parent picked: one clear thing to look at, one warm
  *     light source, a child-safe scene, a consistent character, no lettering
- *     baked into the art, and a painting that fills the whole canvas.
+ *     baked into the art (the cover is the one exception: it letters the
+ *     book's own title into the painting), and a painting that fills the
+ *     whole canvas.
  *
  *  2. STYLES — the medium: gouache, watercolour, collage, clay, comic, and so
  *     on. Each style carries its own palette guidance, because a classic
@@ -229,23 +231,26 @@ export function getStyle(value: string | undefined): IllustrationStyle {
   return byPrompt || ILLUSTRATION_STYLES[0]
 }
 
-/** One painted example of each style, made by scripts/generate-style-plates.mjs. */
 /**
- * The model that paints a style, and the default for the whole book.
+ * The model that paints when a parent leaves the picker on Automatic.
  *
- * The cheap graphic models were tested as a general replacement for this one by
- * painting ten styles twice and comparing. They lost eight of ten: they collapse
- * every brief into a single house look (graded sky, atmospheric depth, full
- * colour) and cannot hold a flat palette, a line weight or a real drawing
- * medium. So the house painter stays the one that performs the medium, and the
- * cheaper models are routed in only where they measurably win.
+ * Grok Imagine is the house painter, and Muse takes over whenever Venice lists
+ * it (lib/venice.ts resolveDefaultImageModel reads the live list, because a
+ * model's id is Venice's to publish, not ours to guess). Both were chosen by
+ * Vivek on 2026-10-22 as the default for every style.
+ *
+ * A style's own `model` is the specialist measured to win that medium against
+ * flux-2-max. It is no longer the default; it is what "Style specialist" in
+ * the advanced picker means.
  */
-export const HOUSE_IMAGE_MODEL = 'flux-2-max'
+export const HOUSE_IMAGE_MODEL = 'grok-imagine-image'
 
+/** The specialist for a style, or the house painter when it has none. */
 export function styleModel(value: string | undefined): string {
   return getStyle(value).model || HOUSE_IMAGE_MODEL
 }
 
+/** One painted example of each style, made by scripts/generate-style-plates.mjs. */
 export function stylePlate(value: string): string {
   return `/styles/${getStyle(value).value}.webp`
 }
@@ -340,24 +345,129 @@ export function buildIllustrationPrompt(parts: IllustrationParts): string {
     .substring(0, PROMPT_LIMIT)
 }
 
-/** Composition rule for a cover, so the title can be set over it in real type. */
+/**
+ * The cover carries the book's name in the painting itself, lettered by the
+ * image model as part of the art, the way a real picture book cover is drawn.
+ * There is no type laid over it afterwards, and no plate or banner behind it.
+ */
+export function coverTitleRule(title: string): string {
+  const t = title.replace(/["\u201c\u201d]/g, '').trim()
+  return (
+    `The book title "${t}" is hand lettered into the painting across the upper third, large, ` +
+    `bold and joyful, spelled exactly "${t}", every letter correct and fully inside the picture. ` +
+    'The lettering is painted in the same medium as the rest of the picture and belongs to the ' +
+    'scene, with no banner, ribbon, plaque, sign, label, frame or box behind it. ' +
+    'That title is the only writing anywhere in the picture: no author name, no subtitle, no other words.'
+  )
+}
+
 export const KQ_COVER_RULE =
   'Cover composition: one hero moment, the main character large and unmistakably the subject, ' +
-  'placed low or to one side, leaving the upper third quiet and uncluttered so the title can be ' +
-  'set over it afterwards.'
+  'placed in the lower two thirds, with calm painted sky or space in the upper third where the ' +
+  'title is lettered.'
 
-/** Assemble the cover prompt, which adds the title space rule and the style. */
-export function buildCoverIllustrationPrompt(parts: IllustrationParts): string {
+/** Negative prompt for a cover: the house negatives, minus the ban on lettering. */
+export const KQ_COVER_NEGATIVE =
+  'misspelled title, extra words, subtitle, author name, gibberish writing, watermark, signature, ' +
+  'logo, banner, ribbon, plaque, label, text box, border, frame, vignette, neon, lens flare, ' +
+  'pure black, 3D render, photograph'
+
+/**
+ * Assemble the cover prompt: the medium, the title lettered into the art, the
+ * composition, then the ordinary page brief without its "no text" rule.
+ */
+export function buildCoverIllustrationPrompt(parts: IllustrationParts & { title?: string }): string {
   const style = getStyle(parts.style)
+  const title = parts.title?.trim()
+  const page = buildIllustrationPrompt(parts).replace(HOUSE_CLEAN, '')
   return [
     style.medium,
-    'Front cover illustration for a picture book. The title is set separately in real type, so ' +
-      'leave the upper third as quiet, empty painted space.',
+    'Front cover illustration for a children\u2019s picture book.',
+    title ? coverTitleRule(title) : 'Leave the upper third as quiet painted space.',
     KQ_COVER_RULE,
-    buildIllustrationPrompt(parts),
+    page,
+    title ? `Remember: the title "${title}" is lettered into the painting, spelled exactly.` : HOUSE_CLEAN,
   ]
     .join(' ')
     .substring(0, PROMPT_LIMIT)
+}
+
+/* ─────────────────────────── The hero, first ───────────────────────────
+   When a parent brings a photo, or describes their hero, the character is
+   painted on its own before any page is. That one approved picture is then
+   the reference every page is painted around, which is what keeps the hero
+   the same child on page one and page eight. */
+
+/** Turn a photo into the book's hero, painted in the book's own medium. */
+export function buildCharacterFromPhotoPrompt(styleValue: string, opts: { isAdult?: boolean; name?: string } = {}): string {
+  const style = getStyle(styleValue)
+  const who = opts.isAdult ? 'grown-up' : 'child'
+  return [
+    `Repaint the person in this photo as the hero of a children\u2019s picture book, as ${style.medium.split('.')[0].toLowerCase()}.`,
+    `Keep them clearly recognisable: the same face shape, eyes, skin tone, hair colour and hairstyle, and their apparent age. They stay a ${who}; never make them older or younger.`,
+    'Full body, standing, facing us in a relaxed friendly pose, the whole figure visible from head to toe with space around it.',
+    'Plain soft single-colour background, no scenery, no props, no other people.',
+    `Palette: ${style.palette}`,
+    'Friendly, warm and expressive, the way a picture book hero looks.',
+    HOUSE_CLEAN,
+  ].join(' ').substring(0, PROMPT_LIMIT)
+}
+
+/** Paint a hero from words alone, when there is no photo. */
+export function buildCharacterSheetPrompt(styleValue: string, description: string): string {
+  const style = getStyle(styleValue)
+  return [
+    style.medium,
+    'Character design for the hero of a children\u2019s picture book.',
+    `The hero: ${description}.`,
+    'Full body, standing, facing us in a relaxed friendly pose, the whole figure visible from head to toe with space around it.',
+    'Plain soft single-colour background, no scenery, no props, no other characters.',
+    `Palette: ${style.palette}`,
+    `Avoid: ${style.avoid}.`,
+    HOUSE_CHILD_SAFE,
+    HOUSE_CLEAN,
+  ].join(' ').substring(0, PROMPT_LIMIT)
+}
+
+/**
+ * Paint a page around the approved hero. The reference image is the character
+ * sheet; this prompt asks for a whole new picture with that character in it,
+ * and says plainly not to copy the sheet's plain background or pose, which is
+ * the mistake reference models make when nobody tells them.
+ */
+export function buildSceneWithHeroPrompt(parts: IllustrationParts & { heroName?: string; cover?: boolean; title?: string }): string {
+  const style = getStyle(parts.style)
+  const name = parts.heroName ? `${parts.heroName}, ` : ''
+  return [
+    `Paint a brand new, complete, full-page children\u2019s picture book illustration as ${style.medium.split('.')[0].toLowerCase()}.`,
+    `The character in the reference image is the hero of the book (${name}the same character on every page): keep their face, hair, skin tone, body proportions and outfit exactly as in the reference.`,
+    'Do not copy the reference picture: give the hero a new pose and expression that fits this moment, and paint the whole scene around them. No plain background.',
+    parts.cover && parts.title ? coverTitleRule(parts.title) : '',
+    parts.cover ? KQ_COVER_RULE : '',
+    `The scene: ${parts.scene}`,
+    parts.shot ? `Shot: ${parts.shot}.` : '',
+    parts.characters ? `Other characters: ${parts.characters}` : '',
+    `Palette: ${style.palette}`,
+    parts.palette ? `Continue the book\u2019s own palette: ${parts.palette}.` : '',
+    HOUSE_LIGHT,
+    HOUSE_CHILD_SAFE,
+    HOUSE_FULL_BLEED,
+    `Avoid: ${style.avoid}.`,
+    parts.cover && parts.title ? `Remember: the title "${parts.title}" is lettered into the painting, spelled exactly.` : HOUSE_CLEAN,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .substring(0, PROMPT_LIMIT)
+}
+
+/** A change a parent asked for, applied to a page that already exists. */
+export function buildPageTouchUpPrompt(styleValue: string, instruction: string): string {
+  const style = getStyle(styleValue)
+  return [
+    instruction.trim().replace(/\.?$/, '.'),
+    `Keep everything else about the picture the same: the characters, their faces and outfits, the composition, and the medium (${style.medium.split('.')[0].toLowerCase()}).`,
+    HOUSE_CHILD_SAFE,
+  ].join(' ').substring(0, PROMPT_LIMIT)
 }
 
 /**

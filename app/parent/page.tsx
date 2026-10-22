@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { Header } from '@/components/Header'
+import { LS_MAGIC, setMagicEnabled } from '@/lib/magic'
 
 interface ReadingStats {
   totalBooksRead: number
@@ -22,6 +23,11 @@ interface ParentSettings {
 export default function ParentDashboardPage() {
   const router = useRouter()
   const [stats, setStats] = useState<ReadingStats | null>(null)
+  // Floating magic is a setting for this device, kept in the browser.
+  const [magicOn, setMagicOn] = useState(true)
+  useEffect(() => {
+    try { setMagicOn(localStorage.getItem(LS_MAGIC) !== 'off') } catch { /* private browsing */ }
+  }, [])
   const [settings, setSettings] = useState<ParentSettings>({
     contentFilterEnabled: true,
     maxBooksPerDay: 10,
@@ -179,6 +185,21 @@ export default function ParentDashboardPage() {
               <h2 className="mb-6 font-display text-xl text-kq-text">Parent settings</h2>
 
               <div className="flex flex-col gap-6">
+                {/* Floating magic */}
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base text-kq-text">Floating magic</h3>
+                    <p className="text-sm text-kq-dim">Butterflies, fireflies and fairy dust across the screens, and sparkles on every tap. On this device only.</p>
+                  </div>
+                  <button
+                    onClick={() => { setMagicEnabled(!magicOn); setMagicOn(!magicOn) }}
+                    className={`kq-toggle ${magicOn ? 'on' : ''}`}
+                    role="switch"
+                    aria-checked={magicOn}
+                    aria-label="Floating magic"
+                  />
+                </div>
+
                 {/* Content filter */}
                 <div className="flex items-center justify-between gap-4">
                   <div>

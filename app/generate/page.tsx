@@ -6,21 +6,25 @@ import { GeneratingGame } from '@/components/GeneratingGame'
 import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icons'
 import { ILLUSTRATION_STYLES, getStyle, stylePlate } from '@/lib/illustration-style'
+import { NARRATORS } from '@/lib/narrators'
+import { magicBurstAt, magicShower } from '@/lib/magic'
 
 /* ════════════════════════════════════════════════════════════════════════
-   New book: the form a parent fills in to make a picture book.
+   New book: three short steps a parent can do one handed.
 
-   Plainly structured on purpose (Vivek is a scientist, not a developer):
-     1. static data (the choices on the form)
-     2. shared style recipes and small local components
-     3. localStorage helpers
-     4. the page itself: state, then handlers, then the layout
+     1. The idea      what the story is about
+     2. The look      how every page is painted
+     3. The hero      a photo or a few words, painted FIRST as a character
+                      the parent approves, then used on every page
+
+   Everything else (length, age, language, voice, painter, dedication) is
+   folded into "More options" on the last step. The defaults are good, so a
+   parent who never opens it still gets a finished book.
 
    Styling rules this file follows, from DESIGN.md:
      - colour comes from the kq tokens, never a raw hex
      - rounded rectangles, never pills
-     - one amber action on the screen: the step 1 action that carries a parent
-       from the painted style into the story itself
+     - one amber action on the screen: the step's own next action
      - no emoji as UI, icons come from components/Icons.tsx
      - motion is transform and opacity only
    ════════════════════════════════════════════════════════════════════════ */
@@ -61,27 +65,13 @@ const CHARACTER_TRAITS = [
 ]
 
 /**
- * Leaving this on automatic is the right answer for almost everyone: the style
- * knows which machine paints it well, and the automatic choice was measured
- * against the alternatives on cost and on the brief. These stay for anyone who
- * wants to override that.
+ * Automatic is the right answer for almost everyone: Muse when Venice offers
+ * it, otherwise Grok Imagine. "Style specialist" is the model measured to win
+ * the chosen medium. The rest of the list is read live from Venice.
  */
-const IMAGE_MODELS = [
-  { value: '',                   label: 'Automatic',       description: 'The style picks the best model' },
-  { value: 'gpt-image-2-5-flare', label: 'GPT Image 2.5',  description: 'Paint and lettering' },
-  { value: 'qwen-image-3',       label: 'Qwen Image 3',    description: 'Dense, printed detail' },
-  { value: 'ideogram-v4-5',      label: 'Ideogram 4.5',    description: 'Strongest with words' },
-  { value: 'flux-2-max',         label: 'Flux 2 Max',      description: 'Soft art painting' },
-]
-
-const NARRATOR_VOICES = [
-  { value: 'default', label: 'Default', description: 'Warm and friendly' },
-  { value: 'nova',    label: 'Nova',    description: 'Warm, slightly British' },
-  { value: 'alloy',   label: 'Alloy',   description: 'Versatile, balanced' },
-  { value: 'echo',    label: 'Echo',    description: 'Soft, gentle' },
-  { value: 'fable',   label: 'Fable',   description: 'Perfect for storytelling' },
-  { value: 'onyx',    label: 'Onyx',    description: 'Deep, calming' },
-  { value: 'shimmer', label: 'Shimmer', description: 'Bright and cheerful' },
+const IMAGE_MODEL_PRESETS = [
+  { value: '',           label: 'Automatic',        description: 'Muse or Grok Imagine' },
+  { value: 'specialist', label: 'Style specialist', description: 'The best painter for this style' },
 ]
 
 const STORY_TEMPLATES = [
@@ -455,31 +445,123 @@ function AllStylesSheet({ current, onPick, onClose }: AllStylesSheetProps) {
   )
 }
 
+// ── Small pieces of the journey ──────────────────────────────────────────────
+
+type Step = 1 | 2 | 3
+type HeroMode = 'photo' | 'describe' | 'story'
+
+const STEP_NAMES: Record<Step, string> = { 1: 'The idea', 2: 'The look', 3: 'The hero' }
+
+/** Where you are, and a way back to any step already done. */
+function StepRail({ step, maxStep, onGo }: { step: Step; maxStep: Step; onGo: (s: Step) => void }) {
+  return (
+    <nav aria-label="Steps" className="mb-5 grid grid-cols-3 gap-2">
+      {([1, 2, 3] as Step[]).map(s => {
+        const reachable = s <= maxStep
+        return (
+          <button
+            key={s}
+            onClick={() => reachable && onGo(s)}
+            disabled={!reachable}
+            aria-current={s === step ? 'step' : undefined}
+            className="min-w-0 text-left disabled:cursor-default"
+          >
+            <span className={`block h-1.5 rounded-[3px] transition-colors ${s <= step ? 'bg-kq-amber' : 'bg-kq-text/10'}`} />
+            <span className={`mt-1.5 block truncate text-[11px] ${s === step ? 'text-kq-text' : 'text-kq-dim'}`}>
+              {s}. {STEP_NAMES[s]}
+            </span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/** Shrink a picture before it is sent, so uploads stay fast and under limits. */
+function downscaleImage(dataUrl: string, maxDim = 1024): Promise<string> {
+  return new Promise(resolve => {
+    const img = new window.Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(dataUrl); return }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', 0.88))
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
+function readFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = e => resolve(e.target?.result as string)
+    reader.onerror = () => reject(new Error('That file could not be read.'))
+    reader.readAsDataURL(file)
+  })
+}
+
 // ── Main page component ──────────────────────────────────────────────────────
 
 export default function GeneratePage() {
   const router = useRouter()
 
-  // Form state
-  const [storyIdea, setStoryIdea] = useState('')
-  const [ageRange, setAgeRange] = useState('2nd')
-  const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
-  const [storyLength, setStoryLength] = useState('8')
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  // The full style sheet, opened by the round chevron on the strip and by the
-  // quiet link under the step-1 action.
-  const [showStyleSheet, setShowStyleSheet] = useState(false)
-  const [narratorVoice, setNarratorVoice] = useState('default')
-  const [imageModel, setImageModel] = useState('')
+  // Where the parent is in the journey
+  const [step, setStep] = useState<Step>(1)
+  const [maxStep, setMaxStep] = useState<Step>(1)
+  const goTo = (s: Step) => {
+    setStep(s)
+    setMaxStep(m => (s > m ? s : m))
+    window.scrollTo({ top: 0 })
+  }
 
-  // Character builder
-  const [characterName, setCharacterName] = useState('')
+  // Step 1: the idea
+  const [storyIdea, setStoryIdea] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('custom')
+  const [isReadingDrawing, setIsReadingDrawing] = useState(false)
+  const [drawingError, setDrawingError] = useState('')
+  const drawingFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Step 2: the look
+  const [illustrationStyle, setIllustrationStyle] = useState('ghibli')
+  const [showStyleSheet, setShowStyleSheet] = useState(false)
+
+  // Step 3: the hero. A photo or a description becomes one painted character
+  // sheet, which the parent sees and approves before any page is painted.
+  const [heroMode, setHeroMode] = useState<HeroMode>('story')
+  const [heroPhotoDataUrl, setHeroPhotoDataUrl] = useState<string | null>(null)
+  const [characterImage, setCharacterImage] = useState<string | null>(null)
+  /** The style the character sheet was painted in, so a later change can be caught. */
+  const [characterStyle, setCharacterStyle] = useState<string | null>(null)
+  const [isPaintingHero, setIsPaintingHero] = useState(false)
+  const [heroError, setHeroError] = useState('')
+  const [heroIsAdult, setHeroIsAdult] = useState(false)
+  const [heroName, setHeroName] = useState('')
+  const [heroDescription, setHeroDescription] = useState('')
+  const [heroTweak, setHeroTweak] = useState('')
   const [characterType, setCharacterType] = useState('animal')
   const [selectedTraits, setSelectedTraits] = useState<string[]>(['brave', 'curious'])
-  const [showCharacterBuilder, setShowCharacterBuilder] = useState(false)
+  const [savedHeroes, setSavedHeroes] = useState<SavedHero[]>([])
+  const [heroSaved, setHeroSaved] = useState(false)
+  const heroFileInputRef = useRef<HTMLInputElement>(null)
 
-  // Generation state
+  // More options, all optional
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [ageRange, setAgeRange] = useState('2nd')
+  const [storyLength, setStoryLength] = useState('8')
+  const [language, setLanguage] = useState('English')
+  const [narratorVoice, setNarratorVoice] = useState('heart')
+  const [imageModel, setImageModel] = useState('')
+  const [liveModels, setLiveModels] = useState<{ id: string; name: string }[]>([])
+  const [automaticModel, setAutomaticModel] = useState('')
+  const [consistentHero, setConsistentHero] = useState(true)
+  const [dedication, setDedication] = useState('')
+
+  // Generation
   const [isGenerating, setIsGenerating] = useState(false)
   const [bookId, setBookId] = useState<string | null>(null)
   const [generationProgress, setGenerationProgress] = useState(0)
@@ -488,38 +570,14 @@ export default function GeneratePage() {
   const [userApiKey, setUserApiKey] = useState<string>('')
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [freeBookCount, setFreeBookCount] = useState(0)
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false)
   const [apiKeyInputValue, setApiKeyInputValue] = useState('')
 
-  // Cartoon hero state
-  const [heroPhotoDataUrl, setHeroPhotoDataUrl] = useState<string | null>(null)
-  const [cartoonHeroDataUrl, setCartoonHeroDataUrl] = useState<string | null>(null)
-  const [isCartoonifying, setIsCartoonifying] = useState(false)
-  const [cartoonError, setCartoonError] = useState('')
-  const heroFileInputRef = useRef<HTMLInputElement>(null)
-  // Detected or edited hero details (works for a child OR a grown-up)
-  const [heroIsAdult, setHeroIsAdult] = useState(false)
-  const [heroName, setHeroName] = useState('')
-  const [heroDescription, setHeroDescription] = useState('')
-  const [savedHeroes, setSavedHeroes] = useState<SavedHero[]>([])
-  const [heroSaved, setHeroSaved] = useState(false)
-
-  // Story language
-  const [language, setLanguage] = useState('English')
-
-  // Draw-to-story: turn a child's drawing into a story idea via a vision model
-  const [isReadingDrawing, setIsReadingDrawing] = useState(false)
-  const [drawingError, setDrawingError] = useState('')
-  const drawingFileInputRef = useRef<HTMLInputElement>(null)
-  // "Next: who is in the story" brings the story idea box into view.
-  const storyIdeaRef = useRef<HTMLTextAreaElement>(null)
-
-  // The form values used for the book currently being made, so the library
-  // entry matches what was actually sent.
+  // The form values used for the book being made, so the library entry
+  // matches what was actually sent.
   const pendingMetaRef = useRef<{ ageRange: string; illustrationStyle: string } | null>(null)
 
-  // Read the query string (a story idea can be linked in from the homepage),
-  // then pick up whatever the reader saved last time.
+  // A story idea can be linked in from the homepage; then pick up whatever the
+  // reader saved last time.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const idea = params.get('idea')
@@ -527,9 +585,7 @@ export default function GeneratePage() {
     const style = params.get('illustrationStyle')
     if (idea) setStoryIdea(idea)
     if (age) setAgeRange(age)
-    // Links made before the shared registry may carry a full prompt string.
-    // getStyle maps a value, a label or a legacy prompt onto this picker's
-    // value and never throws, so nothing old lands on an unknown style.
+    // getStyle maps a value, a label or a legacy prompt onto a picker value.
     if (style) setIllustrationStyle(getStyle(style).value)
     const lang = params.get('language')
     if (lang) setLanguage(lang)
@@ -539,29 +595,50 @@ export default function GeneratePage() {
     setSavedHeroes(getSavedHeroes())
   }, [])
 
-  // Poll the book while it is being made. Unchanged behaviour: every two
-  // seconds, and on completion the book is filed in the library and opened.
+  // The live painter list, fetched only when a parent opens More options.
+  useEffect(() => {
+    if (!showAdvanced || liveModels.length) return
+    fetch('/api/models', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userApiKey: userApiKey || undefined }),
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d) return
+        setAutomaticModel(d.automatic || '')
+        setLiveModels(d.models || [])
+      })
+      .catch(() => {})
+  }, [showAdvanced, liveModels.length, userApiKey])
+
+  // Poll the book while it is being made. On completion it is filed in the
+  // library and opened.
   useEffect(() => {
     if (!bookId || !isGenerating) return
     const checkStatus = async () => {
       try {
         const res = await fetch(`/api/book-status/${bookId}`)
-        if (res.ok) {
-          const data = await res.json()
-          if (data.status === 'completed') {
-            setIsGenerating(false)
-            incrementFreeBookCount()
-            const newCount = getFreeBookCount()
-            setFreeBookCount(newCount)
-            const meta = pendingMetaRef.current
-            saveBookToLibrary({ id: bookId, title: data.title || 'My Story', ageRange: meta?.ageRange || ageRange, illustrationStyle: meta?.illustrationStyle || illustrationStyle, createdAt: data.createdAt || new Date().toISOString(), titlePageImage: data.titlePageImage ?? null })
-            router.push(`/book/${bookId}`)
-          } else if (data.status === 'generating') {
-            setGenerationProgress(Math.min(95, data.progress || 0))
-          } else if (data.status === 'error') {
-            setIsGenerating(false)
-            alert('Something went wrong while generating your book. Please try again.')
-          }
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.status === 'completed') {
+          setIsGenerating(false)
+          incrementFreeBookCount()
+          setFreeBookCount(getFreeBookCount())
+          const meta = pendingMetaRef.current
+          saveBookToLibrary({
+            id: bookId, title: data.title || 'My Story',
+            ageRange: meta?.ageRange || ageRange, illustrationStyle: meta?.illustrationStyle || illustrationStyle,
+            createdAt: data.createdAt || new Date().toISOString(), titlePageImage: data.titlePageImage ?? null,
+          })
+          // The book arrives in a shower of sparkles; the sky layer carries
+          // them on into the reader.
+          magicShower()
+          router.push(`/book/${bookId}`)
+        } else if (data.status === 'generating') {
+          setGenerationProgress(Math.min(97, data.progress || 0))
+        } else if (data.status === 'error') {
+          setIsGenerating(false)
+          alert('Something went wrong while making your book. Please try again.')
         }
       } catch { /* ignore transient errors */ }
     }
@@ -569,59 +646,112 @@ export default function GeneratePage() {
     return () => clearInterval(interval)
   }, [bookId, isGenerating, router, ageRange, illustrationStyle])
 
-  // A photo has been chosen: show it and forget anything we knew about the
-  // previous one.
-  const handleHeroImageLoad = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = e => {
-      setHeroPhotoDataUrl(e.target?.result as string)
-      setCartoonHeroDataUrl(null); setCartoonError('')
-      setHeroName(''); setHeroDescription(''); setHeroIsAdult(false); setHeroSaved(false)
-    }
-    reader.readAsDataURL(file)
-  }, [])
+  // ── Step 1 handlers ──
 
-  // Ask the server to turn the photo into a painted character.
-  const handleCartoonify = async () => {
-    if (!heroPhotoDataUrl) return
-    setIsCartoonifying(true); setCartoonError('')
+  // Read a child's drawing and turn it into a story idea.
+  const handleDrawingUpload = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    setIsReadingDrawing(true); setDrawingError('')
     try {
-      const res = await fetch('/api/cartoonify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: heroPhotoDataUrl, userApiKey: userApiKey || undefined }) })
+      const dataUrl = await downscaleImage(await readFile(file))
+      const res = await fetch('/api/describe-drawing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl, userApiKey: userApiKey || undefined }),
+      })
       const data = await res.json()
-      if (!res.ok) {
-        setCartoonError(data.error || 'Failed to cartoonify. Please try again.')
-      } else {
-        setCartoonHeroDataUrl(data.cartoonImage)
-        if (data.hero) {
-          setHeroIsAdult(!!data.hero.isAdult)
-          setHeroDescription(data.hero.description || '')
-          if (data.hero.suggestedName && !heroName) setHeroName(data.hero.suggestedName)
-        }
-      }
-    } catch (err: any) { setCartoonError(err.message || 'Failed to cartoonify.') } finally { setIsCartoonifying(false) }
+      if (!res.ok) setDrawingError(data.error || 'Could not read the drawing. Please try another.')
+      else if (data.storyIdea) { setStoryIdea(data.storyIdea); setSelectedTemplate('custom') }
+    } catch (err: any) {
+      setDrawingError(err.message || 'Could not read the drawing.')
+    } finally {
+      setIsReadingDrawing(false)
+    }
+  }, [userApiKey])
+
+  // ── Step 3 handlers ──
+
+  const clearCharacter = () => {
+    setCharacterImage(null); setCharacterStyle(null); setHeroError(''); setHeroSaved(false)
   }
 
-  // Reuse a previously saved hero (recurring characters / a series).
+  const handleHeroPhoto = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    try {
+      const dataUrl = await downscaleImage(await readFile(file), 1280)
+      setHeroPhotoDataUrl(dataUrl)
+      setHeroMode('photo')
+      setCharacterImage(null); setCharacterStyle(null); setHeroError('')
+      setHeroName(''); setHeroDescription(''); setHeroIsAdult(false); setHeroSaved(false); setHeroTweak('')
+    } catch (err: any) {
+      setHeroError(err.message || 'That photo could not be opened.')
+    }
+  }, [])
+
+  /** The description sent with a described hero, from the builder's choices. */
+  const describedHero = () => {
+    const type = CHARACTER_TYPES.find(t => t.value === characterType)?.label.toLowerCase() || characterType
+    const base = heroDescription.trim() || `a ${selectedTraits.join(', ')} ${type}`
+    return heroName.trim() ? `${heroName.trim()}, ${base}` : base
+  }
+
+  // Paint the hero, on their own, in the book's style. This is the first thing
+  // made for a book with a hero, and nothing else is painted until it is approved.
+  const handleCreateCharacter = async () => {
+    setIsPaintingHero(true); setHeroError('')
+    try {
+      const res = await fetch('/api/create-character', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          photo: heroMode === 'photo' ? heroPhotoDataUrl : undefined,
+          description: heroMode === 'describe' ? describedHero() : heroDescription || undefined,
+          name: heroName || undefined,
+          isAdult: heroMode === 'photo' && characterImage ? heroIsAdult : heroMode === 'describe' ? heroIsAdult : undefined,
+          style: illustrationStyle,
+          tweak: characterImage ? heroTweak : undefined,
+          userApiKey: userApiKey || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setHeroError(data.error || 'The hero could not be painted. Please try again.'); return }
+      setCharacterImage(data.characterImage)
+      setCharacterStyle(illustrationStyle)
+      // The hero appears with a puff of sparkles.
+      setTimeout(() => magicBurstAt(document.querySelector('[data-hero-sheet]'), { count: 14, spread: 90, big: true }), 120)
+      setHeroSaved(false)
+      setHeroTweak('')
+      if (data.hero) {
+        if (heroMode === 'photo') setHeroIsAdult(!!data.hero.isAdult)
+        if (data.hero.description && heroMode === 'photo') setHeroDescription(data.hero.description)
+        if (data.hero.suggestedName && !heroName) setHeroName(data.hero.suggestedName)
+      }
+    } catch (err: any) {
+      setHeroError(err.message || 'The hero could not be painted.')
+    } finally {
+      setIsPaintingHero(false)
+    }
+  }
+
+  // A saved hero is already painted, so it goes straight in.
   const useSavedHero = (h: SavedHero) => {
-    setHeroPhotoDataUrl(h.image)
-    setCartoonHeroDataUrl(h.image)
+    setHeroMode('photo')
+    setHeroPhotoDataUrl(null)
+    setCharacterImage(h.image)
+    setCharacterStyle(null)
     setHeroName(h.name || '')
     setHeroDescription(h.description || '')
     setHeroIsAdult(!!h.isAdult)
-    setCartoonError(''); setHeroSaved(true)
+    setHeroError(''); setHeroSaved(true)
   }
 
   const handleSaveHero = () => {
-    if (!cartoonHeroDataUrl) return
-    const hero: SavedHero = {
+    if (!characterImage) return
+    saveHero({
       id: `hero_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: heroName.trim() || 'My Hero',
-      image: cartoonHeroDataUrl,
-      description: heroDescription,
+      image: characterImage,
+      description: heroMode === 'describe' ? describedHero() : heroDescription,
       isAdult: heroIsAdult,
-    }
-    saveHero(hero)
+    })
     setSavedHeroes(getSavedHeroes())
     setHeroSaved(true)
   }
@@ -631,97 +761,59 @@ export default function GeneratePage() {
     setSavedHeroes(getSavedHeroes())
   }
 
-  // Shrink a drawing to a sane size before sending, which keeps the upload
-  // fast and well under the vision model's payload limit.
-  const downscaleImage = (dataUrl: string, maxDim = 1024): Promise<string> =>
-    new Promise(resolve => {
-      const img = new window.Image()
-      img.onload = () => {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
-        if (scale === 1) { resolve(dataUrl); return }
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.round(img.width * scale)
-        canvas.height = Math.round(img.height * scale)
-        const ctx = canvas.getContext('2d')
-        if (!ctx) { resolve(dataUrl); return }
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', 0.85))
-      }
-      img.onerror = () => resolve(dataUrl)
-      img.src = dataUrl
-    })
+  // ── Making the book ──
 
-  // Read a child's drawing and turn it into a story idea.
-  const handleDrawingUpload = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) return
-    setIsReadingDrawing(true); setDrawingError('')
-    const reader = new FileReader()
-    reader.onload = async e => {
-      try {
-        const dataUrl = await downscaleImage(e.target?.result as string)
-        const res = await fetch('/api/describe-drawing', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: dataUrl, userApiKey: userApiKey || undefined }),
-        })
-        const data = await res.json()
-        if (!res.ok) { setDrawingError(data.error || 'Could not read the drawing. Please try another.') }
-        else if (data.storyIdea) { setStoryIdea(data.storyIdea); setSelectedTemplate('custom') }
-      } catch (err: any) {
-        setDrawingError(err.message || 'Could not read the drawing.')
-      } finally {
-        setIsReadingDrawing(false)
-      }
-    }
-    reader.readAsDataURL(file)
-  }, [userApiKey])
-
-  // Build the request and hand it to the server. The server does the writing
-  // and painting; this page then polls for the finished book.
   const doGenerate = async (overrideApiKey?: string) => {
     setIsGenerating(true); setGenerationProgress(0)
     pendingMetaRef.current = { ageRange, illustrationStyle }
     try {
       const template = STORY_TEMPLATES.find(t => t.id === selectedTemplate)
       let fullStoryIdea = template && template.id !== 'custom' ? `${template.prompt}\n\nStory idea: ${storyIdea}` : storyIdea
-      if (showCharacterBuilder && characterName) {
-        fullStoryIdea = `The main character is ${characterName}, a ${characterType} who is ${selectedTraits.join(', ')}.\n\n${fullStoryIdea}`
+      const usingHero = heroMode !== 'story' && (!!characterImage || heroMode === 'describe')
+      if (heroMode === 'describe' && !characterImage) {
+        fullStoryIdea = `The main character is ${describedHero()}.\n\n${fullStoryIdea}`
       }
-      const effectiveApiKey = overrideApiKey || userApiKey
       const res = await fetch('/api/generate-book', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          storyIdea: fullStoryIdea, ageRange,
-          illustrationStyle,
+          storyIdea: fullStoryIdea, ageRange, illustrationStyle,
           storyLength: parseInt(storyLength), narratorVoice, imageModel,
-          userVeniceApiKey: effectiveApiKey || undefined,
-          cartoonHeroImage: cartoonHeroDataUrl || undefined,
+          userVeniceApiKey: (overrideApiKey || userApiKey) || undefined,
           language,
-          hero: cartoonHeroDataUrl && heroDescription
-            ? { description: heroDescription, isAdult: heroIsAdult, name: heroName || undefined }
+          consistentHero,
+          dedication: dedication.trim() || undefined,
+          hero: usingHero
+            ? {
+                image: characterImage || undefined,
+                description: heroMode === 'describe' ? describedHero() : heroDescription || undefined,
+                isAdult: heroIsAdult,
+                name: heroName.trim() || undefined,
+              }
             : undefined,
-          character: showCharacterBuilder ? { name: characterName, type: characterType, traits: selectedTraits } : undefined,
+          character: heroMode === 'describe'
+            ? { name: heroName.trim() || 'Hero', type: characterType, traits: selectedTraits }
+            : undefined,
         }),
       })
       if (!res.ok) {
-        const err = await res.json()
+        const err = await res.json().catch(() => ({}))
         if (res.status === 403) { alert(err.error); setIsGenerating(false); return }
-        throw new Error(err.error || 'Failed to generate book')
+        throw new Error(err.error || 'Failed to make the book')
       }
       const data = await res.json()
       setBookId(data.bookId); setGenerationProgress(5)
     } catch (err: any) {
-      console.error('Generation error:', err)
       const msg = err.message || ''
       const isNetworkError = msg === 'fetch failed' || msg === 'Failed to fetch' || msg.includes('network')
-      if (isNetworkError) {
-        alert('The connection timed out. Your story may still be generating. Wait 30 seconds and check your Library.')
-      } else { alert(msg || 'Failed to generate book. Please try again.') }
+      alert(isNetworkError
+        ? 'The connection timed out. Your story may still be on its way. Wait 30 seconds and check your shelf.'
+        : msg || 'Failed to make the book. Please try again.')
       setIsGenerating(false); setGenerationProgress(0)
     }
   }
 
   const handleGenerate = async () => {
-    if (!storyIdea.trim()) { alert('Please enter a story idea!'); return }
+    if (!storyIdea.trim()) { goTo(1); return }
     if (freeBookCount >= FREE_BOOK_LIMIT && !userApiKey) { setShowApiKeyModal(true); return }
     await doGenerate()
   }
@@ -730,25 +822,16 @@ export default function GeneratePage() {
     localStorage.setItem(LS_API_KEY, key); setUserApiKey(key); setShowApiKeyModal(false); doGenerate(key)
   }
 
-  // Step 1's action carries a parent down to the story itself. On one page,
-  // "next" means bringing the story idea box into view and putting the cursor
-  // in it. The jump is instant: the design rules keep motion off layout, and a
-  // smooth scroll is unreliable on some engines.
-  const goToStoryStep = () => {
-    const el = storyIdeaRef.current
-    if (!el) return
-    el.scrollIntoView({ block: 'center' })
-    el.focus({ preventScroll: true })
-  }
+  // ── Derived ──
 
-  // Step 1 shows the chosen style large, then three whole alternatives. The
-  // three are the next styles in registry order, wrapping, so they always
-  // follow the one that is currently chosen.
   const selectedStyle = getStyle(illustrationStyle)
   const styleIndex = Math.max(0, ILLUSTRATION_STYLES.findIndex(s => s.value === selectedStyle.value))
-  const otherStyles = [1, 2, 3].map(step => ILLUSTRATION_STYLES[(styleIndex + step) % ILLUSTRATION_STYLES.length])
-
-  const timeEstimate = storyLength === '5' ? 'about 1 minute' : storyLength === '8' ? 'about 2 minutes' : 'about 3 to 4 minutes'
+  const otherStyles = [1, 2, 3].map(n => ILLUSTRATION_STYLES[(styleIndex + n) % ILLUSTRATION_STYLES.length])
+  const timeEstimate = storyLength === '5' ? 'about 2 minutes' : storyLength === '8' ? 'about 3 minutes' : 'about 4 to 5 minutes'
+  const characterIsStale = !!characterImage && !!characterStyle && characterStyle !== illustrationStyle
+  // The hero step's one amber action: paint the hero while there is one to
+  // paint and none yet, otherwise make the book.
+  const heroNeedsPainting = heroMode === 'photo' && !!heroPhotoDataUrl && !characterImage
 
   return (
     <div className="kq-ground kq-has-tabbar relative flex min-h-screen w-full flex-col overflow-x-hidden">
@@ -756,95 +839,121 @@ export default function GeneratePage() {
         <Header title="New book" showBack={false} />
 
         {showApiKeyModal && (
-          <VeniceApiKeyModal
-            onClose={() => setShowApiKeyModal(false)}
-            onSave={handleApiKeySave}
-            booksUsed={freeBookCount}
-          />
+          <VeniceApiKeyModal onClose={() => setShowApiKeyModal(false)} onSave={handleApiKeySave} booksUsed={freeBookCount} />
         )}
 
         {showStyleSheet && (
           <AllStylesSheet
             current={selectedStyle.value}
-            onPick={(value) => { setIllustrationStyle(value); setShowStyleSheet(false) }}
+            onPick={value => { setIllustrationStyle(value); setShowStyleSheet(false) }}
             onClose={() => setShowStyleSheet(false)}
           />
         )}
 
-        <main className="mx-auto w-full max-w-content grow px-5 py-6 lg:px-10">
+        <main className="mx-auto w-full max-w-xl grow px-4 py-6 sm:px-5">
           {isGenerating ? (
-            // While the book is being made we show the waiting screen and
-            // nothing else. The form comes back once the book is ready.
             <div className="flex flex-col items-center justify-center py-10">
               <GeneratingGame progress={generationProgress} />
             </div>
           ) : (
             <>
-              <div className="mx-auto w-full max-w-3xl lg:max-w-none">
+              <StepRail step={step} maxStep={maxStep} onGo={goTo} />
 
-                {/* ══ Step 1: how it is painted ══════════════════════════════
-                    The most delightful choice in the product, so it opens the
-                    page instead of hiding in advanced options: the chosen
-                    style as a big painted plate, three whole alternatives
-                    beneath it, a round way to the rest, and the one amber
-                    action on the screen. */}
-                <section className="mx-auto mb-6 w-full max-w-md">
-
-                  {/* Step header: the way back, and where you are. */}
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <button
-                      onClick={() => router.back()}
-                      className="flex items-center gap-1 text-sm text-kq-text/85 transition-colors hover:text-kq-text"
-                    >
-                      <Icon name="chevron_left" size={18} />
-                      Back
-                    </button>
-                    <span className="text-xs text-kq-dim">Step 1 of 3</span>
-                  </div>
-
-                  <h1 className="font-display text-2xl leading-snug text-kq-text lg:text-3xl">
-                    How should it be painted?
-                  </h1>
+              {/* ══ Step 1: the idea ═══════════════════════════════════════ */}
+              {step === 1 && (
+                <section>
+                  <h1 className="font-display text-2xl leading-snug text-kq-text">What is the story about?</h1>
                   <p className="mt-1.5 text-sm leading-relaxed text-kq-dim">
-                    Pick the medium. Every page of your book is painted in it.
+                    One sentence is plenty. We write the rest.
                   </p>
 
-                  {/* The chosen style, as a big painted plate with its name and
-                      blurb on a scrim so the picture still dominates. */}
+                  <textarea
+                    value={storyIdea}
+                    onChange={e => setStoryIdea(e.target.value)}
+                    className="kq-input mt-4"
+                    rows={4}
+                    autoFocus
+                    placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || 'A brave knight who is afraid of spiders'}
+                  />
+
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setStoryIdea(RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)])}
+                      className={`${QUIET} flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm`}
+                    >
+                      <Icon name="sync" size={15} /> Surprise me
+                    </button>
+                    <button
+                      onClick={() => drawingFileInputRef.current?.click()}
+                      disabled={isReadingDrawing}
+                      className={`${QUIET} flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm disabled:opacity-60`}
+                    >
+                      <Icon name="image" size={15} /> {isReadingDrawing ? 'Reading it' : 'From a drawing'}
+                    </button>
+                  </div>
+                  <input
+                    ref={drawingFileInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleDrawingUpload(f); e.target.value = '' }}
+                  />
+                  {drawingError && <p className="mt-1.5 text-xs text-kq-dim">{drawingError}</p>}
+
+                  <div className="mt-5">
+                    <FieldLabel>Kind of story (optional)</FieldLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {STORY_TEMPLATES.map(template => (
+                        <button
+                          key={template.id}
+                          onClick={() => {
+                            setSelectedTemplate(template.id)
+                            if (template.id !== 'custom' && !storyIdea) setStoryIdea(template.example)
+                          }}
+                          className={`kq-chip ${selectedTemplate === template.id ? 'is-on' : ''}`}
+                        >
+                          {template.name}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedTemplate !== 'custom' && (
+                      <p className="mt-2 text-xs text-kq-dim">
+                        {STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.description}.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-6">
+                    <button onClick={() => goTo(2)} disabled={!storyIdea.trim()} className="kq-btn-primary">
+                      Next: choose the look <Icon name="arrow_forward" size={18} />
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* ══ Step 2: the look ═══════════════════════════════════════ */}
+              {step === 2 && (
+                <section>
+                  <h1 className="font-display text-2xl leading-snug text-kq-text">How should it be painted?</h1>
+                  <p className="mt-1.5 text-sm leading-relaxed text-kq-dim">
+                    Every page, and the hero, is painted in this style.
+                  </p>
+
                   <div className="relative mt-4 overflow-hidden rounded-xl border-2 border-kq-amber bg-kq-navy-mid">
                     <img
                       src={stylePlate(selectedStyle.value)}
                       alt={`${selectedStyle.label}, painted example`}
-                      className="block aspect-[4/3] min-h-[240px] w-full object-cover"
+                      className="block aspect-[4/3] w-full object-cover"
                     />
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-kq-ink via-kq-ink/70 to-transparent" />
                     <div className="absolute inset-x-0 bottom-0 p-4">
                       <div className="font-display text-xl text-kq-text">{selectedStyle.label}</div>
                       <div className="mt-0.5 text-sm leading-snug text-kq-dim">{selectedStyle.blurb}</div>
                     </div>
-                    <span className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-kq-amber px-2 py-1 text-[11px] font-semibold text-kq-amber-ink">
-                      <Icon name="check" size={13} />
-                      Selected
-                    </span>
                   </div>
 
-                  {/* Three whole alternatives, never sliced, and a round way
-                      to the rest. The chevron is the one circular control the
-                      owner approved on the comp. */}
                   <div className="mt-4 flex items-stretch gap-3">
                     {otherStyles.map(s => (
-                      <button
-                        key={s.value}
-                        onClick={() => setIllustrationStyle(s.value)}
-                        className="min-w-0 flex-1 text-left"
-                      >
+                      <button key={s.value} onClick={() => setIllustrationStyle(s.value)} className="min-w-0 flex-1 text-left">
                         <span className="block overflow-hidden rounded-md border border-kq-line">
-                          <img
-                            src={stylePlate(s.value)}
-                            alt=""
-                            loading="lazy"
-                            className="block aspect-[4/3] w-full object-cover"
-                          />
+                          <img src={stylePlate(s.value)} alt="" loading="lazy" className="block aspect-[4/3] w-full object-cover" />
                         </span>
                         <span className="mt-2 block min-h-[26px] break-words font-display text-[11px] leading-[1.2] text-kq-text">
                           {s.label}
@@ -854,530 +963,402 @@ export default function GeneratePage() {
                     <button
                       onClick={() => setShowStyleSheet(true)}
                       aria-label={`See all ${ILLUSTRATION_STYLES.length} styles`}
-                      className="ml-1 grid h-10 w-10 shrink-0 self-center place-items-center rounded-full border border-kq-line bg-kq-text/10 text-kq-text transition-colors hover:bg-kq-text/20"
+                      className="ml-1 grid h-10 w-10 shrink-0 self-center place-items-center rounded-md border border-kq-line bg-kq-text/10 text-kq-text transition-colors hover:bg-kq-text/20"
                     >
                       <Icon name="chevron_right" size={18} />
                     </button>
                   </div>
 
-                  {/* The one amber action on this screen, and a quieter way to
-                      compare the styles side by side. */}
-                  <div className="mt-5">
-                    <button
-                      onClick={goToStoryStep}
-                      className={storyIdea.trim() ? 'kq-btn-secondary' : 'kq-btn-primary'}
-                    >
-                      Next: who is in the story
-                      <Icon name="arrow_forward" size={18} />
+                  <div className="mt-6 grid gap-2">
+                    <button onClick={() => goTo(3)} className="kq-btn-primary">
+                      Next: the hero <Icon name="arrow_forward" size={18} />
                     </button>
-                    <div className="mt-2 text-center">
-                      <button
-                        onClick={() => setShowStyleSheet(true)}
-                        className="text-xs text-kq-dim underline decoration-kq-line underline-offset-4 transition-colors hover:text-kq-text"
-                      >
-                        Not sure? Compare them side by side
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setShowStyleSheet(true)}
+                      className="text-center text-xs text-kq-dim underline decoration-kq-line underline-offset-4 transition-colors hover:text-kq-text"
+                    >
+                      Compare all {ILLUSTRATION_STYLES.length} styles side by side
+                    </button>
                   </div>
                 </section>
+              )}
 
-                {/* Free books counter */}
-                <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
+              {/* ══ Step 3: the hero ═══════════════════════════════════════ */}
+              {step === 3 && (
+                <section>
+                  <h1 className="font-display text-2xl leading-snug text-kq-text">Who is the hero?</h1>
+                  <p className="mt-1.5 text-sm leading-relaxed text-kq-dim">
+                    We paint the hero first, so they look the same on every page.
+                  </p>
 
-                {/* API key management */}
-                {userApiKey ? (
-                  <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-kq-line bg-kq-text/5 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Icon name="lock" size={14} className="shrink-0 text-kq-dim" />
-                      <p className="text-xs text-kq-dim">Venice API key saved. Unlimited books.</p>
-                    </div>
-                    <button
-                      onClick={() => { localStorage.removeItem(LS_API_KEY); setUserApiKey('') }}
-                      className="text-xs text-kq-dim underline decoration-kq-line underline-offset-4 transition-colors hover:text-kq-text"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mb-3">
-                    {!showApiKeyInput ? (
+                  {/* Three ways in, as one choice */}
+                  <div className="mt-4 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Choose a hero">
+                    {([
+                      { mode: 'photo', icon: 'add_photo_alternate', label: 'From a photo' },
+                      { mode: 'describe', icon: 'edit', label: 'Describe one' },
+                      { mode: 'story', icon: 'auto_stories', label: 'Story decides' },
+                    ] as { mode: HeroMode; icon: string; label: string }[]).map(o => (
                       <button
-                        onClick={() => setShowApiKeyInput(true)}
-                        className={`${QUIET} flex w-full items-center justify-center gap-2 border-dashed px-3 py-2.5 text-xs`}
+                        key={o.mode}
+                        role="radio"
+                        aria-checked={heroMode === o.mode}
+                        onClick={() => {
+                          setHeroMode(o.mode)
+                          if (o.mode !== heroMode) clearCharacter()
+                          if (o.mode === 'photo' && !heroPhotoDataUrl) heroFileInputRef.current?.click()
+                        }}
+                        className={plateClass(heroMode === o.mode, 'flex flex-col items-center gap-1.5 px-2 py-3 text-center')}
                       >
-                        <Icon name="lock" size={14} />
-                        Have a Venice API key? Add it for unlimited books
+                        <Icon name={o.icon} size={20} className={heroMode === o.mode ? 'text-kq-amber' : 'text-kq-dim'} />
+                        <span className="text-xs font-medium text-kq-text">{o.label}</span>
                       </button>
-                    ) : (
-                      <div className="rounded-lg border border-kq-line px-3 py-3">
-                        <p className="mb-2 text-xs text-kq-dim">
-                          Enter your Venice API key.{' '}
-                          <a href="https://venice.ai/chat?ref=yN8qqI" target="_blank" rel="noopener noreferrer" className="text-kq-text underline decoration-kq-line underline-offset-4">
-                            Get one free
-                          </a>
-                        </p>
-                        <div className="flex gap-2">
-                          <input
-                            type="password"
-                            value={apiKeyInputValue}
-                            onChange={e => setApiKeyInputValue(e.target.value)}
-                            placeholder="venice-api-..."
-                            className="kq-input flex-1 !px-3 !py-2 !text-xs"
-                          />
-                          <button
-                            onClick={() => { const t = apiKeyInputValue.trim(); if (!t) return; localStorage.setItem(LS_API_KEY, t); setUserApiKey(t); setApiKeyInputValue(''); setShowApiKeyInput(false) }}
-                            disabled={!apiKeyInputValue.trim()}
-                            className={`${QUIET} shrink-0 px-3 py-2 text-xs`}
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => { setShowApiKeyInput(false); setApiKeyInputValue('') }}
-                            aria-label="Close"
-                            className={`${QUIET} shrink-0 px-2.5 py-2 text-xs`}
-                          >
-                            ×
-                          </button>
+                    ))}
+                  </div>
+                  <input
+                    ref={heroFileInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleHeroPhoto(f); e.target.value = '' }}
+                  />
+
+                  {/* Heroes painted for earlier books, ready to reuse for a series */}
+                  {savedHeroes.length > 0 && heroMode !== 'story' && (
+                    <div className="mt-4">
+                      <FieldLabel>Your heroes</FieldLabel>
+                      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+                        {savedHeroes.map(h => (
+                          <div key={h.id} className="relative shrink-0 text-center">
+                            <button
+                              onClick={() => useSavedHero(h)}
+                              title={`Use ${h.name}`}
+                              className={`block overflow-hidden rounded-md border transition-colors ${
+                                characterImage === h.image ? 'border-kq-amber' : 'border-kq-line hover:border-kq-text/30'
+                              }`}
+                            >
+                              <img src={h.image} alt={h.name} className="h-16 w-14 object-cover" />
+                            </button>
+                            <p className="mt-0.5 w-14 truncate text-[10px] text-kq-dim">{h.name}</p>
+                            <button
+                              onClick={() => handleRemoveHero(h.id)}
+                              aria-label={`Remove ${h.name}`}
+                              className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-[5px] border border-kq-line bg-kq-navy text-kq-text"
+                            >
+                              <Icon name="close" size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* A photo: show it, then the painted hero beside it */}
+                  {heroMode === 'photo' && (heroPhotoDataUrl || characterImage) && (
+                    <div className="mt-4 rounded-xl border border-kq-line bg-kq-card p-3">
+                      <div className="flex items-stretch gap-3">
+                        {heroPhotoDataUrl && (
+                          <>
+                            <div className="w-2/5 min-w-0">
+                              <p className="mb-1 text-center text-[11px] text-kq-dim">Photo</p>
+                              <div className="relative">
+                                <img src={heroPhotoDataUrl} alt="The uploaded photo" className="aspect-[3/4] w-full rounded-md border border-kq-line object-cover" />
+                                <button
+                                  onClick={() => heroFileInputRef.current?.click()}
+                                  aria-label="Choose a different photo"
+                                  className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-[6px] border border-kq-line bg-kq-navy/90 text-kq-text"
+                                >
+                                  <Icon name="sync" size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="flex items-center"><Icon name="arrow_forward" size={18} className="text-kq-dim" /></div>
+                          </>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="mb-1 text-center text-[11px] text-kq-dim">Painted hero</p>
+                          <HeroSheet image={characterImage} painting={isPaintingHero} />
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Desktop: two-column creator (mobile stays single-column) */}
-                <div className="w-full lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6">
-                  <div className="min-w-0">
-
-                    {/* Story type */}
-                    <div className="mb-5 w-full">
-                      <FieldLabel>Story type</FieldLabel>
-                      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-                        {STORY_TEMPLATES.map(template => {
-                          const on = selectedTemplate === template.id
-                          return (
-                            <button
-                              key={template.id}
-                              onClick={() => {
-                                setSelectedTemplate(template.id)
-                                if (template.id !== 'custom' && !storyIdea) setStoryIdea(template.example)
-                              }}
-                              className={`kq-chip shrink-0 ${on ? 'is-on' : ''}`}
-                            >
-                              {template.name}
-                            </button>
-                          )
-                        })}
-                      </div>
-                      {/* The chosen template explains itself, so nobody has to guess. */}
-                      {selectedTemplate !== 'custom' && (
-                        <p className="mt-2 text-xs text-kq-dim">
-                          {STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.description}.
-                          {selectedTemplate === 'ai-adventure' && ' Teaches children how AI learns, through the story itself.'}
-                        </p>
-                      )}
                     </div>
+                  )}
 
-                    {/* Story idea */}
-                    <div className="mb-5 w-full">
-                      <div className="flex items-center justify-between gap-3">
-                        <FieldLabel>Your story idea</FieldLabel>
-                        <button
-                          onClick={() => setStoryIdea(RANDOM_PROMPTS[Math.floor(Math.random() * RANDOM_PROMPTS.length)])}
-                          className={`${QUIET} mb-2 flex w-auto shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs`}
-                        >
-                          <Icon name="sync" size={13} />
-                          Surprise me
-                        </button>
+                  {heroMode === 'photo' && !heroPhotoDataUrl && !characterImage && (
+                    <button
+                      onClick={() => heroFileInputRef.current?.click()}
+                      className="mt-4 flex w-full items-center justify-center gap-3 rounded-lg border border-dashed border-kq-line px-3 py-6 transition-colors hover:bg-kq-text/5"
+                    >
+                      <Icon name="add_photo_alternate" size={24} className="shrink-0 text-kq-dim" />
+                      <div className="text-left">
+                        <p className="text-sm text-kq-text">Choose a photo</p>
+                        <p className="text-xs text-kq-dim">A child, or a grown-up they love. A clear face works best.</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Words: the character builder, folded into the hero step */}
+                  {heroMode === 'describe' && (
+                    <div className="mt-4 space-y-4 rounded-xl border border-kq-line bg-kq-card p-4">
+                      <div className="grid grid-cols-2 gap-2">
+                        {CHARACTER_TYPES.map(type => (
+                          <button
+                            key={type.value}
+                            onClick={() => { setCharacterType(type.value); clearCharacter() }}
+                            className={plateClass(characterType === type.value, 'p-2.5 text-left')}
+                          >
+                            <div className="text-xs font-medium text-kq-text">{type.label}</div>
+                            <div className="text-[11px] text-kq-dim">{type.description}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <FieldLabel>Personality (up to 4)</FieldLabel>
+                        <div className="flex flex-wrap gap-1.5">
+                          {CHARACTER_TRAITS.map(trait => {
+                            const on = selectedTraits.includes(trait)
+                            return (
+                              <button
+                                key={trait}
+                                onClick={() => {
+                                  if (on) setSelectedTraits(selectedTraits.filter(t => t !== trait))
+                                  else if (selectedTraits.length < 4) setSelectedTraits([...selectedTraits, trait])
+                                }}
+                                className={`kq-chip ${on ? 'is-on' : ''}`}
+                              >
+                                {trait}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
                       <textarea
-                        ref={storyIdeaRef}
-                        value={storyIdea}
-                        onChange={e => setStoryIdea(e.target.value)}
-                        className="kq-input"
-                        rows={3}
-                        placeholder={STORY_TEMPLATES.find(t => t.id === selectedTemplate)?.example || 'A brave knight who is afraid of spiders, or a treehouse that travels through time...'}
+                        value={heroDescription}
+                        onChange={e => { setHeroDescription(e.target.value); clearCharacter() }}
+                        rows={2}
+                        className="kq-input !py-2.5 !text-sm"
+                        placeholder="What do they look like? For example: a small fox with one white ear and a yellow raincoat"
                       />
+                      {characterImage || isPaintingHero ? (
+                        <div className="mx-auto w-1/2"><HeroSheet image={characterImage} painting={isPaintingHero} /></div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  {/* The hero's name and age, once there is a hero */}
+                  {heroMode !== 'story' && (characterImage || heroMode === 'describe') && (
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <input
-                        ref={drawingFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={e => { const f = e.target.files?.[0]; if (f) handleDrawingUpload(f); e.target.value = '' }}
+                        type="text"
+                        value={heroName}
+                        onChange={e => { setHeroName(e.target.value); setHeroSaved(false) }}
+                        placeholder="Hero's name"
+                        className="kq-input min-w-[8rem] flex-1 !px-3 !py-2 !text-sm"
                       />
-                      <button
-                        onClick={() => drawingFileInputRef.current?.click()}
-                        disabled={isReadingDrawing}
-                        className={`${QUIET} mt-2 flex w-full items-center justify-center gap-2 border-dashed px-3 py-2.5 text-sm disabled:opacity-60`}
-                      >
-                        <Icon name="image" size={16} />
-                        {isReadingDrawing ? 'Reading your drawing' : 'Turn a drawing into a story'}
-                      </button>
-                      {drawingError && (
-                        <p className="mt-1.5 text-xs text-kq-dim">{drawingError}</p>
+                      <div className="flex gap-1 rounded-lg border border-kq-line p-1">
+                        {[{ v: false, label: 'Child' }, { v: true, label: 'Grown-up' }].map(o => (
+                          <button
+                            key={String(o.v)}
+                            onClick={() => { setHeroIsAdult(o.v); setHeroSaved(false) }}
+                            className={`rounded-md px-2.5 py-1.5 text-xs transition-colors ${heroIsAdult === o.v ? 'bg-kq-text/10 text-kq-text' : 'text-kq-dim hover:text-kq-text'}`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Not quite right? Say what to change and paint again. */}
+                  {characterImage && heroMode !== 'story' && (
+                    <div className="mt-3 space-y-2">
+                      {characterIsStale && (
+                        <p className="rounded-md border border-kq-line px-3 py-2 text-xs text-kq-dim">
+                          This hero was painted in another style. Paint again to match {selectedStyle.label}.
+                        </p>
                       )}
+                      <div className="flex gap-2">
+                        <input
+                          value={heroTweak}
+                          onChange={e => setHeroTweak(e.target.value)}
+                          placeholder="Change something? For example: give her a red scarf"
+                          className="kq-input flex-1 !px-3 !py-2 !text-xs"
+                        />
+                        <button
+                          onClick={handleCreateCharacter}
+                          disabled={isPaintingHero || (heroMode === 'photo' && !heroPhotoDataUrl && !heroDescription)}
+                          className={`${QUIET} flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50`}
+                        >
+                          <Icon name="brush" size={14} /> Paint again
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleSaveHero}
+                        disabled={heroSaved}
+                        className={`${QUIET} flex w-full items-center justify-center gap-2 px-3 py-2 text-xs disabled:opacity-60`}
+                      >
+                        <Icon name="star" size={14} />
+                        {heroSaved ? 'Saved to your heroes' : 'Save this hero for next time'}
+                      </button>
                     </div>
+                  )}
 
-                  </div>{/* end left column */}
+                  {heroError && <p className="mt-3 rounded-md border border-kq-line px-3 py-2 text-xs text-kq-dim">{heroError}</p>}
 
-                  {/* Make someone the hero */}
-                  <div className="mb-5 w-full rounded-xl border border-kq-line bg-kq-card p-4">
-                    <div className="mb-2">
-                      <h3 className="flex items-center gap-2 font-display text-lg text-kq-text">
-                        <Icon name="star" size={16} className="text-kq-amber" />
-                        Make someone the hero
-                      </h3>
-                      <p className="mt-1 text-xs leading-relaxed text-kq-dim">
-                        Upload a photo of a child, or of a grown-up they love. We turn them
-                        into a painted character and put them in the story.
-                      </p>
-                    </div>
+                  {heroMode === 'story' && (
+                    <p className="mt-4 rounded-lg border border-kq-line bg-kq-text/5 px-3 py-3 text-sm leading-relaxed text-kq-dim">
+                      The story invents its own hero. We still paint them first, so they stay the same on every page.
+                    </p>
+                  )}
 
-                    {/* Saved heroes: reuse a character across books (a series) */}
-                    {savedHeroes.length > 0 && (
-                      <div className="mb-3">
-                        <div className="mb-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-kq-dim">
-                          Your heroes
-                        </div>
-                        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-                          {savedHeroes.map(h => (
-                            <div key={h.id} className="relative shrink-0 text-center">
-                              <button
-                                onClick={() => useSavedHero(h)}
-                                title={`Use ${h.name}`}
-                                className={`block overflow-hidden rounded-md border transition-colors ${
-                                  cartoonHeroDataUrl === h.image ? 'border-kq-amber' : 'border-kq-line hover:border-kq-text/30'
-                                }`}
-                              >
-                                <img src={h.image} alt={h.name} className="h-14 w-14 object-cover" />
-                              </button>
-                              <p className="mt-0.5 w-14 truncate text-[10px] text-kq-dim">{h.name}</p>
-                              <button
-                                onClick={() => handleRemoveHero(h.id)}
-                                aria-label={`Remove ${h.name}`}
-                                className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-[5px] border border-kq-line bg-kq-navy text-[9px] text-kq-text"
-                              >
-                                ×
-                              </button>
-                            </div>
+                  {/* ── More options: everything here is optional ── */}
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    aria-expanded={showAdvanced}
+                    className="mt-5 flex items-center gap-1.5 text-sm text-kq-dim transition-colors hover:text-kq-text"
+                  >
+                    <Icon name={showAdvanced ? 'expand_less' : 'expand_more'} size={18} />
+                    More options
+                    <span className="text-xs text-kq-dim/80">
+                      {STORY_LENGTHS.find(l => l.value === storyLength)?.pages} pages, {AGE_RANGES.find(a => a.value === ageRange)?.label.split(' (')[0]}, {language}
+                    </span>
+                  </button>
+
+                  {showAdvanced && (
+                    <div className="mt-3 space-y-5 rounded-xl border border-kq-line bg-kq-card p-4">
+                      <div>
+                        <FieldLabel>Length</FieldLabel>
+                        <div className="flex gap-2">
+                          {STORY_LENGTHS.map(len => (
+                            <button key={len.value} onClick={() => setStoryLength(len.value)} className={plateClass(storyLength === len.value, 'flex-1 px-2 py-2.5 text-center')}>
+                              <div className="font-display text-xl">{len.pages}</div>
+                              <div className="text-xs font-medium text-kq-text">{len.label}</div>
+                            </button>
                           ))}
                         </div>
                       </div>
-                    )}
 
-                    {!heroPhotoDataUrl ? (
-                      <button
-                        onClick={() => heroFileInputRef.current?.click()}
-                        className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-dashed border-kq-line px-3 py-4 transition-colors hover:bg-kq-text/5"
-                      >
-                        <Icon name="image" size={22} className="shrink-0 text-kq-dim" />
-                        <div className="text-left">
-                          <p className="text-sm text-kq-text">Upload a photo</p>
-                          <p className="text-xs text-kq-dim">JPG or PNG, portrait works best</p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <FieldLabel>Reader</FieldLabel>
+                          <select value={ageRange} onChange={e => setAgeRange(e.target.value)} className="kq-input !py-2.5 !text-sm">
+                            {AGE_RANGES.map(r => <option key={r.value} value={r.value} className="bg-kq-navy text-kq-text">{r.label}</option>)}
+                          </select>
                         </div>
-                      </button>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex gap-3">
-                          <div className="flex-1">
-                            <p className="mb-1 text-center text-xs text-kq-dim">Original</p>
-                            <div className="relative">
-                              <img src={heroPhotoDataUrl} alt="The uploaded photo" className="h-36 w-full rounded-md border border-kq-line object-cover" />
-                              <button
-                                onClick={() => { setHeroPhotoDataUrl(null); setCartoonHeroDataUrl(null); setCartoonError('') }}
-                                aria-label="Remove the photo"
-                                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-[6px] border border-kq-line bg-kq-navy text-xs text-kq-text"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                          <div className="flex items-center pt-5">
-                            <Icon name="arrow_forward" size={18} className="text-kq-dim" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="mb-1 text-center text-xs text-kq-dim">Painted hero</p>
-                            {cartoonHeroDataUrl ? (
-                              <img src={cartoonHeroDataUrl} alt="The painted character" className="h-36 w-full rounded-md border border-kq-amber/40 object-cover" />
-                            ) : (
-                              <div className="flex h-36 w-full items-center justify-center rounded-md border border-dashed border-kq-line bg-kq-text/5">
-                                {isCartoonifying ? (
-                                  <div className="text-center">
-                                    <Icon name="palette" size={20} className="mx-auto mb-1 animate-kq-spin text-kq-dim" />
-                                    <p className="text-xs text-kq-dim">Painting</p>
-                                  </div>
-                                ) : (
-                                  <div className="px-2 text-center">
-                                    <Icon name="image" size={20} className="mx-auto mb-1 text-kq-dim" />
-                                    <p className="text-xs text-kq-dim">Not painted yet</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                        <div>
+                          <FieldLabel>Language</FieldLabel>
+                          <select value={language} onChange={e => setLanguage(e.target.value)} className="kq-input !py-2.5 !text-sm">
+                            {LANGUAGES.map(l => <option key={l.value} value={l.value} className="bg-kq-navy text-kq-text">{l.label}</option>)}
+                          </select>
                         </div>
-                        {cartoonError && (
-                          <p className="rounded-md border border-kq-line px-3 py-2 text-xs text-kq-dim">{cartoonError}</p>
-                        )}
-                        {!cartoonHeroDataUrl ? (
-                          <button
-                            onClick={handleCartoonify}
-                            disabled={isCartoonifying}
-                            className={`${QUIET} flex w-full items-center justify-center gap-2 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50`}
-                          >
-                            <Icon name="palette" size={16} />
-                            {isCartoonifying ? 'Painting the character' : 'Paint the character'}
-                          </button>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 rounded-md border border-kq-line bg-kq-text/5 px-3 py-2">
-                              <Icon name="star" size={14} className="shrink-0 text-kq-amber" />
-                              <p className="text-xs text-kq-dim">The painted hero is ready. The story will be about them.</p>
-                            </div>
-
-                            {/* Hero name, and who this is (a child or a grown-up) */}
-                            <div className="flex flex-wrap gap-2">
-                              <input
-                                type="text"
-                                value={heroName}
-                                onChange={e => { setHeroName(e.target.value); setHeroSaved(false) }}
-                                placeholder="Hero's name"
-                                className="kq-input min-w-[8rem] flex-1 !px-3 !py-2 !text-sm"
-                              />
-                              <div className="flex gap-1 rounded-lg border border-kq-line p-1">
-                                {[{ v: false, label: 'Child' }, { v: true, label: 'Grown-up' }].map(o => (
-                                  <button
-                                    key={String(o.v)}
-                                    onClick={() => { setHeroIsAdult(o.v); setHeroSaved(false) }}
-                                    className={`rounded-md px-2.5 py-1.5 text-xs transition-colors ${
-                                      heroIsAdult === o.v ? 'bg-kq-text/10 text-kq-text' : 'text-kq-dim hover:text-kq-text'
-                                    }`}
-                                  >
-                                    {o.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-[11px] text-kq-dim">
-                              {heroIsAdult
-                                ? 'A warm, inspiring story starring this grown-up.'
-                                : 'A fun adventure starring this child.'}
-                            </p>
-
-                            <div className="flex gap-2">
-                              <button
-                                onClick={handleSaveHero}
-                                disabled={heroSaved}
-                                className={`${QUIET} flex flex-1 items-center justify-center gap-2 px-3 py-2 text-xs disabled:opacity-60`}
-                              >
-                                <Icon name="star" size={14} />
-                                {heroSaved ? 'Saved to your heroes' : 'Save for next time'}
-                              </button>
-                              <button
-                                onClick={() => { setCartoonHeroDataUrl(null); setCartoonError('') }}
-                                className={`${QUIET} shrink-0 px-3 py-2 text-xs`}
-                              >
-                                Start over
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    )}
-                    <input ref={heroFileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleHeroImageLoad(f) }} />
-                  </div>
 
-                </div>{/* end two-column creator */}
+                      <div>
+                        <FieldLabel>Narrator</FieldLabel>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          {NARRATORS.map(v => (
+                            <button key={v.value} onClick={() => setNarratorVoice(v.value)} className={plateClass(narratorVoice === v.value, 'p-2 text-left')}>
+                              <div className="text-xs font-medium text-kq-text">{v.label}</div>
+                              <div className="text-[11px] leading-snug text-kq-dim">{v.description}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                {/* Advanced options toggle */}
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="mb-3 flex items-center gap-1.5 text-sm text-kq-dim transition-colors hover:text-kq-text"
-                >
-                  <Icon name={showAdvanced ? 'expand_less' : 'expand_more'} size={18} />
-                  {showAdvanced ? 'Hide advanced options' : 'Show advanced options'}
-                </button>
+                      <div>
+                        <FieldLabel>Painter</FieldLabel>
+                        <select value={imageModel} onChange={e => setImageModel(e.target.value)} className="kq-input !py-2.5 !text-sm">
+                          {IMAGE_MODEL_PRESETS.map(m => (
+                            <option key={m.value} value={m.value} className="bg-kq-navy text-kq-text">
+                              {m.label}: {m.value === '' && automaticModel ? automaticModel : m.description}
+                            </option>
+                          ))}
+                          {liveModels.map(m => (
+                            <option key={m.id} value={m.id} className="bg-kq-navy text-kq-text">{m.name}</option>
+                          ))}
+                        </select>
+                        <label className="mt-3 flex items-center justify-between gap-3">
+                          <span className="text-xs text-kq-dim">Paint the hero first and keep them identical on every page</span>
+                          <span
+                            className={`kq-toggle shrink-0 ${consistentHero ? 'on' : ''}`}
+                            onClick={() => setConsistentHero(!consistentHero)}
+                            role="switch"
+                            aria-checked={consistentHero}
+                            aria-label="Keep the hero identical on every page"
+                          />
+                        </label>
+                      </div>
 
-                {/* Advanced options */}
-                {showAdvanced && (
-                  <div className="mb-5 w-full space-y-5 rounded-xl border border-kq-line bg-kq-card p-4 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0">
-
-                    {/* Character builder */}
-                    <div className="lg:col-span-2">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <FieldLabel>Character builder</FieldLabel>
-                        <div
-                          className={`kq-toggle ${showCharacterBuilder ? 'on' : ''}`}
-                          onClick={() => setShowCharacterBuilder(!showCharacterBuilder)}
-                          role="switch"
-                          aria-checked={showCharacterBuilder}
-                          aria-label="Use the character builder"
+                      <div>
+                        <FieldLabel>Dedication</FieldLabel>
+                        <input
+                          value={dedication}
+                          onChange={e => setDedication(e.target.value)}
+                          maxLength={200}
+                          className="kq-input !py-2.5 !text-sm"
+                          placeholder="For Maya, who is braver than she knows"
                         />
                       </div>
-                      {showCharacterBuilder && (
-                        <div className="mt-2 space-y-4 rounded-lg border border-kq-line p-3">
-                          <input
-                            type="text"
-                            value={characterName}
-                            onChange={e => setCharacterName(e.target.value)}
-                            placeholder="Character name (for example Luna, Pixel, Ziggy)"
-                            className="kq-input !py-2.5 !text-sm"
-                          />
-                          <div>
-                            <FieldLabel>Character type</FieldLabel>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                              {CHARACTER_TYPES.map(type => {
-                                const on = characterType === type.value
-                                return (
-                                  <button
-                                    key={type.value}
-                                    onClick={() => setCharacterType(type.value)}
-                                    className={plateClass(on, 'p-2.5')}
-                                  >
-                                    <div className="text-xs font-medium text-kq-text">{type.label}</div>
-                                    <div className="text-xs text-kq-dim">{type.description}</div>
-                                  </button>
-                                )
-                              })}
-                            </div>
+
+                      <div>
+                        <FieldLabel>Venice API key</FieldLabel>
+                        <FreeBooksBadge used={freeBookCount} hasApiKey={!!userApiKey} />
+                        {userApiKey ? (
+                          <button
+                            onClick={() => { localStorage.removeItem(LS_API_KEY); setUserApiKey('') }}
+                            className="text-xs text-kq-dim underline decoration-kq-line underline-offset-4 hover:text-kq-text"
+                          >
+                            Remove the saved key
+                          </button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <input
+                              type="password"
+                              value={apiKeyInputValue}
+                              onChange={e => setApiKeyInputValue(e.target.value)}
+                              placeholder="venice-api-..."
+                              className="kq-input flex-1 !px-3 !py-2 !text-xs"
+                            />
+                            <button
+                              onClick={() => { const t = apiKeyInputValue.trim(); if (!t) return; localStorage.setItem(LS_API_KEY, t); setUserApiKey(t); setApiKeyInputValue('') }}
+                              disabled={!apiKeyInputValue.trim()}
+                              className={`${QUIET} shrink-0 px-3 py-2 text-xs disabled:opacity-50`}
+                            >
+                              Save
+                            </button>
                           </div>
-                          <div>
-                            <FieldLabel>Personality traits (pick up to 4)</FieldLabel>
-                            <div className="flex flex-wrap gap-1.5">
-                              {CHARACTER_TRAITS.map(trait => {
-                                const on = selectedTraits.includes(trait)
-                                return (
-                                  <button
-                                    key={trait}
-                                    onClick={() => {
-                                      if (selectedTraits.includes(trait)) setSelectedTraits(selectedTraits.filter(t => t !== trait))
-                                      else if (selectedTraits.length < 4) setSelectedTraits([...selectedTraits, trait])
-                                    }}
-                                    className={`kq-chip ${on ? 'is-on' : ''}`}
-                                  >
-                                    {trait}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Story length */}
-                    <div>
-                      <FieldLabel>Story length</FieldLabel>
-                      <div className="flex gap-2">
-                        {STORY_LENGTHS.map(len => {
-                          const on = storyLength === len.value
-                          return (
-                            <button
-                              key={len.value}
-                              onClick={() => setStoryLength(len.value)}
-                              className={plateClass(on, 'flex-1 px-2 py-3 text-center')}
-                            >
-                              <div className="font-display text-2xl">{len.pages}</div>
-                              <div className="text-xs font-medium text-kq-text">{len.label}</div>
-                              <div className="text-xs text-kq-dim">{len.description}</div>
-                            </button>
-                          )
-                        })}
+                        )}
                       </div>
                     </div>
+                  )}
 
-                    {/* Age range */}
-                    <div>
-                      <FieldLabel>Age range</FieldLabel>
-                      <select
-                        value={ageRange}
-                        onChange={e => setAgeRange(e.target.value)}
-                        className="kq-input"
-                      >
-                        {AGE_RANGES.map(r => (
-                          <option key={r.value} value={r.value} className="bg-kq-navy text-kq-text">{r.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Story language */}
-                    <div>
-                      <FieldLabel>Story language</FieldLabel>
-                      <select
-                        value={language}
-                        onChange={e => setLanguage(e.target.value)}
-                        className="kq-input"
-                      >
-                        {LANGUAGES.map(l => (
-                          <option key={l.value} value={l.value} className="bg-kq-navy text-kq-text">{l.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Illustration model */}
-                    <div>
-                      <FieldLabel>Illustration model</FieldLabel>
-                      <div className="grid grid-cols-2 gap-2">
-                        {IMAGE_MODELS.map(m => {
-                          const on = imageModel === m.value
-                          return (
-                            <button
-                              key={m.value}
-                              onClick={() => setImageModel(m.value)}
-                              className={plateClass(on, 'p-2.5')}
-                            >
-                              <div className="text-xs font-medium text-kq-text">{m.label}</div>
-                              <div className="text-xs text-kq-dim">{m.description}</div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Narrator voice */}
-                    <div>
-                      <FieldLabel>Narrator voice</FieldLabel>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {NARRATOR_VOICES.map(v => {
-                          const on = narratorVoice === v.value
-                          return (
-                            <button
-                              key={v.value}
-                              onClick={() => setNarratorVoice(v.value)}
-                              className={plateClass(on, 'p-2.5')}
-                            >
-                              <div className="text-xs font-medium text-kq-text">{v.label}</div>
-                              <div className="text-xs text-kq-dim">{v.description}</div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* The one amber action moves to whichever control is the next
-                    real step: step 1 while the story box is empty, and this one
-                    once there is a story to make. Two ambers on one screen would
-                    split the attention the amber is supposed to focus. */}
-                <div className="w-full pt-1">
-                  <button
-                    onClick={handleGenerate}
-                    disabled={!storyIdea.trim()}
-                    className={`${storyIdea.trim() ? 'kq-btn-primary' : 'kq-btn-secondary'} disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    <Icon name="auto_awesome" size={20} />
-                    Make this book
-                  </button>
-                  <p className="mt-2 text-center text-xs text-kq-dim">
-                    Story and illustrations are made in {timeEstimate}.
-                    {freeBookCount >= FREE_BOOK_LIMIT && !userApiKey && (
-                      <span className="mt-1 block text-kq-text">
-                        Add your Venice API key to make more books.
-                      </span>
+                  {/* The step's one amber action */}
+                  <div className="mt-6">
+                    {heroNeedsPainting || (heroMode === 'describe' && !characterImage && isPaintingHero) ? (
+                      <button onClick={handleCreateCharacter} disabled={isPaintingHero} className="kq-btn-primary">
+                        <Icon name="brush" size={20} />
+                        {isPaintingHero ? 'Painting your hero' : 'Paint my hero'}
+                      </button>
+                    ) : (
+                      <button onClick={handleGenerate} disabled={!storyIdea.trim() || isPaintingHero} className="kq-btn-primary">
+                        <Icon name="auto_awesome" size={20} />
+                        Make this book
+                      </button>
                     )}
-                  </p>
-                </div>
-              </div>
+                    {heroMode === 'describe' && !characterImage && !isPaintingHero && (
+                      <button
+                        onClick={handleCreateCharacter}
+                        className="mt-2 w-full text-center text-xs text-kq-dim underline decoration-kq-line underline-offset-4 hover:text-kq-text"
+                      >
+                        See the hero first
+                      </button>
+                    )}
+                    <p className="mt-2 text-center text-xs text-kq-dim">
+                      {heroNeedsPainting
+                        ? 'You will see your hero before any page is painted.'
+                        : `Story and pictures are ready in ${timeEstimate}.`}
+                      {freeBookCount >= FREE_BOOK_LIMIT && !userApiKey && (
+                        <span className="mt-1 block text-kq-text">Add your Venice API key under More options to make more books.</span>
+                      )}
+                    </p>
+                  </div>
+                </section>
+              )}
             </>
           )}
         </main>
@@ -1387,6 +1368,25 @@ export default function GeneratePage() {
             Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
           </p>
         </footer>
+      </div>
+    </div>
+  )
+}
+
+/** The painted hero, or the space where they will be. */
+function HeroSheet({ image, painting }: { image: string | null; painting: boolean }) {
+  if (image) {
+    return (
+      <div data-hero-sheet className="relative overflow-hidden rounded-md border border-kq-amber/50 bg-kq-cream">
+        <img src={image} alt="The painted hero" className="aspect-[3/4] w-full object-contain" />
+      </div>
+    )
+  }
+  return (
+    <div className="flex aspect-[3/4] w-full items-center justify-center rounded-md border border-dashed border-kq-line bg-kq-text/5">
+      <div className="px-2 text-center">
+        <Icon name={painting ? 'palette' : 'image'} size={22} className={`mx-auto mb-1 text-kq-dim ${painting ? 'animate-kq-spin' : ''}`} />
+        <p className="text-xs text-kq-dim">{painting ? 'Painting' : 'Not painted yet'}</p>
       </div>
     </div>
   )

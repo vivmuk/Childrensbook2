@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { GeneratingGame } from '@/components/GeneratingGame'
+import { magicShower } from '@/lib/magic'
 
 /**
  * The waiting screen. A parent lands here the moment a book starts and stays
@@ -29,6 +30,7 @@ export default function GeneratingPage() {
         const data = await res.json()
 
         if (data.status === 'completed') {
+          magicShower()
           router.push(`/book/${bookId}`)
         } else if (data.status === 'generating') {
           setProgress(Math.min(95, data.progress || 0))

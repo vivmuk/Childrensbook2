@@ -1,74 +1,73 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
+import { bookFileName, renderBookHTML, type ExportBook } from '@/lib/book-export'
 
-interface BookPage {
-  text: string
-  image: string
-}
-
-interface TitlePage {
-  image: string
-  title: string
-}
-
-interface Book {
-  id: string
-  title: string
-  titlePage?: TitlePage
-  pages: BookPage[]
-  ageRange: string
-  illustrationStyle: string
-}
-
-/* The PDF view prints A4 pages, so the printed sheet stays plain white paper
-   with black story text. Only the on-screen preview wears the night world:
-   the app ground behind warm cream pages. Fonts come from the app (Fraunces
-   for the story, Inter for the controls); no font CDN is fetched here. */
+/**
+ * The print preview. It shows the book exactly as it will print, from the same
+ * renderer the PDF file is made from, so what a parent sees here is what comes
+ * out of the printer: one sheet per page, the cover whole, nothing cropped.
+ *
+ * "Download PDF" asks the server for a real PDF file. If the server cannot make
+ * one (no Chromium in a dev container, say) it falls back to the browser's own
+ * print dialog, where "Save as PDF" gives the same pages.
+ */
 export default function PDFViewPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const bookId = params.bookId as string
-  const [book, setBook] = useState<Book | null>(null)
+  const [book, setBook] = useState<ExportBook | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [downloadTriggered, setDownloadTriggered] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const frameRef = useRef<HTMLIFrameElement>(null)
+  const autoPrinted = useRef(false)
 
   useEffect(() => {
-    const fetchBook = async () => {
-      try {
-        const response = await fetch(`/api/book/${bookId}`)
-        if (!response.ok) {
-          throw new Error('Failed to fetch book')
-        }
-        const data = await response.json()
-        setBook(data)
-        setIsLoading(false)
-      } catch (error) {
-        console.error('Error fetching book:', error)
-        setIsLoading(false)
-      }
-    }
-
-    fetchBook()
+    fetch(`/api/book/${bookId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => setBook(data))
+      .catch(() => setBook(null))
+      .finally(() => setIsLoading(false))
   }, [bookId])
 
-  // Auto-trigger print dialog for download
-  useEffect(() => {
-    if (!isLoading && book && searchParams.get('download') === 'true' && !downloadTriggered) {
-      setDownloadTriggered(true)
-      // Wait for images to load, then trigger print
-      setTimeout(() => {
-        window.print()
-      }, 1000)
+  const printFrame = () => {
+    const w = frameRef.current?.contentWindow
+    if (w) { w.focus(); w.print() } else window.print()
+  }
+
+  const handleDownload = async () => {
+    if (!book) return
+    setIsDownloading(true)
+    try {
+      const res = await fetch(`/api/pdf/${bookId}`)
+      if (!res.ok || !(res.headers.get('content-type') || '').includes('pdf')) throw new Error('no pdf')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = bookFileName(book.title, 'pdf')
+      document.body.appendChild(a); a.click(); a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      printFrame()
+    } finally {
+      setIsDownloading(false)
     }
-  }, [isLoading, book, searchParams, downloadTriggered])
+  }
+
+  // ?download=true opens straight into the print dialog once the pictures are in.
+  const onFrameLoad = () => {
+    if (autoPrinted.current || searchParams.get('download') !== 'true') return
+    autoPrinted.current = true
+    setTimeout(printFrame, 600)
+  }
 
   if (isLoading) {
     return (
       <div className="kq-ground-flat flex min-h-screen items-center justify-center px-4">
-        <p className="text-kq-text">Loading book...</p>
+        <p className="text-kq-text">Setting the pages</p>
       </div>
     )
   }
@@ -76,303 +75,42 @@ export default function PDFViewPage() {
   if (!book) {
     return (
       <div className="kq-ground-flat flex min-h-screen items-center justify-center px-4">
-        <p className="text-kq-text">Book not found</p>
+        <p className="text-kq-text">We could not find this book</p>
       </div>
     )
   }
 
-  const handleDownload = () => {
-    window.print()
-  }
-
   return (
-    <>
-      {/* Download/Print Controls - Hidden when printing */}
-      <div className="print-controls">
-        <style jsx>{`
-          .print-controls {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 10px;
-            max-width: calc(100vw - 40px);
-          }
-
-          /* The design buttons stretch by default. On this floating bar they
-             should hug their label instead. */
-          .print-controls button {
-            width: auto;
-            padding: 12px 20px;
-            font-size: 0.95rem;
-          }
-
-          @media print {
-            .print-controls {
-              display: none;
-            }
-          }
-        `}</style>
-        <button onClick={handleDownload} className="kq-btn-primary">
-          <Icon name="download" size={20} />
-          Download PDF
+    <div className="kq-ground-flat flex min-h-[100dvh] flex-col">
+      <div className="kq-top-bar">
+        <button onClick={() => history.back()} className="kq-icon-btn" aria-label="Back">
+          <Icon name="arrow_back" size={18} />
         </button>
-        <button onClick={() => window.print()} className="kq-btn-secondary">
-          <Icon name="print" size={20} />
-          Print
-        </button>
+        <span className="min-w-0 flex-1 truncate px-2 text-center font-display text-base text-kq-text">
+          {book.title}
+        </span>
+        <div className="flex gap-2">
+          <button onClick={printFrame} className="kq-btn-secondary !w-auto !px-3 !py-2 !text-sm" aria-label="Print">
+            <Icon name="print" size={18} />
+            <span className="hidden sm:inline">Print</span>
+          </button>
+          <button onClick={handleDownload} disabled={isDownloading} className="kq-btn-primary !w-auto !px-4 !py-2 !text-sm">
+            <Icon name="download" size={18} />
+            {isDownloading ? 'Making PDF' : 'Download PDF'}
+          </button>
+        </div>
       </div>
-
-      <div className="pdf-container">
-        <style jsx global>{`
-        /* Common styles */
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-
-        body {
-          font-family: var(--kq-font-ui);
-        }
-
-        /* Print styles - optimized for single page per spread */
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-
-          html, body {
-            width: 210mm;
-            height: 297mm;
-            margin: 0;
-            padding: 0;
-            background: white;
-          }
-
-          .pdf-container {
-            width: 100%;
-            margin: 0;
-            padding: 0;
-          }
-
-          .page {
-            width: 210mm;
-            height: 297mm;
-            page-break-after: always;
-            page-break-inside: avoid;
-            overflow: hidden;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            background: white;
-          }
-
-          .page:last-child {
-            page-break-after: auto;
-          }
-
-          /* Title Page - Full bleed cover */
-          .title-page {
-            width: 210mm;
-            height: 297mm;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-          }
-
-          .title-page img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          /* Content Pages - Image on top, text below */
-          .content-page {
-            width: 210mm;
-            height: 297mm;
-            padding: 10mm 12mm 10mm 12mm;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            justify-content: space-between;
-          }
-
-          .image-container {
-            width: 100%;
-            height: 190mm;
-            max-height: 190mm;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            background: white;
-            flex-shrink: 0;
-            margin-bottom: 6mm;
-          }
-
-          .page-image {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-          }
-
-          .text-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 0;
-            min-height: 75mm;
-            max-height: 80mm;
-            overflow: hidden;
-          }
-
-          .page-text {
-            font-family: var(--kq-font-display);
-            font-size: 13pt;
-            font-weight: 400;
-            line-height: 1.45;
-            color: black;
-            text-align: center;
-            overflow: hidden;
-            word-wrap: break-word;
-          }
-
-          .page-number {
-            position: absolute;
-            bottom: 8mm;
-            right: 15mm;
-            font-size: 10pt;
-            font-weight: 500;
-            color: rgb(102, 102, 102);
-          }
-        }
-
-        /* Screen preview styles */
-        @media screen {
-          body {
-            background: linear-gradient(170deg, var(--kq-navy) 0%, var(--kq-plum) 100%);
-            padding: 40px 20px;
-            min-height: 100vh;
-          }
-
-          .pdf-container {
-            max-width: 650px;
-            margin: 0 auto;
-          }
-
-          .page {
-            background: var(--kq-cream);
-            color: var(--kq-amber-ink);
-            margin-bottom: 30px;
-            border-radius: var(--kq-radius-lg);
-            border: 1px solid var(--kq-line-soft);
-            overflow: hidden;
-            aspect-ratio: 210 / 297;
-            display: flex;
-            flex-direction: column;
-          }
-
-          /* Title Page Preview */
-          .title-page {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            height: 100%;
-          }
-
-          .title-page img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-
-          /* Content Page Preview */
-          .content-page {
-            padding: 5% 6% 6% 6%;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            position: relative;
-          }
-
-          .image-container {
-            width: 100%;
-            height: 65%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            border-radius: var(--kq-radius);
-            background: var(--kq-navy-mid);
-            flex-shrink: 0;
-          }
-
-          .page-image {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-          }
-
-          .text-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 16px 10px 0 10px;
-            min-height: 0;
-          }
-
-          .page-text {
-            font-family: var(--kq-font-display);
-            font-size: clamp(13px, 2vw, 17px);
-            font-weight: 400;
-            line-height: 1.5;
-            color: var(--kq-amber-ink);
-            text-align: center;
-            overflow: hidden;
-          }
-
-          .page-number {
-            position: absolute;
-            bottom: 12px;
-            right: 20px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--kq-dim);
-          }
-        }
-      `}</style>
-
-        {/* Title Page */}
-        {book.titlePage && (
-          <div className="page title-page">
-            <img src={book.titlePage.image} alt={book.title} />
-          </div>
-        )}
-
-        {/* Content Pages */}
-        {book.pages.map((page, index) => (
-          <div key={index} className="page content-page">
-            <div className="image-container">
-              <img src={page.image} alt={`Page ${index + 1}`} className="page-image" />
-            </div>
-            <div className="text-container">
-              <div className="page-text">{page.text}</div>
-            </div>
-            <div className="page-number">Page {index + 1}</div>
-          </div>
-        ))}
-      </div>
-    </>
+      <p className="px-4 pt-3 text-center text-xs text-kq-dim">
+        Each page prints on its own sheet, A4 landscape.
+      </p>
+      <iframe
+        ref={frameRef}
+        title={`${book.title}, print preview`}
+        srcDoc={renderBookHTML(book, { mode: 'print' })}
+        onLoad={onFrameLoad}
+        className="w-full flex-1 border-0"
+        style={{ minHeight: '80vh' }}
+      />
+    </div>
   )
 }

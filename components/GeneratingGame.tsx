@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { magicBurst, magicBurstAt, setMagicLevel } from '@/lib/magic'
 import { Icon } from '@/components/Icons'
 
 /**
@@ -27,10 +28,10 @@ interface GeneratingGameProps {
 // The four things the machine does, in order. The progress value walks down
 // this list.
 const STEPS = [
-  { icon: 'spark', label: 'Finding the idea' },
   { icon: 'auto_stories', label: 'Writing the words' },
+  { icon: 'person', label: 'Painting the hero' },
   { icon: 'palette', label: 'Painting the pages' },
-  { icon: 'book', label: 'Binding the book' },
+  { icon: 'book', label: 'Lettering the cover' },
 ]
 
 // Short true notes about how the book is made, rotated while the reader waits.
@@ -102,14 +103,40 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
     return () => clearInterval(t)
   }, [])
 
-  const lightStar = (i: number) =>
+  // While the book is being made, the whole sky fills with butterflies and dust.
+  useEffect(() => setMagicLevel('celebrate'), [])
+
+  // Sparkles fly off the end of the progress bar each time it moves, and
+  // burst from a step as it starts.
+  const barRef = useRef<HTMLDivElement>(null)
+  const stepsRef = useRef<HTMLOListElement>(null)
+  const lastPctRef = useRef(progress)
+  useEffect(() => {
+    if (progress <= lastPctRef.current) return
+    lastPctRef.current = progress
+    const r = barRef.current?.getBoundingClientRect()
+    if (r) magicBurst(r.left + (r.width * Math.max(progress, 2)) / 100, r.top + r.height / 2, { count: 7, spread: 34 })
+  }, [progress])
+
+  const lightStar = (i: number, el?: Element | null) => {
+    if (!lit[i]) magicBurstAt(el || null, { count: 12, spread: 60, big: true })
     setLit(prev => (prev[i] ? prev : prev.map((v, j) => (j === i ? true : v))))
+  }
 
   const litCount = lit.filter(Boolean).length
   const allLit = litCount === STARS.length
 
-  const stepIdx = Math.min(Math.floor(progress / 25), STEPS.length - 1)
+  // The words are done at 10 per cent and the hero comes next, so the steps
+  // are spaced to match what the server is really doing.
+  const stepIdx = progress < 10 ? 0 : progress < 22 ? 1 : progress < 92 ? 2 : 3
   const pct = Math.max(0, Math.min(100, progress))
+
+  const lastStepRef = useRef(stepIdx)
+  useEffect(() => {
+    if (stepIdx === lastStepRef.current) return
+    lastStepRef.current = stepIdx
+    magicBurstAt(stepsRef.current?.children[stepIdx] || null, { count: 12, spread: 70, big: true })
+  }, [stepIdx])
 
   // Plain estimate lines. No dashes, no invented precision.
   const timeMsg = () => {
@@ -155,6 +182,7 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
             <span className="font-display text-sm text-kq-text">{pct}%</span>
           </div>
           <div
+            ref={barRef}
             className="kq-progress-bar"
             role="progressbar"
             aria-valuenow={pct}
@@ -175,7 +203,7 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
         </div>
 
         {/* ── The four steps ───────────────────────────────────────────── */}
-        <ol className="mb-4 grid grid-cols-2 gap-2">
+        <ol ref={stepsRef} className="mb-4 grid grid-cols-2 gap-2">
           {STEPS.map((s, i) => {
             const done = i < stepIdx
             const now = i === stepIdx
@@ -212,7 +240,7 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
             <button
               key={s.x}
               type="button"
-              onClick={() => lightStar(i)}
+              onClick={e => lightStar(i, e.currentTarget)}
               aria-label={lit[i] ? 'A lit star' : 'Light this star'}
               aria-pressed={lit[i]}
               className="absolute grid h-9 w-9 -translate-x-1/2 -translate-y-1/2 place-items-center"

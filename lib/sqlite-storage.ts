@@ -30,6 +30,7 @@ export interface SQLiteBook {
   is_favorite: number
   read_count: number
   last_read_at?: string
+  meta?: string | null
 }
 
 // pg returns TIMESTAMPTZ columns as JS Date objects. Normalise them back to the
@@ -70,6 +71,10 @@ function dbBookToBook(dbBook: SQLiteBook): Book {
     book.songUrl = dbBook.song_url
   }
 
+  if (dbBook.meta) {
+    try { book.meta = typeof dbBook.meta === 'string' ? JSON.parse(dbBook.meta) : dbBook.meta } catch { /* a bad row loses its extras, not the book */ }
+  }
+
   if (dbBook.character_name) {
     book.character = {
       name: dbBook.character_name,
@@ -79,6 +84,12 @@ function dbBookToBook(dbBook: SQLiteBook): Book {
   }
 
   return book
+}
+
+/** A shelf does not need a book's narration and songs, which can run to megabytes. */
+function withoutMeta(book: Book): Book {
+  const { meta, ...rest } = book
+  return meta?.heroName ? { ...rest, meta: { heroName: meta.heroName } } : rest
 }
 
 export async function getBookFromSQLite(bookId: string): Promise<Book | undefined> {
@@ -133,6 +144,7 @@ export async function setBookInSQLite(book: Book): Promise<void> {
       character_type: book.character?.type || null,
       character_traits: book.character?.traits ? JSON.stringify(book.character.traits) : null,
       owner_id: book.ownerId || null,
+      meta: book.meta ? JSON.stringify(book.meta) : null,
     })
 
     if (book.pages && book.pages.length > 0) {
@@ -158,6 +170,7 @@ export async function setBookInSQLite(book: Book): Promise<void> {
     book.character?.type || null,
     book.character?.traits ? JSON.stringify(book.character.traits) : null,
     book.ownerId || null,
+    book.meta ? JSON.stringify(book.meta) : null,
   ]
 
   // Upsert the book and (if present) replace its pages in one transaction so the
@@ -168,8 +181,8 @@ export async function setBookInSQLite(book: Book): Promise<void> {
       INSERT INTO books (
         id, title, title_page_image, age_range, illustration_style, status,
         audio_url, song_url, created_at, expected_pages, generation_progress, narrator_voice,
-        character_name, character_type, character_traits, owner_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        character_name, character_type, character_traits, owner_id, meta
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       ON CONFLICT (id) DO UPDATE SET
         title = EXCLUDED.title,
         title_page_image = EXCLUDED.title_page_image,
@@ -185,7 +198,8 @@ export async function setBookInSQLite(book: Book): Promise<void> {
         character_name = EXCLUDED.character_name,
         character_type = EXCLUDED.character_type,
         character_traits = EXCLUDED.character_traits,
-        owner_id = EXCLUDED.owner_id
+        owner_id = EXCLUDED.owner_id,
+        meta = EXCLUDED.meta
       `,
       params
     )
@@ -214,7 +228,7 @@ export async function getUserBookSummariesFromSQLite(userId: string): Promise<Bo
   if (!isDatabaseConfigured()) {
     return Array.from(memoryStorage.books.values())
       .filter(b => b.owner_id === userId)
-      .map(b => dbBookToBook(b))
+      .map(b => withoutMeta(dbBookToBook(b)))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
@@ -223,7 +237,7 @@ export async function getUserBookSummariesFromSQLite(userId: string): Promise<Bo
     [userId]
   )).rows as SQLiteBook[]
   // dbBookToBook leaves pages as [] — exactly what a list view needs.
-  return rows.map(dbBookToBook)
+  return rows.map(r => withoutMeta(dbBookToBook(r)))
 }
 
 export async function countUserBooksInSQLite(userId: string): Promise<number> {
