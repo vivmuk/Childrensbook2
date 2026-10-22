@@ -32,6 +32,44 @@ interface Character {
   traits: string[]
 }
 
+/** One song made for a book: the theme, a sung retelling, a lullaby, or a background bed. */
+export interface BookSong {
+  kind: 'theme' | 'story' | 'lullaby' | 'background'
+  title: string
+  url: string
+  lyrics?: string
+  createdAt: string
+}
+
+/**
+ * Everything about a book that is not a page or a cover, kept as one JSON
+ * column so a new kind of thing does not need a migration. The hero sheet and
+ * the page briefs are what let the studio repaint a page later and still get
+ * the same hero; narration and songs are cached so they are paid for once.
+ */
+export interface BookMeta {
+  /** The approved hero picture every page was painted around. */
+  heroImage?: string
+  heroName?: string
+  heroDescription?: string
+  heroIsAdult?: boolean
+  /** The story's own locked description of its main character and colours. */
+  visualBible?: { mainCharacter?: string; colorPalette?: string }
+  otherCharacters?: string[]
+  /** What each page shows, in English, in page order. */
+  scenes?: Array<{ imageDescription?: string; shotType?: string }>
+  language?: string
+  imageModel?: string
+  storyIdea?: string
+  /** Narration per page, as mp3 data URLs, keyed by the page text it speaks. */
+  narration?: Array<{ text: string; url: string; narrator: string } | null>
+  /** Narration for the cover: the title, read aloud. */
+  coverNarration?: { text: string; url: string; narrator: string }
+  songs?: BookSong[]
+  dedication?: string
+  author?: string
+}
+
 interface Book {
   id: string
   title: string
@@ -57,6 +95,7 @@ interface Book {
     story: string
     images: Array<{ pageNumber: number | 'cover'; prompt: string }>
   }
+  meta?: BookMeta
 }
 
 const sampleBooks: Map<string, Book> = new Map()

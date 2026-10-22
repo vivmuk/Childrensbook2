@@ -579,6 +579,48 @@ textarea.kq-input { resize: none; min-height: 110px; line-height: 1.6; }
 .animate-twinkle { animation: twinkle-star 2.4s ease-in-out infinite; }
 .animate-pop     { animation: pop-score 0.5s ease-out forwards; }
 
+/* ════════════════ The flip-through book ════════════════
+   A page turns from its spine: the new page swings in from the right edge
+   when going forward and from the left when going back. Transform and
+   opacity only, and it collapses under reduced motion like everything else. */
+.kq-flip-stage { perspective: 2200px; }
+@keyframes kqFlipNext {
+  from { transform: rotateY(-62deg) translateX(6%); opacity: 0; }
+  to   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+}
+@keyframes kqFlipPrev {
+  from { transform: rotateY(62deg) translateX(-6%); opacity: 0; }
+  to   { transform: rotateY(0deg) translateX(0); opacity: 1; }
+}
+.kq-flip-next { transform-origin: left center;  animation: kqFlipNext 0.55s cubic-bezier(.2,.75,.25,1) both; }
+.kq-flip-prev { transform-origin: right center; animation: kqFlipPrev 0.55s cubic-bezier(.2,.75,.25,1) both; }
+
+/* The page itself: warm paper with a faint spine shadow along one edge. */
+.kq-page {
+  background: var(--kq-cream);
+  color: #3B2A1E;
+  border-radius: var(--kq-radius-lg);
+  border: 1px solid rgba(59, 42, 30, 0.1);
+  overflow: hidden;
+  position: relative;
+}
+.kq-page::before {
+  content: '';
+  position: absolute; inset: 0 auto 0 0; width: 18px;
+  background: linear-gradient(90deg, rgba(59, 42, 30, 0.1), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* A word being read aloud. A tint, not a glow. */
+.kq-word { border-radius: 4px; transition: background-color 0.15s ease, color 0.15s ease; }
+.kq-word.is-on { background: rgba(224, 160, 70, 0.38); }
+.kq-word.is-read { color: rgba(59, 42, 30, 0.72); }
+
+/* A bottom sheet, for songs, voices and sharing. */
+@keyframes kqSheetUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.kq-bottom-sheet { animation: kqSheetUp 0.28s ease-out both; }
+
 /* ════════════════ Accessibility ════════════════
    If the device asks for less motion, every animation collapses to static.
    The Three.js scene reads the same media query and holds a still frame. */

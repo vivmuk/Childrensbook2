@@ -27,10 +27,10 @@ interface GeneratingGameProps {
 // The four things the machine does, in order. The progress value walks down
 // this list.
 const STEPS = [
-  { icon: 'spark', label: 'Finding the idea' },
   { icon: 'auto_stories', label: 'Writing the words' },
+  { icon: 'person', label: 'Painting the hero' },
   { icon: 'palette', label: 'Painting the pages' },
-  { icon: 'book', label: 'Binding the book' },
+  { icon: 'book', label: 'Lettering the cover' },
 ]
 
 // Short true notes about how the book is made, rotated while the reader waits.
@@ -108,7 +108,9 @@ export function GeneratingGame({ progress = 0 }: GeneratingGameProps) {
   const litCount = lit.filter(Boolean).length
   const allLit = litCount === STARS.length
 
-  const stepIdx = Math.min(Math.floor(progress / 25), STEPS.length - 1)
+  // The words are done at 10 per cent and the hero comes next, so the steps
+  // are spaced to match what the server is really doing.
+  const stepIdx = progress < 10 ? 0 : progress < 22 ? 1 : progress < 92 ? 2 : 3
   const pct = Math.max(0, Math.min(100, progress))
 
   // Plain estimate lines. No dashes, no invented precision.

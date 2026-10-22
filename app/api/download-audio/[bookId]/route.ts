@@ -20,7 +20,7 @@ export async function GET(
     }
 
     // Extract base64 data from data URL
-    const base64Data = book.audioUrl.replace(/^data:audio\/\w+;base64,/, '')
+    const base64Data = book.audioUrl.replace(/^data:audio\/[^;]+;base64,/, '')
     const audioBuffer = Buffer.from(base64Data, 'base64')
 
     // Return audio as response

@@ -173,6 +173,8 @@ async function createSchema(): Promise<void> {
 
   // Migration parity with lib/sqlite.ts: ensure older books tables gain song_url.
   await p.query('ALTER TABLE books ADD COLUMN IF NOT EXISTS song_url TEXT')
+  // Hero sheet, page briefs, narration and songs: see BookMeta in lib/storage.ts.
+  await p.query('ALTER TABLE books ADD COLUMN IF NOT EXISTS meta TEXT')
 
   await p.query('CREATE INDEX IF NOT EXISTS idx_books_owner ON books(owner_id)')
   await p.query('CREATE INDEX IF NOT EXISTS idx_books_status ON books(status)')

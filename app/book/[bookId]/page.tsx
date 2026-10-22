@@ -1,428 +1,374 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Icon } from '@/components/Icons'
+import { SongsSheet, type SongJob } from '@/components/reader/SongsSheet'
+import { useReadAloud } from '@/components/reader/useReadAloud'
+import { bookFileName, renderBookHTML } from '@/lib/book-export'
+import { bookSongs, LS_NARRATOR, readApiKey, splitWords, type ClientBook, type ClientSong } from '@/lib/book-client'
+import { NARRATORS, getNarrator } from '@/lib/narrators'
 
-interface BookPage {
-  text: string
-  image: string
-}
+/* ════════════════════════════════════════════════════════════════════════
+   The reader: a picture book you flip through.
 
-interface TitlePage {
-  image: string
-  title: string
-}
+   Each position is one page of the book: the cover (its title painted into
+   the art), then the story pages, then The End. The whole picture is always
+   shown, never cropped, on a warm paper page that turns from its spine.
 
-interface Book {
-  id: string
-  title: string
-  titlePage?: TitlePage
-  pages: BookPage[]
-  ageRange: string
-  illustrationStyle: string
-  audioUrl?: string
-  songUrl?: string
-}
+   Swipe, the arrow keys, or the page edges turn the page. "Read to me" reads
+   each page in a real narrator's voice, lights up each word as it is said,
+   and turns the page when the voice stops. The storyboard strip along the
+   bottom jumps anywhere. Songs, the studio and sharing are one tap away.
+   ════════════════════════════════════════════════════════════════════════ */
 
 const LS_DYSLEXIA = 'kinderquill_dyslexia_mode'
+const LS_LAST_READ = 'kinderquill_last_read'
+const TOOL = 'kq-btn-secondary !w-auto !px-3 !py-2 !text-xs'
 
-// The quiet action in the book toolbar: a hairline, sized to its label.
-// The !important utilities beat the full width button class.
-const TOOL_BTN = 'kq-btn-secondary !w-auto !px-3 !py-2 !text-xs'
-
-// Split page prose into sentences for read-along highlighting.
-function splitSentences(text: string): string[] {
-  const matches = text.match(/[^.!?…]+[.!?…]*\s*/g)
-  const parts = (matches || [text]).map(s => s.trim()).filter(Boolean)
-  return parts.length ? parts : [text]
-}
+type Position = { kind: 'cover' } | { kind: 'page'; index: number } | { kind: 'end' }
 
 export default function BookViewerPage() {
   const router = useRouter()
   const params = useParams()
   const bookId = params.bookId as string
-  const [book, setBook] = useState<Book | null>(null)
-  // Email / HTML / PDF are things a parent does once, not while reading, so
-  // they stay folded away until asked for.
-  const [showExport, setShowExport] = useState(false)
-  const [currentPage, setCurrentPage] = useState(0)
-  /* Where they stopped, so the stage on the home screen can say "you left off
-     on page 3" instead of guessing. Written here because this is the only place
-     that knows. One small key, one entry per book, and failures are ignored:
-     private browsing must not break the reader. */
-  useEffect(() => {
-    if (!book || !book.pages?.length) return
-    const total = book.pages.length + (book.titlePage ? 1 : 0)
-    try {
-      const raw = localStorage.getItem('kinderquill_last_read')
-      const all = raw ? JSON.parse(raw) : {}
-      all[bookId] = { page: Math.min(currentPage + 1, total), total, at: Date.now() }
-      localStorage.setItem('kinderquill_last_read', JSON.stringify(all))
-    } catch { /* ignore */ }
-  }, [book, bookId, currentPage])
+
+  const [book, setBook] = useState<ClientBook | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
-  const [isPageTransitioning, setIsPageTransitioning] = useState(false)
-  const [, setAudioRef] = useState<HTMLAudioElement | null>(null)
-
-  // Animation state
-  const [userApiKey, setUserApiKey] = useState<string>('')
-  const [pageVideos, setPageVideos] = useState<Record<string, string>>({})
-  const [animatingPageKey, setAnimatingPageKey] = useState<string | null>(null)
-  const [animateQueueId, setAnimateQueueId] = useState<string | null>(null)
-  const [animateModel, setAnimateModel] = useState<string | null>(null)
-  const [animateElapsed, setAnimateElapsed] = useState<number>(0)
-  const [animateAvgTime, setAnimateAvgTime] = useState<number>(120000)
-  const [showVideoModal, setShowVideoModal] = useState(false)
-  const [modalVideoUrl, setModalVideoUrl] = useState<string | null>(null)
-
-  // Theme song state
-  const [isGeneratingSong, setIsGeneratingSong] = useState(false)
-  const [songQueueId, setSongQueueId] = useState<string | null>(null)
-  const [songModel, setSongModel] = useState<string | null>(null)
-
-  // Reading modes: read-along highlighting + dyslexia-friendly text
+  const [at, setAt] = useState(0)
+  const [direction, setDirection] = useState<'next' | 'prev'>('next')
+  const [userApiKey, setUserApiKey] = useState('')
+  const [narrator, setNarrator] = useState('heart')
   const [dyslexiaMode, setDyslexiaMode] = useState(false)
-  const [readAlong, setReadAlong] = useState(false)
-  const [highlightIndex, setHighlightIndex] = useState(-1)
+  const [sheet, setSheet] = useState<null | 'songs' | 'share' | 'voice'>(null)
+  const [showStrip, setShowStrip] = useState(true)
+
+  // Songs being composed, by kind
+  const [songJobs, setSongJobs] = useState<Partial<Record<ClientSong['kind'], SongJob>>>({})
+  const [musicOn, setMusicOn] = useState(false)
+  const musicRef = useRef<HTMLAudioElement | null>(null)
+
+  // Exports
+  const [isMakingAudiobook, setIsMakingAudiobook] = useState(false)
+  const [includeAudio, setIncludeAudio] = useState(true)
+
+  // Animation of a single page (an advanced extra)
+  const [pageVideos, setPageVideos] = useState<Record<string, string>>({})
+  const [animating, setAnimating] = useState<{ key: string; queueId?: string; model?: string } | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchBook = async () => {
-      try {
-        const response = await fetch(`/api/book/${bookId}`)
-        if (!response.ok) throw new Error('Failed to fetch book')
-        const data = await response.json()
-        setBook(data)
-        setIsLoading(false)
-      } catch (error) {
-        console.error('Error fetching book:', error)
-        setIsLoading(false)
-      }
-    }
-    fetchBook()
-    const savedKey = localStorage.getItem('kinderquill_venice_api_key')
-    if (savedKey) setUserApiKey(savedKey)
-    try { if (localStorage.getItem(LS_DYSLEXIA) === '1') setDyslexiaMode(true) } catch {}
+    fetch(`/api/book/${bookId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => setBook(data))
+      .catch(() => setBook(null))
+      .finally(() => setIsLoading(false))
+    setUserApiKey(readApiKey())
+    try {
+      if (localStorage.getItem(LS_DYSLEXIA) === '1') setDyslexiaMode(true)
+      const n = localStorage.getItem(LS_NARRATOR)
+      if (n) setNarrator(n)
+    } catch { /* private browsing */ }
   }, [bookId])
 
-  const toggleDyslexia = () => {
-    setDyslexiaMode(prev => {
-      const next = !prev
-      try { localStorage.setItem(LS_DYSLEXIA, next ? '1' : '0') } catch {}
-      return next
-    })
-  }
-
-  const toggleReadAlong = () => {
-    setReadAlong(prev => {
-      if (prev) setHighlightIndex(-1)
-      return !prev
-    })
-  }
-
-  // Drives read-along: highlight one sentence at a time, then turn the page.
+  // The book's own narrator, unless the reader picked another.
   useEffect(() => {
-    if (!readAlong || !book) return
-    const hasTitle = !!book.titlePage
-    const total = book.pages.length + (hasTitle ? 1 : 0)
-    // Skip the cover during read-along and jump to the first story page.
-    if (hasTitle && currentPage === 0) { setCurrentPage(1); return }
-    const contentIdx = hasTitle ? currentPage - 1 : currentPage
-    const pg = book.pages[contentIdx]
-    if (!pg) return
-    const sents = splitSentences(pg.text)
-    let idx = 0
-    setHighlightIndex(0)
-    let timer: ReturnType<typeof setTimeout>
-    const schedule = () => {
-      const words = sents[idx].split(/\s+/).filter(Boolean).length
-      const dur = Math.max(1700, words * 360) // about the pace of reading aloud
-      timer = setTimeout(() => {
-        idx++
-        if (idx < sents.length) { setHighlightIndex(idx); schedule() }
-        else if (currentPage < total - 1) { setCurrentPage(currentPage + 1) }
-        else { setReadAlong(false); setHighlightIndex(-1) }
-      }, dur)
-    }
-    schedule()
-    return () => clearTimeout(timer)
-  }, [readAlong, currentPage, book])
-
-  useEffect(() => {
-    if (!animateQueueId || !animatingPageKey) return
-    const poll = async () => {
-      try {
-        const res = await fetch('/api/animate-retrieve', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ queueId: animateQueueId, model: animateModel, userApiKey }),
-        })
-        const data = await res.json()
-        if (data.status === 'complete' && data.videoUrl) {
-          setPageVideos(prev => ({ ...prev, [animatingPageKey]: data.videoUrl }))
-          setModalVideoUrl(data.videoUrl); setShowVideoModal(true)
-          setAnimatingPageKey(null); setAnimateQueueId(null); setAnimateModel(null)
-        } else if (data.status === 'processing') {
-          setAnimateElapsed(data.elapsed ?? 0); setAnimateAvgTime(data.averageTime ?? 120000)
-        } else if (data.error) {
-          console.error('Animation error:', data.error); alert('Animation failed: ' + data.error)
-          setAnimatingPageKey(null); setAnimateQueueId(null); setAnimateModel(null)
-        }
-      } catch (err) { console.error('Animation poll error:', err) }
-    }
-    const interval = setInterval(poll, 10000)
-    return () => clearInterval(interval)
-  }, [animateQueueId, animatingPageKey, animateModel, userApiKey])
-
-  const handleGenerateAudio = async () => {
     if (!book) return
-    setIsGeneratingAudio(true)
+    try { if (!localStorage.getItem(LS_NARRATOR) && book.narratorVoice) setNarrator(getNarrator(book.narratorVoice).value) } catch {}
+  }, [book])
+
+  const positions: Position[] = useMemo(() => {
+    if (!book) return []
+    return [
+      ...(book.titlePage ? [{ kind: 'cover' } as Position] : []),
+      ...book.pages.map((_, index) => ({ kind: 'page', index }) as Position),
+      { kind: 'end' },
+    ]
+  }, [book])
+
+  const total = positions.length
+  const pos = positions[at]
+
+  // Where they stopped, for the home screen's "you left off" line.
+  useEffect(() => {
+    if (!book || !total) return
     try {
-      const response = await fetch(`/api/generate-audio/${bookId}`, { method: 'POST' })
-      if (!response.ok) throw new Error('Failed to generate audio')
-      const data = await response.json()
-      setBook({ ...book, audioUrl: data.audioUrl })
-    } catch (error) {
-      console.error('Error generating audio:', error)
-      alert('Failed to generate audio. Please try again.')
-    } finally { setIsGeneratingAudio(false) }
+      const raw = localStorage.getItem(LS_LAST_READ)
+      const all = raw ? JSON.parse(raw) : {}
+      all[bookId] = { page: Math.min(at + 1, total), total, at: Date.now() }
+      localStorage.setItem(LS_LAST_READ, JSON.stringify(all))
+    } catch { /* ignore */ }
+  }, [book, bookId, at, total])
+
+  const scripts = useMemo(
+    () =>
+      positions.map(p =>
+        !book ? null
+          : p.kind === 'cover' ? `${book.title}.${book.meta?.dedication ? ` ${book.meta.dedication}` : ''}`
+          : p.kind === 'page' ? book.pages[p.index].text
+          : null,
+      ),
+    [positions, book],
+  )
+
+  const go = useCallback((target: number, dir?: 'next' | 'prev') => {
+    if (target < 0 || target >= total) return
+    setDirection(dir || (target > at ? 'next' : 'prev'))
+    setAt(target)
+  }, [at, total])
+
+  const reader = useReadAloud({
+    bookId,
+    scripts,
+    narrator,
+    apiKey: userApiKey,
+    routeFor: i => {
+      const p = positions[i]
+      return !p ? null : p.kind === 'cover' ? 'cover' : p.kind === 'page' ? p.index : null
+    },
+    cached: i => {
+      const p = positions[i]
+      if (!p || !book) return undefined
+      if (p.kind === 'cover') {
+        const c = book.meta?.coverNarration
+        return c && c.narrator === narrator && c.text === scripts[i] ? c.url : undefined
+      }
+      if (p.kind === 'page') {
+        const c = book.meta?.narration?.[p.index]
+        return c && c.narrator === narrator && c.text === scripts[i] ? c.url : undefined
+      }
+      return undefined
+    },
+    onFinished: i => {
+      if (i < total - 1) {
+        setDirection('next')
+        setAt(i + 1)
+      } else {
+        reader.stop()
+      }
+    },
+  })
+
+  // While reading, every new page starts its own voice.
+  const readingRef = useRef(false)
+  readingRef.current = reader.isReading
+  useEffect(() => {
+    if (readingRef.current) void reader.readPosition(at)
+    // reader.readPosition is stable; at is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at])
+
+  // Reading music, quietly under the voice
+  const songs = book ? bookSongs(book) : []
+  const background = songs.find(s => s.kind === 'background')
+  useEffect(() => {
+    if (!background) return
+    if (!musicRef.current) {
+      musicRef.current = new Audio(background.url)
+      musicRef.current.loop = true
+      musicRef.current.volume = 0.18
+    }
+    if (musicOn) musicRef.current.play().catch(() => setMusicOn(false))
+    else musicRef.current.pause()
+  }, [musicOn, background])
+  useEffect(() => () => { musicRef.current?.pause() }, [])
+
+  // Keyboard: arrows turn, space reads
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (sheet || (e.target as HTMLElement)?.tagName === 'INPUT') return
+      if (e.key === 'ArrowRight') go(at + 1, 'next')
+      if (e.key === 'ArrowLeft') go(at - 1, 'prev')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [at, go, sheet])
+
+  // Swipe
+  const touchX = useRef<number | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchX.current
+    touchX.current = null
+    if (Math.abs(dx) > 45) go(at + (dx < 0 ? 1 : -1), dx < 0 ? 'next' : 'prev')
   }
 
-  const handleGenerateSong = async () => {
-    if (!book || isGeneratingSong) return
-    setIsGeneratingSong(true)
+  // Keep the current thumbnail in view
+  const stripRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = stripRef.current?.querySelector<HTMLElement>(`[data-pos="${at}"]`)
+    el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [at])
+
+  // ── Songs ──
+  const makeSong = async (kind: ClientSong['kind']) => {
     try {
       const res = await fetch(`/api/generate-song/${bookId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userApiKey: userApiKey || undefined }),
+        body: JSON.stringify({ kind, userApiKey: userApiKey || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to start theme song')
-      if (data.status === 'complete' && data.songUrl) {
-        setBook({ ...book, songUrl: data.songUrl }); setIsGeneratingSong(false)
-      } else {
-        setSongQueueId(data.queueId); if (data.model) setSongModel(data.model)
-      }
+      if (!res.ok) throw new Error(data.error || 'The song could not be started.')
+      if (data.status === 'complete' && data.song) { addSong(data.song); return }
+      setSongJobs(j => ({ ...j, [kind]: { queueId: data.queueId, model: data.model, title: data.title, lyrics: data.lyrics, startedAt: Date.now() } }))
     } catch (err: any) {
-      console.error('Theme song error:', err)
-      alert(err.message || 'Failed to create theme song. Please try again.')
-      setIsGeneratingSong(false)
+      alert(err.message || 'The song could not be started.')
     }
   }
 
-  // Poll for the queued theme song until the audio is ready (give up after ~3 min).
+  const addSong = (song: ClientSong) => {
+    setBook(b => b ? {
+      ...b,
+      songUrl: song.kind === 'theme' ? song.url : b.songUrl,
+      meta: { ...(b.meta || {}), songs: [...(b.meta?.songs || []).filter(s => s.kind !== song.kind), song] },
+    } : b)
+  }
+
+  // Poll every song still being composed. Gives up after five minutes each.
   useEffect(() => {
-    if (!songQueueId) return
-    let attempts = 0
-    const maxAttempts = 60 // 60 x 3s = 3 minutes (sung songs take longer)
-    let interval: ReturnType<typeof setInterval>
-    const stop = () => { clearInterval(interval); setSongQueueId(null); setSongModel(null); setIsGeneratingSong(false) }
-    const poll = async () => {
-      attempts++
-      try {
-        const res = await fetch(`/api/song-retrieve/${bookId}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ queueId: songQueueId, model: songModel, userApiKey: userApiKey || undefined }),
-        })
-        const data = await res.json()
-        if (data.status === 'complete' && data.songUrl) {
-          setBook(prev => (prev ? { ...prev, songUrl: data.songUrl } : prev))
-          stop()
-        } else if (data.error) {
-          console.error('Song retrieve error:', data.error)
-          alert('The theme song could not be created. Please try again.')
-          stop()
-        } else if (attempts >= maxAttempts) {
-          console.warn('Theme song timed out after 3 minutes')
-          alert('The theme song is taking longer than expected. Please try again in a moment.')
-          stop()
-        }
-      } catch (err) {
-        console.error('Song poll error:', err)
-        if (attempts >= maxAttempts) stop()
+    const kinds = Object.keys(songJobs) as ClientSong['kind'][]
+    if (!kinds.length) return
+    const t = setInterval(async () => {
+      for (const kind of kinds) {
+        const job = songJobs[kind]
+        if (!job) continue
+        const drop = () => setSongJobs(j => { const n = { ...j }; delete n[kind]; return n })
+        if (Date.now() - job.startedAt > 5 * 60_000) { drop(); alert('That song is taking too long. Please try again.'); continue }
+        try {
+          const res = await fetch(`/api/song-retrieve/${bookId}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...job, kind, userApiKey: userApiKey || undefined }),
+          })
+          const data = await res.json()
+          if (data.status === 'complete' && data.song) { addSong(data.song); drop() }
+          else if (data.error) { drop(); alert(data.error) }
+        } catch { /* try again next tick */ }
       }
-    }
-    interval = setInterval(poll, 3000)
-    return () => clearInterval(interval)
-  }, [songQueueId, songModel, userApiKey, bookId])
+    }, 4000)
+    return () => clearInterval(t)
+  }, [songJobs, bookId, userApiKey])
 
-  const handlePageChange = (newPage: number) => {
-    setIsPageTransitioning(true)
-    setTimeout(() => { setCurrentPage(newPage); setIsPageTransitioning(false) }, 150)
+  // ── Sharing and saving ──
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/share/${bookId}` : ''
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: book?.title, text: `A storybook for you: ${book?.title}`, url: shareUrl }); return } catch { /* fall through */ }
+    }
+    try { await navigator.clipboard.writeText(shareUrl); alert('Link copied.') } catch { alert(shareUrl) }
   }
 
-  const handleDownloadPDF = () => { window.open(`/pdf/${bookId}?download=true`, '_blank') }
-  const handlePrint = () => { window.open(`/pdf/${bookId}?download=true`, '_blank') }
-  const handleDownloadAudio = () => { if (!book || !book.audioUrl) return; window.open(`/api/download-audio/${bookId}`, '_blank') }
-
-  // Email this storybook (share the read-only link via the user's mail client)
   const handleEmail = () => {
-    const shareUrl = `${window.location.origin}/share/${bookId}`
     const subject = encodeURIComponent(`A storybook for you: ${book?.title || 'My KinderQuill Story'}`)
     const body = encodeURIComponent(`I made this storybook with KinderQuill. I hope you love it.\n\n${shareUrl}`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
-  // Continue the adventure: open the generator pre-filled with a sequel idea
-  const handleContinueAdventure = () => {
+  const handleDownloadHTML = () => {
     if (!book) return
-    const idea = `Continue the adventure from the storybook "${book.title}". Bring back the same beloved hero for a brand-new chapter with a fresh, exciting challenge. Keep it positive, warm and inspiring, with a happy ending.`
-    router.push(`/generate?idea=${encodeURIComponent(idea)}`)
+    const html = renderBookHTML(book, { mode: 'reader', includeAudio, baseUrl: window.location.origin })
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
+    const a = document.createElement('a')
+    a.href = url; a.download = bookFileName(book.title, 'html')
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(url)
   }
 
-  const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/share/${bookId}`
-    if (navigator.share) {
-      try { await navigator.share({ title: book?.title || 'My KinderQuill Story', text: `Check out this story: ${book?.title}`, url: shareUrl }) }
-      catch { copyToClipboard(shareUrl) }
-    } else { copyToClipboard(shareUrl) }
+  const handleAudiobook = async () => {
+    if (!book) return
+    if (book.audioUrl) { window.open(`/api/download-audio/${bookId}`, '_blank'); return }
+    setIsMakingAudiobook(true)
+    try {
+      const res = await fetch(`/api/generate-audio/${bookId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userApiKey: userApiKey || undefined, narrator }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'The audiobook could not be made.')
+      setBook({ ...book, audioUrl: data.audioUrl })
+      window.open(`/api/download-audio/${bookId}`, '_blank')
+    } catch (err: any) {
+      alert(err.message || 'The audiobook could not be made.')
+    } finally {
+      setIsMakingAudiobook(false)
+    }
   }
 
-  const copyToClipboard = async (url: string) => {
-    try { await navigator.clipboard.writeText(url); alert('Link copied to clipboard!') }
-    catch { alert(`Share this link: ${url}`) }
-  }
-
-  const handleAnimate = async (pageKey: string, pageIndex: number) => {
-    if (animatingPageKey) return
-    setAnimatingPageKey(pageKey); setAnimateElapsed(0); setAnimateAvgTime(120000)
+  // ── Animate one picture (advanced extra) ──
+  const handleAnimate = async (key: string, pageIndex: number) => {
+    if (animating) return
+    setAnimating({ key })
     try {
       const res = await fetch('/api/animate-image', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId, pageIndex, userApiKey }),
       })
       const data = await res.json()
-      if (!res.ok || data.error) { alert(data.error || 'Failed to start animation'); setAnimatingPageKey(null); return }
-      setAnimateQueueId(data.queueId); if (data.model) setAnimateModel(data.model)
-    } catch (err: any) { alert(err.message || 'Failed to start animation'); setAnimatingPageKey(null) }
+      if (!res.ok || data.error) throw new Error(data.error || 'The animation could not be started.')
+      setAnimating({ key, queueId: data.queueId, model: data.model })
+    } catch (err: any) {
+      alert(err.message); setAnimating(null)
+    }
+  }
+  useEffect(() => {
+    if (!animating?.queueId) return
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch('/api/animate-retrieve', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queueId: animating.queueId, model: animating.model, userApiKey }),
+        })
+        const data = await res.json()
+        if (data.status === 'complete' && data.videoUrl) {
+          setPageVideos(v => ({ ...v, [animating.key]: data.videoUrl }))
+          setVideoUrl(data.videoUrl)
+          setAnimating(null)
+        } else if (data.error) {
+          alert('The animation failed: ' + data.error); setAnimating(null)
+        }
+      } catch { /* next tick */ }
+    }, 8000)
+    return () => clearInterval(t)
+  }, [animating, userApiKey])
+
+  const toggleDyslexia = () => {
+    setDyslexiaMode(v => {
+      try { localStorage.setItem(LS_DYSLEXIA, v ? '0' : '1') } catch {}
+      return !v
+    })
   }
 
-  const handleDownloadHTML = () => {
-    if (!book) return
-    const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</title>
-  <style>
-    /* The exported book keeps the Cosy Night-Light world: indigo ground,
-       one warm cream reading page, one amber action. Colours live here once. */
-    :root {
-      --kq-navy: rgb(27 29 58);
-      --kq-text: rgb(244 242 236);
-      --kq-cream: rgb(246 231 201);
-      --kq-ink-text: rgb(59 42 30);
-      --kq-line: rgba(244, 242, 236, 0.14);
-      --kq-amber: rgb(224 160 70);
-      --kq-amber-ink: rgb(36 26 18);
-      --kq-serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
-      --kq-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: var(--kq-ui);
-      background: var(--kq-navy);
-      color: var(--kq-text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-    .book-container { max-width: 800px; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 18px; }
-    .page { display: none; flex-direction: column; gap: 18px; width: 100%; }
-    .page.active { display: flex; }
-    .page-image { width: 100%; border-radius: 14px; border: 1px solid var(--kq-line); }
-    .page-text {
-      background: var(--kq-cream);
-      color: var(--kq-ink-text);
-      padding: 26px 24px;
-      border-radius: 22px;
-      font-family: var(--kq-serif);
-      font-size: 1.3rem;
-      line-height: 1.7;
-    }
-    .header { width: 100%; text-align: center; padding: 16px; }
-    .header h1 { font-family: var(--kq-serif); font-size: 1.5rem; font-weight: 600; color: var(--kq-text); }
-    .navigation { display: flex; justify-content: space-between; width: 100%; gap: 14px; position: sticky; bottom: 16px; }
-    .nav-button { flex: 1; padding: 14px 22px; border-radius: 14px; font-size: 0.95rem; font-weight: 600; font-family: var(--kq-ui); cursor: pointer; }
-    .nav-button.prev { background: rgba(244, 242, 236, 0.05); border: 1px solid var(--kq-line); color: var(--kq-text); }
-    .nav-button.next { background: var(--kq-amber); border: none; color: var(--kq-amber-ink); }
-    .nav-button:disabled { opacity: 0.4; cursor: not-allowed; }
-    .page-indicators { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
-    .indicator { width: 8px; height: 8px; border-radius: 2px; background: rgba(244, 242, 236, 0.24); cursor: pointer; }
-    .indicator.active { width: 22px; background: var(--kq-amber); }
-  </style>
-</head>
-<body>
-  <div class="book-container">
-    <div class="header"><h1>${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1></div>
-    ${book.titlePage ? `<div class="page active" id="page-title"><img src="${book.titlePage.image}" alt="${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}" class="page-image" /><div class="page-text" style="text-align:center;font-size:24px;font-weight:bold;">${book.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>` : ''}
-    ${book.pages.map((page, index) => `<div class="page ${!book.titlePage && index === 0 ? 'active' : ''}" id="page-${index}"><img src="${page.image}" alt="Page ${index + 1}" class="page-image" /><div class="page-text">${page.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`).join('')}
-    <div class="page-indicators">
-      ${book.titlePage ? '<div class="indicator active" onclick="goToPage(0)"></div>' : ''}
-      ${book.pages.map((_, index) => `<div class="indicator ${!book.titlePage && index === 0 ? 'active' : ''}" onclick="goToPage(${book.titlePage ? index + 1 : index})"></div>`).join('')}
-    </div>
-    <div class="navigation">
-      <button class="nav-button prev" onclick="previousPage()" id="prevBtn">Previous</button>
-      <button class="nav-button next" onclick="nextPage()" id="nextBtn">Next</button>
-    </div>
-  </div>
-  <script>
-    let currentPage = 0;
-    const hasTitlePage = ${book.titlePage ? 'true' : 'false'};
-    const totalPages = ${book.pages.length} + (hasTitlePage ? 1 : 0);
-    function showPage(index) {
-      document.querySelectorAll('.page').forEach((page, i) => page.classList.toggle('active', i === index));
-      document.querySelectorAll('.indicator').forEach((ind, i) => ind.classList.toggle('active', i === index));
-      document.getElementById('prevBtn').disabled = index === 0;
-      document.getElementById('nextBtn').disabled = index === totalPages - 1;
-    }
-    function nextPage() { if (currentPage < totalPages - 1) showPage(++currentPage); }
-    function previousPage() { if (currentPage > 0) showPage(--currentPage); }
-    function goToPage(index) { currentPage = index; showPage(index); }
-    document.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') previousPage(); if (e.key === 'ArrowRight') nextPage(); });
-    showPage(0);
-  <\/script>
-</body>
-</html>`
-    const blob = new Blob([htmlContent], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `${book.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`
-    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+  const pickNarrator = (value: string) => {
+    reader.stop()
+    setNarrator(value)
+    try { localStorage.setItem(LS_NARRATOR, value) } catch {}
+    setSheet(null)
   }
 
-  // Loading
+  // ── Empty states ──
   if (isLoading) {
     return (
       <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
         <div className="text-center">
-          <Icon name="auto_awesome" size={36} className="animate-kq-spin text-kq-amber" />
+          <Icon name="auto_stories" size={36} className="animate-kq-spin text-kq-amber" />
           <p className="mt-4 font-display text-lg text-kq-text">Opening the book</p>
         </div>
       </div>
     )
   }
-
   if (!book) {
     return (
       <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
-        <div className="text-center">
+        <div className="max-w-xs text-center">
           <h1 className="font-display text-xl text-kq-text">We could not find this book</h1>
-          <p className="mt-2 text-sm text-kq-dim">It may have been removed from this device.</p>
-          <div className="mx-auto mt-5 max-w-xs">
-            <button onClick={() => router.push('/generate')} className="kq-btn-primary">
-              Make a story
-            </button>
-          </div>
+          <p className="mt-2 text-sm text-kq-dim">It may still be being made, or it was removed.</p>
+          <button onClick={() => router.push('/generate')} className="kq-btn-primary mt-5">Make a story</button>
         </div>
       </div>
     )
   }
-
-  if (!book.pages || book.pages.length === 0) {
+  if (!book.pages?.length) {
     return (
       <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
         <div className="text-center">
@@ -433,372 +379,307 @@ export default function BookViewerPage() {
     )
   }
 
-  const hasTitlePage = !!book.titlePage
-  const totalPages = book.pages.length + (hasTitlePage ? 1 : 0)
-  const isTitlePage = hasTitlePage && currentPage === 0
-  const contentPageIndex = hasTitlePage ? currentPage - 1 : currentPage
-  const page = isTitlePage ? null : book.pages[contentPageIndex]
+  // ── The page being shown ──
+  const pictureFor = (p: Position) => p.kind === 'cover' ? book.titlePage?.image : p.kind === 'page' ? book.pages[p.index].image : undefined
+  const picture = pictureFor(pos)
+  const animKey = pos.kind === 'cover' ? '-1' : pos.kind === 'page' ? String(pos.index) : ''
+  const pageNumberLabel = pos.kind === 'page' ? `Page ${pos.index + 1} of ${book.pages.length}` : pos.kind === 'cover' ? 'Cover' : 'The End'
 
-  // Video Modal
-  const VideoModal = () => {
-    if (!showVideoModal || !modalVideoUrl) return null
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-kq-ink/90 p-4 backdrop-blur"
-        onClick={() => setShowVideoModal(false)}
-      >
-        <div className="kq-card relative w-full max-w-2xl !p-0" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="font-display text-sm text-kq-text">Animated illustration</div>
-            <button onClick={() => setShowVideoModal(false)} className="kq-icon-btn" title="Close" aria-label="Close">
-              <Icon name="close" size={20} />
-            </button>
-          </div>
-          <video
-            src={modalVideoUrl} autoPlay loop controls playsInline
-            className="w-full bg-kq-ink"
-            style={{ maxHeight: '70vh', objectFit: 'contain' }}
-          />
-          <div className="flex justify-center gap-3 px-4 py-3">
-            {/* The modal is its own focus surface, so it carries its own single amber action. */}
-            <a href={modalVideoUrl} download="animation.mp4" className="kq-btn-primary !w-auto !px-4 !py-2 !text-sm">
-              <Icon name="download" size={16} /> Download MP4
-            </a>
-            <button onClick={() => setShowVideoModal(false)} className="kq-btn-secondary !w-auto !px-4 !py-2 !text-sm">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const words = pos.kind === 'page' ? splitWords(book.pages[pos.index].text) : []
+  const textStyle: React.CSSProperties = dyslexiaMode
+    ? { fontFamily: "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif", letterSpacing: '0.04em', wordSpacing: '0.14em', lineHeight: 2 }
+    : { lineHeight: 1.7 }
+  const textSize = words.join('').length > 420 ? 'text-[1.02rem] lg:text-[1.15rem]' : words.join('').length > 220 ? 'text-[1.12rem] lg:text-[1.3rem]' : 'text-[1.28rem] lg:text-[1.55rem]'
 
-  // Animate Button: a small quiet control sitting on the illustration
-  const AnimateButton = ({ pageKey, pageIndex }: { pageKey: string; pageIndex: number }) => {
-    const video = pageVideos[pageKey]
-    const isAnimating = animatingPageKey === pageKey
-    const progressPct = animateAvgTime > 0 ? Math.min(99, Math.round((animateElapsed / animateAvgTime) * 100)) : 0
-    const overlay = 'flex items-center gap-1.5 rounded-lg border border-kq-line bg-kq-ink/80 px-3 py-1.5 text-xs text-kq-text backdrop-blur transition-transform duration-200'
-    if (video) {
-      return (
-        <button
-          onClick={() => { setModalVideoUrl(video); setShowVideoModal(true) }}
-          className={`${overlay} hover:scale-105`}
-        >
-          <Icon name="play_arrow" size={18} /> Watch animation
-        </button>
-      )
-    }
-    if (isAnimating) {
-      return (
-        <div className={overlay}>
-          <Icon name="progress_activity" size={18} className="animate-kq-spin text-kq-dim" />
-          <span>Animating {animateQueueId ? `${progressPct}%` : 'starting'}</span>
-        </div>
-      )
-    }
-    return (
-      <button
-        onClick={() => handleAnimate(pageKey, pageIndex)}
-        disabled={!!animatingPageKey}
-        className={`${overlay} hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40`}
-      >
-        <Icon name="auto_awesome" size={14} /> Animate
-      </button>
-    )
-  }
-
-  // Top Bar
-  const TopBar = () => (
-    <div className="kq-top-bar">
-      <div className="flex items-center gap-1.5">
-        <button onClick={() => router.push('/')} className="kq-icon-btn" title="Home" aria-label="Home">
-          <Icon name="home" size={18} />
-        </button>
-        <button onClick={() => router.back()} className="kq-icon-btn" title="Back" aria-label="Back">
-          <Icon name="arrow_back" size={18} />
-        </button>
-        <button onClick={() => router.push('/library')} className="kq-icon-btn" title="Back to the shelf" aria-label="Back to the shelf">
-          <Icon name="shelf" size={18} />
-        </button>
-      </div>
-      <span className="font-display min-w-0 flex-1 truncate px-1.5 text-center text-base text-kq-text">
-        {book.title}
-      </span>
-      <button onClick={handleShare} className="kq-icon-btn" title="Share this book" aria-label="Share this book">
-        <Icon name="share" size={20} />
-      </button>
-    </div>
-  )
-
-  // The reading screen stays a reading screen: listening and singing belong
-  // here, exporting does not. One tap folds the rest out when it is wanted.
-  const BookActions = () => (
-    <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center gap-2 px-4 pt-3 lg:max-w-6xl">
-      {book.audioUrl ? (
-        <button onClick={handleDownloadAudio} className={TOOL_BTN} title="Download the audiobook">
-          <Icon name="headphones" size={18} /> MP3
-        </button>
-      ) : (
-        <button
-          onClick={handleGenerateAudio} disabled={isGeneratingAudio}
-          className={TOOL_BTN} title="Create an audiobook"
-        >
-          <Icon name="volume_up" size={16} /> {isGeneratingAudio ? 'Making audio' : 'Narrate'}
-        </button>
-      )}
-      {!book.songUrl && (
-        <button
-          onClick={handleGenerateSong} disabled={isGeneratingSong}
-          className={TOOL_BTN} title="Create a sing-along song for this book"
-        >
-          <Icon name="music_note" size={18} />
-          {isGeneratingSong ? 'Composing' : 'Sing-along'}
-        </button>
-      )}
-      <button
-        onClick={() => setShowExport(v => !v)}
-        className={TOOL_BTN}
-        aria-expanded={showExport}
-        title="Save or share this book"
-      >
-        <Icon name="share" size={16} /> {showExport ? 'Hide' : 'Save and share'}
-      </button>
-      {showExport && (
-        <>
-          <button onClick={handleEmail} className={TOOL_BTN} title="Email this story">
-            <Icon name="mail" size={18} /> Email
-          </button>
-          <button onClick={handleDownloadHTML} className={TOOL_BTN} title="Download as a web page">
-            <Icon name="code" size={16} /> Web page
-          </button>
-          <button onClick={handleDownloadPDF} className={TOOL_BTN} title="Download as a PDF">
-            <Icon name="picture_as_pdf" size={18} /> PDF
-          </button>
-        </>
-      )}
-    </div>
-  )
-
-  // Page position: one tappable dot per page. On the cream sheet the resting
-  // dots take an ink tint, because moon white vanishes against the cream.
-  const PageIndicators = ({ onSheet = false }: { onSheet?: boolean }) => (
-    <div className="flex w-full flex-row flex-wrap items-center justify-center gap-1">
-      {Array.from({ length: totalPages }).map((_, index) => (
-        <button
-          key={index}
-          onClick={() => handlePageChange(index)}
-          aria-label={`Go to page ${index + 1}`}
-          aria-current={index === currentPage ? 'page' : undefined}
-          className="flex h-11 w-8 items-center justify-center rounded-md"
-        >
-          <span
-            className={`kq-page-dot ${index === currentPage ? 'active' : ''}`}
-            style={onSheet && index !== currentPage ? { background: 'var(--kq-navy)', opacity: 0.35 } : undefined}
-          />
-        </button>
-      ))}
-    </div>
-  )
-
-  // Shared page shell
-  const pageShell = (children: React.ReactNode) => (
-    <div className="kq-ground kq-stars-bg relative flex min-h-[100dvh] w-full flex-col">
-      <VideoModal />
+  return (
+    <div className="kq-ground kq-stars-bg relative flex min-h-[100dvh] w-full flex-col overflow-x-hidden">
       <div className="relative z-10 flex min-h-[100dvh] flex-col">
+
+        {/* Top bar */}
+        <div className="kq-top-bar">
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => router.push('/library')} className="kq-icon-btn" aria-label="Back to the shelf">
+              <Icon name="shelf" size={18} />
+            </button>
+          </div>
+          <span className="min-w-0 flex-1 truncate px-1.5 text-center font-display text-base text-kq-text">{book.title}</span>
+          <div className="flex items-center gap-1.5">
+            {!book.isSample && (
+              <button onClick={() => router.push(`/book/${bookId}/edit`)} className="kq-icon-btn" aria-label="Edit this book in the studio" title="Edit in the studio">
+                <Icon name="edit" size={18} />
+              </button>
+            )}
+            <button onClick={() => setSheet('share')} className="kq-icon-btn" aria-label="Save or share this book" title="Save or share">
+              <Icon name="share" size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* The stage: one page of the book, turning from its spine */}
+        <main className="kq-flip-stage mx-auto flex w-full max-w-6xl flex-1 flex-col px-3 pt-3 sm:px-5" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          <article
+            key={at}
+            className={`kq-page ${direction === 'next' ? 'kq-flip-next' : 'kq-flip-prev'} ${
+              pos.kind === 'page' ? 'lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-stretch' : ''
+            }`}
+            aria-label={pageNumberLabel}
+          >
+            {/* The picture, whole */}
+            {picture && (
+              <div className={`relative flex items-center justify-center bg-kq-cream-dim/40 ${pos.kind === 'cover' ? 'p-2 sm:p-3' : 'p-2 sm:p-3 lg:p-4'}`}>
+                <img
+                  src={picture}
+                  alt={pos.kind === 'cover' ? `The cover of ${book.title}` : `Picture for page ${pos.kind === 'page' ? pos.index + 1 : ''}`}
+                  className={`block h-auto w-full rounded-[12px] object-contain ${pos.kind === 'cover' ? 'max-h-[64dvh]' : 'max-h-[50dvh] lg:max-h-[68dvh]'}`}
+                />
+                {/* Page corners turn the page */}
+                <button onClick={() => go(at - 1, 'prev')} disabled={at === 0} aria-label="Previous page" className="absolute inset-y-0 left-0 w-1/5 disabled:cursor-default" />
+                <button onClick={() => go(at + 1, 'next')} disabled={at === total - 1} aria-label="Next page" className="absolute inset-y-0 right-0 w-1/5 disabled:cursor-default" />
+                {animKey && (
+                  <div className="absolute bottom-4 right-4 z-10">
+                    {pageVideos[animKey] ? (
+                      <button onClick={() => setVideoUrl(pageVideos[animKey])} className="flex items-center gap-1.5 rounded-lg border border-kq-line bg-kq-ink/80 px-2.5 py-1.5 text-xs text-kq-text backdrop-blur">
+                        <Icon name="play_arrow" size={14} /> Watch it move
+                      </button>
+                    ) : animating?.key === animKey ? (
+                      <span className="flex items-center gap-1.5 rounded-lg border border-kq-line bg-kq-ink/80 px-2.5 py-1.5 text-xs text-kq-text backdrop-blur">
+                        <Icon name="progress_activity" size={14} className="animate-kq-spin" /> Bringing it to life
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* The words */}
+            {pos.kind === 'page' && (
+              <div className="flex flex-col justify-center px-5 pb-5 pt-3 sm:px-8 lg:px-10 lg:py-8">
+                <p className={`font-display ${textSize}`} style={textStyle}>
+                  {words.map((w, i) => (
+                    <span
+                      key={i}
+                      className={`kq-word ${reader.isReading && i === reader.wordIndex ? 'is-on' : ''} ${reader.isReading && i < reader.wordIndex ? 'is-read' : ''}`}
+                    >
+                      {w}
+                    </span>
+                  ))}
+                </p>
+                <p className="mt-4 text-center text-xs text-[rgba(59,42,30,0.55)]">{pos.index + 1}</p>
+              </div>
+            )}
+
+            {pos.kind === 'cover' && (
+              <div className="px-5 pb-5 pt-1 text-center">
+                <h1 className="sr-only">{book.title}</h1>
+                {book.meta?.dedication && <p className="font-display text-base italic">{book.meta.dedication}</p>}
+                <p className="mt-1 text-xs text-[rgba(59,42,30,0.6)]">
+                  {book.pages.length} pages{book.meta?.heroName ? `, starring ${book.meta.heroName}` : ''}
+                </p>
+              </div>
+            )}
+
+            {pos.kind === 'end' && (
+              <div className="flex flex-col items-center px-5 py-10 text-center sm:py-14">
+                <h2 className="font-display text-4xl">The End</h2>
+                <p className="mt-2 max-w-sm text-sm text-[rgba(59,42,30,0.7)]">
+                  Thank you for reading {book.title}.
+                </p>
+                <div className="mt-6 grid w-full max-w-sm gap-2">
+                  <button onClick={() => go(0, 'prev')} className="rounded-lg border border-[rgba(59,42,30,0.2)] px-4 py-3 text-sm font-medium transition-colors hover:bg-[rgba(59,42,30,0.06)]">
+                    Read it again
+                  </button>
+                  <button onClick={() => setSheet('songs')} className="rounded-lg border border-[rgba(59,42,30,0.2)] px-4 py-3 text-sm font-medium transition-colors hover:bg-[rgba(59,42,30,0.06)]">
+                    Sing the story
+                  </button>
+                  <button
+                    onClick={() => router.push(`/generate?idea=${encodeURIComponent(`Continue the adventure from the storybook "${book.title}". Bring back the same beloved hero for a brand new chapter with a fresh, gentle challenge and a happy ending.`)}`)}
+                    className="rounded-lg border border-[rgba(59,42,30,0.2)] px-4 py-3 text-sm font-medium transition-colors hover:bg-[rgba(59,42,30,0.06)]"
+                  >
+                    Make the next chapter
+                  </button>
+                </div>
+              </div>
+            )}
+          </article>
+
+          {/* Turning controls and the one amber action */}
+          <div className="mx-auto mt-3 flex w-full max-w-xl items-center gap-2">
+            <button onClick={() => go(at - 1, 'prev')} disabled={at === 0} className="kq-icon-btn !h-12 !w-12 shrink-0 disabled:opacity-30" aria-label="Previous page">
+              <Icon name="chevron_left" size={22} />
+            </button>
+            <button
+              onClick={() => (reader.isReading ? reader.stop() : reader.start(at))}
+              className="kq-btn-primary !py-3 !text-base"
+            >
+              {reader.isReading ? (
+                <><Icon name="stop" size={20} /> {reader.isLoading ? 'Finding the voice' : 'Stop reading'}</>
+              ) : (
+                <><Icon name="play_arrow" size={20} /> Read to me</>
+              )}
+            </button>
+            <button onClick={() => go(at + 1, 'next')} disabled={at === total - 1} className="kq-icon-btn !h-12 !w-12 shrink-0 disabled:opacity-30" aria-label="Next page">
+              <Icon name="chevron_right" size={22} />
+            </button>
+          </div>
+
+          {/* Reading tools */}
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <button onClick={() => setSheet('voice')} className={TOOL}>
+              <Icon name="volume_up" size={15} /> {getNarrator(narrator).label}
+            </button>
+            <button onClick={() => setSheet('songs')} className={TOOL}>
+              <Icon name="music_note" size={15} /> Songs{songs.length ? ` (${songs.length})` : ''}
+            </button>
+            {background && (
+              <button onClick={() => setMusicOn(v => !v)} aria-pressed={musicOn} className={`${TOOL} ${musicOn ? '!border-kq-amber/50' : ''}`}>
+                <Icon name="headphones" size={15} /> {musicOn ? 'Music on' : 'Music off'}
+              </button>
+            )}
+            <button onClick={toggleDyslexia} aria-pressed={dyslexiaMode} className={`${TOOL} ${dyslexiaMode ? '!border-kq-amber/50' : ''}`}>
+              <Icon name="format_size" size={15} /> Easy Read
+            </button>
+            {animKey && picture && !pageVideos[animKey] && !animating && (
+              <button onClick={() => handleAnimate(animKey, Number(animKey))} className={TOOL}>
+                <Icon name="movie" size={15} /> Animate
+              </button>
+            )}
+            <button onClick={() => setShowStrip(v => !v)} aria-pressed={showStrip} className={TOOL}>
+              <Icon name="menu_book" size={15} /> Pages
+            </button>
+          </div>
+          {reader.usingBrowserVoice && reader.isReading && (
+            <p className="mt-1 text-center text-[11px] text-kq-dim">Reading with this device's own voice.</p>
+          )}
+
+          {/* The storyboard: every page, one tap away */}
+          {showStrip && (
+            <div ref={stripRef} className="mt-3 flex gap-2 overflow-x-auto pb-3 [scrollbar-width:thin]" aria-label="All pages">
+              {positions.map((p, i) => {
+                const img = pictureFor(p)
+                return (
+                  <button
+                    key={i}
+                    data-pos={i}
+                    onClick={() => go(i)}
+                    aria-label={p.kind === 'cover' ? 'Cover' : p.kind === 'page' ? `Page ${p.index + 1}` : 'The End'}
+                    aria-current={i === at ? 'page' : undefined}
+                    className={`relative shrink-0 overflow-hidden rounded-md border-2 transition-transform ${i === at ? 'scale-105 border-kq-amber' : 'border-transparent opacity-75 hover:opacity-100'}`}
+                  >
+                    {img ? (
+                      <img src={img} alt="" loading="lazy" className="h-14 w-20 object-cover" />
+                    ) : (
+                      <span className="flex h-14 w-20 items-center justify-center bg-kq-cream font-display text-[11px] text-kq-amber-ink">The End</span>
+                    )}
+                    {p.kind === 'page' && (
+                      <span className="absolute bottom-0.5 left-0.5 rounded-[4px] bg-kq-ink/75 px-1 text-[10px] text-kq-text">{p.index + 1}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </main>
+
+        <footer className="py-2 text-center" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}>
+          <p className="text-xs text-kq-dim">Swipe or use the arrow keys to turn the page.</p>
+        </footer>
+      </div>
+
+      {/* ── Sheets ── */}
+      {sheet === 'songs' && (
+        <SongsSheet bookTitle={book.title} songs={songs} jobs={songJobs} canMake onMake={makeSong} onClose={() => setSheet(null)} />
+      )}
+
+      {sheet === 'voice' && (
+        <Sheet title="Who reads the story?" onClose={() => setSheet(null)}>
+          <div className="grid grid-cols-2 gap-2">
+            {NARRATORS.map(n => (
+              <button
+                key={n.value}
+                onClick={() => pickNarrator(n.value)}
+                aria-pressed={narrator === n.value}
+                className={`rounded-lg border p-3 text-left transition-colors ${narrator === n.value ? 'border-kq-amber/50 bg-kq-amber/10' : 'border-kq-line bg-kq-text/5 hover:bg-kq-text/10'}`}
+              >
+                <div className="text-sm font-medium text-kq-text">{n.label}</div>
+                <div className="text-xs text-kq-dim">{n.description}</div>
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+
+      {sheet === 'share' && (
+        <Sheet title="Save and share" onClose={() => setSheet(null)}>
+          <div className="grid gap-2">
+            <ShareRow icon="share" title="Send a link" note="Anyone with the link can read it" onClick={handleShare} />
+            <ShareRow icon="mail" title="Email it" note="Opens your mail app with the link" onClick={handleEmail} />
+            <ShareRow icon="picture_as_pdf" title="PDF to print" note="One page per sheet, cover first" onClick={() => router.push(`/pdf/${bookId}`)} />
+            <ShareRow icon="code" title="Web page" note="A flip-through book that works offline" onClick={handleDownloadHTML} />
+            <label className="flex items-center justify-between gap-3 px-1 text-xs text-kq-dim">
+              Put the narration and songs inside the web page
+              <span
+                className={`kq-toggle shrink-0 ${includeAudio ? 'on' : ''}`}
+                onClick={() => setIncludeAudio(v => !v)}
+                role="switch"
+                aria-checked={includeAudio}
+                aria-label="Include narration and songs in the web page"
+              />
+            </label>
+            <ShareRow
+              icon="headphones"
+              title={book.audioUrl ? 'Audiobook MP3' : isMakingAudiobook ? 'Recording the audiobook' : 'Make an audiobook MP3'}
+              note={`Read by ${getNarrator(narrator).label}`}
+              onClick={handleAudiobook}
+              disabled={isMakingAudiobook}
+            />
+          </div>
+        </Sheet>
+      )}
+
+      {videoUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-kq-ink/90 p-4" onClick={() => setVideoUrl(null)}>
+          <div className="kq-card w-full max-w-2xl !p-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="font-display text-sm text-kq-text">The page, moving</div>
+              <button onClick={() => setVideoUrl(null)} className="kq-icon-btn" aria-label="Close"><Icon name="close" size={18} /></button>
+            </div>
+            <video src={videoUrl} autoPlay loop controls playsInline className="w-full bg-kq-ink" style={{ maxHeight: '70vh', objectFit: 'contain' }} />
+            <div className="flex justify-center px-4 py-3">
+              <a href={videoUrl} download="page.mp4" className="kq-btn-primary !w-auto !px-4 !py-2 !text-sm"><Icon name="download" size={16} /> Download MP4</a>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-kq-ink/80 p-3 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div role="dialog" aria-label={title} className="kq-bottom-sheet max-h-[88vh] w-full max-w-md overflow-y-auto rounded-xl border border-kq-line bg-kq-card p-4" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg text-kq-text">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="kq-icon-btn"><Icon name="close" size={16} /></button>
+        </div>
         {children}
       </div>
     </div>
   )
+}
 
-  // Title Page: the painted cover fills the top of the glass, the book says
-  // its own name under it, and Start reading is its one amber action.
-  if (isTitlePage && book.titlePage) {
-    return pageShell(
-      <>
-        <div className="relative w-full overflow-hidden">
-          <img
-            src={book.titlePage.image} alt="Book cover"
-            className={`h-[36vh] min-h-[200px] w-full object-cover transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'scale-105 opacity-0' : 'scale-100 opacity-100'}`}
-          />
-          <div className="absolute inset-x-0 top-0 z-20">
-            <TopBar />
-          </div>
-          <div className="absolute bottom-8 right-3 z-20">
-            <AnimateButton pageKey="-1" pageIndex={-1} />
-          </div>
-        </div>
-
-        <main className="relative z-10 -mt-5 flex flex-1 flex-col items-center px-3 pb-6 sm:px-4">
-          <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-4 text-center">
-            {/* The covers are painted without lettering on purpose, and the top
-                bar truncates a long title, so the book says its own name here. */}
-            <h1 className="font-display mt-2 text-2xl leading-tight text-kq-text lg:text-3xl">
-              {book.title}
-            </h1>
-            <p className="kq-eyebrow">{`${book.pages.length} pages`}</p>
-            <PageIndicators />
-            <div className="w-full">
-              <button
-                onClick={() => handlePageChange(1)}
-                className="kq-btn-primary !py-3 !text-base"
-              >
-                Start reading <Icon name="arrow_forward" size={20} />
-              </button>
-            </div>
-          </div>
-        </main>
-      </>
-    )
-  }
-
-  if (!page) {
-    return (
-      <div className="kq-ground flex min-h-[100dvh] items-center justify-center px-4">
-        <p className="font-display text-lg text-kq-text">This page could not be opened</p>
-      </div>
-    )
-  }
-
-  // Content Page: a book fills the glass. The painted page is the hero at the
-  // top of the screen, the words sit on the warm cream sheet under it, and one
-  // amber action reads the page aloud.
-  return pageShell(
-    <>
-      {/* The painted page, full bleed at the top of the screen */}
-      <div className="relative w-full overflow-hidden">
-        {page.image ? (
-          <img
-            src={page.image} alt={`Page ${currentPage + 1} illustration`}
-            className={`h-[46vh] min-h-[230px] w-full animate-bloom-in object-cover transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'scale-105 opacity-0' : 'scale-100 opacity-100'}`}
-            key={currentPage}
-          />
-        ) : (
-          <div className="flex h-[36vh] min-h-[200px] w-full items-center justify-center">
-            <Icon name="auto_awesome" size={44} className="text-kq-dim" />
-          </div>
-        )}
-        {/* The way back rides on the painting, so the picture reaches the top edge. */}
-        <div className="absolute inset-x-0 top-0 z-20">
-          <TopBar />
-        </div>
-        {page.image && (
-          <div className="absolute bottom-8 right-3 z-20">
-            <AnimateButton pageKey={String(contentPageIndex)} pageIndex={contentPageIndex} />
-          </div>
-        )}
-      </div>
-
-      <main
-        className="relative z-10 -mt-5 flex-1 px-3 sm:px-4"
-        /* Room for the phone's own bar at the bottom, or the last row of
-           controls gets sliced by the viewport edge. */
-        style={{ paddingBottom: 'calc(2.5rem + env(safe-area-inset-bottom))' }}
-      >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-          {/* The warm cream reading sheet, tucked under the picture */}
-          <div className={`kq-sheet transition-[opacity,transform] duration-300 ${isPageTransitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
-            <p
-              className="font-display"
-              style={dyslexiaMode ? {
-                fontFamily: "'OpenDyslexic','Comic Sans MS','Lexend',sans-serif",
-                letterSpacing: '0.04em',
-                wordSpacing: '0.12em',
-                lineHeight: 2,
-                fontSize: '1.24rem',
-              } : {
-                fontSize: '1.28rem',
-                lineHeight: 1.72,
-              }}
-            >
-              {splitSentences(page.text).map((sentence, i) => (
-                <span
-                  key={i}
-                  className={readAlong && i === highlightIndex ? 'rounded-sm bg-kq-amber/30 transition-colors' : undefined}
-                >
-                  {sentence}{' '}
-                </span>
-              ))}
-            </p>
-
-            {/* Page position: dots along the bottom of the sheet */}
-            <div className="mt-6 border-t border-kq-ink/10 pt-2">
-              <PageIndicators onSheet />
-            </div>
-          </div>
-
-          {/* The one amber action on this screen: Read aloud */}
-          <button
-            onClick={toggleReadAlong}
-            className="kq-btn-primary !py-3 !text-base"
-            title="Highlight each sentence as it is read"
-          >
-            {readAlong ? (
-              <>
-                <Icon name="stop" size={20} /> Stop reading
-              </>
-            ) : (
-              <>
-                <Icon name="play_arrow" size={20} /> Read aloud
-              </>
-            )}
-          </button>
-
-          {/* Easy Read: a reading preference, so it is a chip and not a second action */}
-          <button
-            onClick={toggleDyslexia}
-            aria-pressed={dyslexiaMode}
-            className={`kq-chip cursor-pointer self-center ${dyslexiaMode ? 'text-kq-text' : ''}`}
-            title="Easy-reading font and spacing"
-          >
-            <Icon name="format_size" size={18} /> Easy Read
-          </button>
-
-          {/* Continue the adventure: last page only */}
-          {currentPage === totalPages - 1 && (
-            <button onClick={handleContinueAdventure} className="kq-btn-secondary !text-sm">
-              <Icon name="auto_stories" size={16} /> Continue the adventure
-            </button>
-          )}
-
-          {/* Audiobook player, when the audio exists */}
-          {book.audioUrl && (
-            <div className="flex items-center gap-2 rounded-lg border border-kq-line bg-white/5 p-2">
-              <Icon name="headphones" size={20} className="text-kq-dim" />
-              <audio ref={setAudioRef} controls className="h-8 flex-1" style={{ minWidth: 0 }}>
-                <source src={book.audioUrl} type="audio/mpeg" />
-              </audio>
-            </div>
-          )}
-
-          {/* Theme song player, when a song exists */}
-          {book.songUrl && (
-            <div className="flex items-center gap-2 rounded-lg border border-kq-line bg-white/5 p-2">
-              <Icon name="music_note" size={20} className="text-kq-dim" />
-              <audio controls className="h-8 flex-1" style={{ minWidth: 0 }}>
-                <source src={book.songUrl} />
-              </audio>
-              <a
-                href={book.songUrl}
-                download={`${(book.title || 'theme-song').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-theme.mp3`}
-                className="kq-icon-btn shrink-0"
-                title="Download theme song"
-              >
-                <Icon name="download" size={16} />
-              </a>
-            </div>
-          )}
-
-          {/* Export stays reachable but quiet, folded behind one control */}
-          <BookActions />
-        </div>
-      </main>
-
-      <footer className="border-t border-kq-line py-2 text-center">
-        <p className="text-xs text-kq-dim">
-          Painted with <span className="text-kq-text">Venice.ai</span>. Your ideas stay yours.
-        </p>
-      </footer>
-    </>
+function ShareRow({ icon, title, note, onClick, disabled }: { icon: string; title: string; note: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex w-full items-center gap-3 rounded-lg border border-kq-line bg-kq-text/5 px-3 py-3 text-left transition-colors hover:bg-kq-text/10 disabled:opacity-60"
+    >
+      <Icon name={icon} size={18} className="shrink-0 text-kq-dim" />
+      <span className="min-w-0">
+        <span className="block text-sm text-kq-text">{title}</span>
+        <span className="block text-xs text-kq-dim">{note}</span>
+      </span>
+    </button>
   )
 }

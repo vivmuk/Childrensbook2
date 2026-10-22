@@ -115,46 +115,53 @@ Generated books must look like they belong to this world: painted gouache illust
 indigo and plum nights, one warm amber lamp light, moon white highlights. See
 `lib/illustration-style.ts` for the single shared style brief every image prompt must use.
 
-## Which model paints, and why it is per style
+## Which model paints
 
-`lib/illustration-style.ts` is the only place a style's machine is chosen, through
-`styleModel(value)` and the optional `model` field on a style. Do not send a model name from
-a page, a route or a script. The picker's default option is Automatic, which means this file
-decides.
+**Automatic means Muse, then Grok Imagine** *[decided by Vivek, 2026-10-22]*. When a parent
+leaves the painter on Automatic, `lib/venice.ts` `resolveDefaultImageModel` reads Venice's live
+model list and picks the image model Venice names Muse; if Venice does not list one, it uses
+`grok-imagine-image`. Muse is matched by name on purpose: its id is Venice's to publish, and a
+hard-coded guess would fail silently. Never send a model name from a page; send `''` for
+Automatic, `'specialist'` for the style's own measured model, or an id from `/api/models`.
 
-**The house painter is `flux-2-max`, and it stays the house painter.** A cheaper graphic model
-was tested as a general replacement by painting ten styles twice and comparing the pairs. It
-lost eight of ten: it collapses every brief into a single look (graded sky, atmospheric depth,
-full colour rendering) and cannot hold a flat palette, a uniform line weight, a limited
-palette, or any real drawing medium. Crayon came back as digital painting with a noise
-overlay, silhouette came back fully lit and in colour, and the flat Nordic style came back with
-gradients and perspective. A model with one house style is not a painter, it is a filter.
+A style's `model` field in `lib/illustration-style.ts` is now the **style specialist**: the model
+measured to win that medium against flux-2-max (`gpt-image-2-5-flare` for torn paper collage,
+`qwen-image-3` for the two printed comic styles). It is offered in More options, not used by
+default.
 
-Cost is not the tie-breaker here. The cheap model is three cents against nine, and it is still
-the wrong buy when the medium is the thing the parent chose. What follows is routed in only
-where it was measured to win:
+**The medium leads the prompt.** In every prompt builder `style.medium` is the first clause. This
+was measured, not chosen for style: with the medium third, torn paper collage came back as a smooth
+digital painting inside a torn paper border. When a style stops landing, reorder the prompt before
+blaming the model.
 
-- `papercut`, torn paper collage: `gpt-image-2-5-flare`. It is the only model measured that
-  builds the picture out of layered torn shapes. The house painter returns an ordinary painting
-  sitting inside a torn paper border, which is a frame, not a collage.
-- `amar-chitra` and `chacha-chaudhary`: `qwen-image-3`. Both are densely printed comic styles,
-  and this one commits to packed ornament, heavy line and flat printed colour where the house
-  painter returns a soft storybook painting.
+Two traps from the build history: newer models reject `width`/`height` and want `aspect_ratio`
+(lib/venice.ts reshapes the request on that 400), and prompt length is a hard per-model limit, so
+prompts are capped by one `PROMPT_LIMIT` below the smallest limit of any routed model.
 
-Everything else uses the house painter. Never promote a model into this file on reputation and
-never on price alone.
+## The hero is painted first
 
-**The medium leads the prompt.** In `buildIllustrationPrompt` and
-`buildCoverIllustrationPrompt`, `style.medium` is the first clause and the generic
-"hand made picture book illustration" line follows it. This was measured, not chosen for
-style: with the medium third, torn paper collage came back as a smooth digital painting
-inside a torn paper border, and with the medium first the same model and clause produced a
-convincing collage. When a style stops landing, reorder the prompt before blaming the model.
+A book with a hero (a photo, a description, or the story's own main character) starts by painting
+that hero alone, in the book's style, as one character sheet. With a photo, the parent sees the
+sheet and approves it before any page is painted. Every page and the cover are then painted with
+`/image/edit` using that sheet as the reference (`buildSceneWithHeroPrompt`), so the hero is the
+same on every page. A page the reference painter refuses is painted from words instead; a book never
+has a hole in it. The sheet is kept on the book (`meta.heroImage`) so the studio can repaint a page
+months later and still get the same hero.
 
-Two traps are recorded in the build history and cost real time: newer models reject
-`width`/`height` and want `aspect_ratio` instead, so the request falls back on that 400, and
-prompt length is a hard per-model limit, so prompts are capped by one `PROMPT_LIMIT` constant
-held below the smallest limit of any routed model.
+## The cover says its own name
+
+The cover is the one picture with words in it: the book's title, **lettered into the painting by
+the image model** (`coverTitleRule`), with no banner, plaque or label behind it, and no type laid
+over it by the app. Every other page keeps the house rule of no lettering at all. When a parent
+renames a book in the studio, the cover is repainted to letter the new title.
+
+## Printing and the HTML book
+
+`lib/book-export.ts` is the only renderer for a finished book outside the app. The PDF (server,
+Puppeteer) and the print preview use its print mode; the HTML download uses its reader mode, which
+is a flip-through book on screen and the same print layout on paper. A4 landscape, one sheet per
+page, cover alone on its sheet, the whole picture always shown (`object-fit: contain`, never
+cropped).
 
 ## Before you call it done
 

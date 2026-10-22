@@ -193,8 +193,9 @@ export default function SharePage() {
               className="h-auto w-full object-cover"
             />
           </div>
-          <h1 className="kq-hero-title text-center text-3xl">{book.title}</h1>
-          <p className="mt-2 text-center text-kq-dim">A magical story created with KinderQuill</p>
+          {/* The title is painted into the cover itself, so it is only named here for screen readers. */}
+          <h1 className="sr-only">{book.title}</h1>
+          <p className="text-center text-kq-dim">A story made with KinderQuill. Turn the page to begin.</p>
         </main>
 
         <PageDots totalPages={totalPages} currentPage={currentPage} onSelect={handlePageChange} />

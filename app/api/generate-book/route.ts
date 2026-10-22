@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { setBook, getBook, type Book, countUserBooks } from '@/lib/storage'
-import { buildStoryStyleBrief, buildIllustrationPrompt, buildCoverIllustrationPrompt, getStyle, styleModel } from '@/lib/illustration-style'
+import { setBook, getBook, type Book, type BookMeta, countUserBooks } from '@/lib/storage'
+import {
+  buildStoryStyleBrief,
+  buildIllustrationPrompt,
+  buildCoverIllustrationPrompt,
+  buildCharacterSheetPrompt,
+  buildSceneWithHeroPrompt,
+  getStyle,
+  styleModel,
+  KQ_COVER_NEGATIVE,
+} from '@/lib/illustration-style'
+import {
+  chat,
+  editImage,
+  generateImage,
+  parseModelJSON,
+  resolveApiKey,
+  resolveDefaultEditModel,
+  resolveDefaultImageModel,
+  runWithConcurrency,
+  EDIT_MODEL_FALLBACKS,
+} from '@/lib/venice'
+
+// The story is written inside the request; the pictures are painted after it
+// returns. Give the writer room on a slow day.
+export const maxDuration = 300
 
 const LOCAL_USER_ID = 'local-user'
 
@@ -64,16 +88,19 @@ function buildStoryPrompt(
   // tale is still wholesome, positive and inspiring for the child reading it.
   const hero = opts.hero
   let heroBlock = ''
-  if (hero?.description) {
+  if (hero?.description || hero?.name) {
     const heroName = hero.name ? `, named ${hero.name},` : ''
+    const looks = hero.description || 'as shown in the painted character sheet the illustrator already has'
     heroBlock = hero.isAdult
       ? `\nREAL-LIFE HERO (GROWN-UP):
-- The main character is a real grown-up${heroName} who looks like this: ${hero.description}
+- The main character is a real grown-up${heroName} who looks like this: ${looks}
+- Use that description, word for word, as visualBible.mainCharacter.
 - This is a child's beloved grown-up (a parent, grandparent, teacher, or hero they look up to). Make the story ABOUT this grown-up and their kindness, courage, talents, and big heart.
 - Keep it 100% wholesome, warm, uplifting and INSPIRING — show the grown-up doing something brave, caring, creative, or adventurous that makes the child reader proud and hopeful.
 - Keep the grown-up an adult in every page and imageDescription (do NOT turn them into a child). Surround them with gentle, age-appropriate wonder.\n`
       : `\nREAL-LIFE HERO (CHILD):
-- The main character is a real child${heroName} who looks like this: ${hero.description}
+- The main character is a real child${heroName} who looks like this: ${looks}
+- Use that description, word for word, as visualBible.mainCharacter.
 - Make the story ABOUT this child being brave, curious, and kind. Keep them a child in every page and imageDescription.\n`
   }
 
@@ -148,7 +175,7 @@ export async function POST(request: NextRequest) {
   try {
     const userId = LOCAL_USER_ID
 
-    // Enforce per-user book limit (cheap COUNT — no page images loaded)
+    // Enforce per-user book limit (cheap COUNT, no page images loaded)
     const userBookCount = await countUserBooks(userId)
     if (userBookCount >= 100) {
       return NextResponse.json(
@@ -162,23 +189,23 @@ export async function POST(request: NextRequest) {
       ageRange,
       illustrationStyle,
       storyLength = 8,
-      narratorVoice = 'default',
-      imageModel: requestedModel,
+      narratorVoice = 'heart',
+      imageModel: requestedModel = '',
       character,
       userVeniceApiKey,
       cartoonHeroImage,
       language = 'English',
       hero,
+      consistentHero = true,
+      dedication,
     } = await request.json()
 
     if (!storyIdea || !ageRange || !illustrationStyle) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Determine which API key to use: user-provided takes precedence over server key
-    const serverApiKey = process.env.VENICE_API_KEY
-    const apiKey = userVeniceApiKey || serverApiKey
-
+    // The parent's own key takes precedence over the site's.
+    const apiKey = resolveApiKey(userVeniceApiKey)
     if (!apiKey) {
       return NextResponse.json(
         { error: 'No Venice API key available. Please provide your Venice AI API key.' },
@@ -186,146 +213,62 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const pageCount = Math.min(Math.max(parseInt(storyLength) || 8, 5), 12)
+    const pageCount = Math.min(Math.max(parseInt(storyLength) || 8, 4), 12)
     const bookId = `book_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    // The approved hero sheet. `cartoonHeroImage` is what older clients send.
+    const heroImage: string | undefined =
+      (hero && typeof hero.image === 'string' && hero.image) || (typeof cartoonHeroImage === 'string' && cartoonHeroImage) || undefined
     const heroContext: HeroContext | undefined =
-      hero && hero.description
-        ? { description: String(hero.description), isAdult: !!hero.isAdult, name: hero.name ? String(hero.name) : undefined }
+      hero && (hero.description || heroImage)
+        ? {
+            description: hero.description ? String(hero.description).slice(0, 500) : undefined,
+            isAdult: !!hero.isAdult,
+            name: hero.name ? String(hero.name).slice(0, 40) : undefined,
+          }
         : undefined
+
     const storyPrompt = buildStoryPrompt(storyIdea, ageRange, illustrationStyle, pageCount, {
       language,
       hero: heroContext,
     })
 
-    console.log(`[${bookId}] Generating story (${pageCount} pages, ${ageRange} grade)...`)
-
-    // ── Story generation with model fallback ────────────────────────────────
-    const models = ['gemini-3-flash-preview', 'nvidia-nemotron-3-nano-30b-a3b']
-    let completionResponse: Response | null = null
-    let lastError = ''
-    let modelUsed = ''
-    const maxRetries = 3
-
-    for (const model of models) {
-      modelUsed = model
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        completionResponse = await fetchWithTimeout('https://api.venice.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: 'system',
-                content:
-                  "You are an award-winning children's book author. CRITICAL: Respond with ONLY valid JSON. No markdown code blocks, no explanations, no text outside the JSON object.",
-              },
-              { role: 'user', content: storyPrompt },
-            ],
-            temperature: 0.85,
-            max_tokens: 16000,
-            response_format: { type: 'json_object' },
-          }),
-        }, 120_000)
-
-        if (completionResponse.ok) break
-
-        if (completionResponse.status === 429 && attempt < maxRetries) {
-          const wait = attempt * 5000
-          console.log(`Rate limited on ${model} (attempt ${attempt}), waiting ${wait / 1000}s...`)
-          await new Promise(r => setTimeout(r, wait))
-          continue
-        }
-
-        lastError = await completionResponse.text()
-        console.error(`[${bookId}] Error with ${model}:`, completionResponse.status, lastError.slice(0, 200))
-        break
-      }
-      if (completionResponse?.ok) break
-    }
-
-    if (!completionResponse?.ok) {
-      let msg = 'Story generation failed. Please try again.'
-      if (completionResponse?.status === 429) msg = 'AI service is busy. Please try again in a few minutes.'
-      else if (completionResponse?.status === 401) msg = 'Invalid Venice API key. Please check your key and try again.'
-      else if (lastError) {
-        try { msg = JSON.parse(lastError).error || msg } catch { msg = lastError.slice(0, 200) || msg }
-      }
-      return NextResponse.json({ error: msg }, { status: completionResponse?.status === 429 ? 503 : 502 })
-    }
-
-    console.log(`[${bookId}] Story generated using model: ${modelUsed}`)
-
-    // ── Parse JSON response ─────────────────────────────────────────────────
-    let completion
-    try {
-      completion = await completionResponse.json()
-    } catch {
-      return NextResponse.json({ error: 'Invalid response from AI. Please try again.' }, { status: 502 })
-    }
-
-    const storyContent = completion.choices?.[0]?.message?.content
-    if (!storyContent) {
-      return NextResponse.json({ error: 'No story content generated. Please try again.' }, { status: 500 })
-    }
-
-    const cleanJSON = (raw: string): string => {
-      let s = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '')
-      const first = s.indexOf('{')
-      if (first === -1) throw new Error('No JSON object found')
-      let depth = 0, last = first
-      for (let i = first; i < s.length; i++) {
-        if (s[i] === '{') depth++
-        if (s[i] === '}') { depth--; if (depth === 0) { last = i; break } }
-      }
-      s = s.substring(first, last + 1)
-      s = s.replace(/,(\s*[}\]])/g, '$1') // remove trailing commas
-      // If JSON is truncated (depth never reached 0), close open structures
-      if (depth !== 0) {
-        s = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '')
-        s = s.substring(first)
-        // Remove incomplete last entry and close all open braces/brackets
-        const stack: string[] = []
-        let inStr = false, escape = false
-        for (const ch of s) {
-          if (escape) { escape = false; continue }
-          if (ch === '\\' && inStr) { escape = true; continue }
-          if (ch === '"') { inStr = !inStr; continue }
-          if (!inStr) {
-            if (ch === '{' || ch === '[') stack.push(ch)
-            else if (ch === '}' || ch === ']') stack.pop()
-          }
-        }
-        // Close remaining open structures
-        let closing = ''
-        for (let i = stack.length - 1; i >= 0; i--) {
-          closing += stack[i] === '{' ? '}' : ']'
-        }
-        s = s.replace(/,\s*$/, '').replace(/,(\s*[}\]])$/g, '$1') + closing
-      }
-      s = s.replace(/,(\s*[}\]])/g, '$1')
-      return s
-    }
+    console.log(`[${bookId}] Writing story (${pageCount} pages, ${ageRange} grade)`)
 
     let storyData: any
     try {
-      storyData = JSON.parse(cleanJSON(storyContent))
-    } catch {
-      try {
-        const f = storyContent.indexOf('{')
-        const l = storyContent.lastIndexOf('}')
-        if (f !== -1 && l > f) storyData = JSON.parse(cleanJSON(storyContent.substring(f, l + 1)))
-        else throw new Error('No JSON found')
-      } catch (e2: any) {
-        console.error('JSON parse failed:', e2.message, storyContent.slice(0, 300))
-        return NextResponse.json({ error: 'Failed to parse story. Please try again.' }, { status: 500 })
-      }
+      const content = await chat(apiKey, {
+        system:
+          "You are an award-winning children's book author. CRITICAL: Respond with ONLY valid JSON. No markdown code blocks, no explanations, no text outside the JSON object.",
+        user: storyPrompt,
+        json: true,
+        temperature: 0.85,
+        maxTokens: 16000,
+      })
+      storyData = parseModelJSON(content)
+    } catch (err: any) {
+      const msg = err?.message || 'Story generation failed. Please try again.'
+      return NextResponse.json({ error: msg }, { status: 502 })
     }
 
-    // ── Store book and start async image generation ──────────────────────────
+    const pages: any[] = Array.isArray(storyData.pages) ? storyData.pages.filter((p: any) => p && p.text) : []
+    if (!pages.length) {
+      return NextResponse.json({ error: 'The story came back empty. Please try again.' }, { status: 502 })
+    }
+
+    const meta: BookMeta = {
+      heroImage,
+      heroName: heroContext?.name,
+      heroDescription: heroContext?.description || storyData.visualBible?.mainCharacter,
+      heroIsAdult: heroContext?.isAdult,
+      visualBible: storyData.visualBible,
+      otherCharacters: Array.isArray(storyData.characters?.others) ? storyData.characters.others.slice(0, 3) : [],
+      scenes: pages.map((p: any) => ({ imageDescription: p.imageDescription, shotType: p.shotType })),
+      language,
+      storyIdea: String(storyIdea).slice(0, 2000),
+      ...(dedication ? { dedication: String(dedication).slice(0, 200) } : {}),
+    }
+
     const book: Book = {
       id: bookId,
       title: storyData.title || 'My Story',
@@ -334,327 +277,190 @@ export async function POST(request: NextRequest) {
       illustrationStyle,
       status: 'generating',
       createdAt: new Date().toISOString(),
-      expectedPages: storyData.pages?.length || pageCount,
+      expectedPages: pages.length,
       generationProgress: 10,
       narratorVoice,
       character,
       prompts: { story: storyPrompt, images: [] },
+      meta,
       ...(userId && { ownerId: userId }),
     }
 
     await setBook(bookId, book)
 
-    // Fire-and-forget image generation (pass the resolved API key)
-    const palette = storyData.visualBible?.colorPalette || ''
-    generateBookImages(bookId, storyData.pages, illustrationStyle, storyData.characters, apiKey, requestedModel, cartoonHeroImage, heroContext, palette).catch(
-      async err => {
-        console.error(`[${bookId}] Image generation error:`, err)
-        const b = await getBook(bookId)
-        if (b) { b.status = 'error'; await setBook(bookId, b) }
-      },
-    )
+    // Painting runs after the response, and the page polls for progress.
+    paintBook(book, pages, {
+      apiKey,
+      requestedModel: String(requestedModel || ''),
+      consistentHero: consistentHero !== false,
+    }).catch(async err => {
+      console.error(`[${bookId}] Painting failed:`, err?.message)
+      const b = await getBook(bookId)
+      if (b) { b.status = 'error'; await setBook(bookId, b) }
+    })
 
     return NextResponse.json({ bookId, status: 'generating' })
   } catch (err: any) {
-    console.error('generate-book error:', err.message)
-    return NextResponse.json(
-      { error: err.message || 'Failed to generate book', ...(process.env.NODE_ENV === 'development' && { stack: err.stack }) },
-      { status: 500 },
-    )
+    console.error('generate-book error:', err?.message)
+    return NextResponse.json({ error: 'Failed to generate book. Please try again.' }, { status: 500 })
   }
 }
 
-// ── Async image generation ───────────────────────────────────────────────────
+// ── Painting ─────────────────────────────────────────────────────────────────
 
-async function generateBookImages(
-  bookId: string,
+/** The painter for this book: Automatic, the style's specialist, or a named model. */
+async function resolvePainter(requested: string, style: string, apiKey: string): Promise<string> {
+  if (!requested || requested === 'auto') return resolveDefaultImageModel(apiKey)
+  if (requested === 'specialist') return styleModel(style)
+  return requested
+}
+
+/**
+ * Paint the book, hero first.
+ *
+ *  1. The hero sheet. A parent's approved sheet is used as is; otherwise one is
+ *     painted from the story's own description of its main character.
+ *  2. The cover and every page, each painted around that sheet, so the hero is
+ *     the same on every page. The cover letters the book's title into the art.
+ *  3. Any page the reference painter refuses is painted from words instead, so
+ *     one refusal never leaves a hole in the book.
+ */
+async function paintBook(
+  book: Book,
   pages: any[],
-  illustrationStyle: string,
-  characters: { main?: string; others?: string[] } | undefined,
-  apiKey: string,
-  imageModel: string | undefined,
-  cartoonHeroImage?: string,
-  hero?: HeroContext,
-  palette: string = '',
+  opts: { apiKey: string; requestedModel: string; consistentHero: boolean },
 ) {
-  const book = await getBook(bookId)
-  if (!book) return
+  const { apiKey } = opts
+  const bookId = book.id
+  const style = book.illustrationStyle
+  const meta = book.meta || {}
+  const painter = await resolvePainter(opts.requestedModel, style, apiKey)
+  const editModel = await resolveDefaultEditModel(apiKey)
+  meta.imageModel = painter
 
-  // Which model paints is a property of the style, decided in one place. A model
-  // passed in here is an override, not the norm.
-  const painter = imageModel || styleModel(illustrationStyle)
+  // One fixed seed for the whole book keeps the look steady across pages.
+  const bookSeed = Math.abs(Array.from(bookId).reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)) % 999_999_999
 
-  // One fixed seed for the whole book → far more consistent character, style and
-  // palette across the cover and every page. Derived deterministically from the
-  // book id so re-runs of the same book stay stable.
-  const bookSeed = Math.abs(
-    Array.from(bookId).reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7),
-  ) % 999_999_999
-
-  const charParts: string[] = []
-  if (characters?.main) charParts.push(characters.main)
-  if (characters?.others?.length) charParts.push(...characters.others.slice(0, 3))
-  // When the hero is a real grown-up, lock their age into every illustration so
-  // the image model never accidentally renders them as a child.
-  const heroAgeNote = hero?.isAdult
-    ? `The main hero is an ADULT grown-up${hero.name ? ` named ${hero.name}` : ''} (${hero.description || 'a kind, warm grown-up'}); always depict them as a fully grown adult, never as a child. `
-    : hero?.description
-      ? `The main hero is a child${hero.name ? ` named ${hero.name}` : ''} (${hero.description}). `
+  const others = meta.otherCharacters?.length ? meta.otherCharacters.join('; ') : ''
+  const mainCharacter = meta.heroDescription || meta.visualBible?.mainCharacter || ''
+  const heroAgeNote = meta.heroIsAdult
+    ? `The hero is a grown-up${meta.heroName ? ` named ${meta.heroName}` : ''}; always paint them as a fully grown adult, never as a child. `
+    : meta.heroName
+      ? `The hero is ${meta.heroName}. `
       : ''
-  const charPrefix = (heroAgeNote || charParts.length)
-    ? `${heroAgeNote}${charParts.length ? `Characters: ${charParts.join('; ')}. ` : ''}Maintain consistent character appearance across every page. `
-    : ''
+  const textLock = `${heroAgeNote}${mainCharacter ? `Main character: ${mainCharacter}. ` : ''}${others ? `Other characters: ${others}. ` : ''}Keep every character identical on every page.`
+  const palette = meta.visualBible?.colorPalette || undefined
 
-  const totalPages = pages.length
-
-  const updateProgress = async (pct: number) => {
-    book.generationProgress = Math.min(99, Math.round(pct))
+  const totalImages = pages.length + 1 + (meta.heroImage || !opts.consistentHero ? 0 : 1)
+  let done = 0
+  const tick = async () => {
+    done++
+    book.generationProgress = Math.min(99, 10 + Math.round((done / totalImages) * 89))
     await setBook(bookId, book)
+  }
+
+  // 1. The hero sheet.
+  let heroSheet = meta.heroImage
+  if (!heroSheet && opts.consistentHero && mainCharacter) {
+    const sheet = await generateImage(apiKey, {
+      prompt: buildCharacterSheetPrompt(style, mainCharacter),
+      model: painter,
+      width: 768,
+      height: 1024,
+      seed: bookSeed,
+    })
+    if (sheet) {
+      heroSheet = sheet.dataUrl
+      meta.heroImage = heroSheet
+    }
+    await tick()
   }
 
   const imagePrompts: Array<{ pageNumber: number | 'cover'; prompt: string }> = []
 
-  // Every prompt is assembled by lib/illustration-style.ts so the whole
-  // catalogue shares one painted world. charPrefix carries the character lock
-  // from the story's visual bible, which is what keeps the hero consistent.
-  const coverPrompt = buildCoverIllustrationPrompt({
-    characters: charPrefix.trim() || undefined,
-    palette: palette || undefined,
-    style: illustrationStyle,
-    scene: pages[0]?.imageDescription || 'A magical adventure scene',
-  })
-  imagePrompts.push({ pageNumber: 'cover', prompt: coverPrompt })
+  // 2. One task per picture, cover first.
+  const paintOne = async (which: number | 'cover'): Promise<string | null> => {
+    const isCover = which === 'cover'
+    const page = isCover ? pages[0] : pages[which as number]
+    const scene = page?.imageDescription || String(page?.text || '').slice(0, 400) || 'A magical moment'
+    const shot = isCover ? undefined : page?.shotType
 
-  const pagePrompts: string[] = pages.map((page: any, i: number) => {
-    const fullPrompt = buildIllustrationPrompt({
-      characters: charPrefix.trim() || undefined,
-      palette: palette || undefined,
-      style: illustrationStyle,
-      shot: page.shotType || undefined,
-      scene: page.imageDescription || page.text.substring(0, 300),
-    })
-    imagePrompts.push({ pageNumber: i + 1, prompt: fullPrompt })
-    return fullPrompt
-  })
-
-  // Track completions for live progress updates (10% story → 99% when all images done)
-  let completedCount = 0
-  const totalImages = 1 + totalPages
-  const onImageDone = async () => {
-    completedCount++
-    await updateProgress(10 + Math.round((completedCount / totalImages) * 89))
-  }
-
-  console.log(`[${bookId}] Generating cover + ${totalPages} page images in parallel${cartoonHeroImage ? ' (cartoon hero mode)' : ''}...`)
-
-  // Strip data URI prefix from cartoon hero if present
-  const heroBase64 = cartoonHeroImage ? cartoonHeroImage.replace(/^data:[^;]+;base64,/, '') : undefined
-
-  // Build one task per image (cover first, then pages) and run them through a
-  // bounded pool so we never overwhelm the Venice API with a burst of requests.
-  type ImgResult = { data: string; isPng: boolean } | null
-  const tasks: Array<() => Promise<ImgResult>> = [
-    () =>
-      heroBase64
-        ? editImage(coverPrompt, heroBase64, '16:9', apiKey)
-        : generateImage(coverPrompt, painter, 1280, 720, apiKey, bookSeed).then(img => (img ? { data: img, isPng: false } : null)),
-    ...pagePrompts.map((prompt: string, i: number) => () =>
-      heroBase64
-        ? editImage(prompt, heroBase64, '3:2', apiKey)
-        : generateImage(prompt, painter, 1024, 768, apiKey, (bookSeed + i + 1) % 999_999_999).then(img => (img ? { data: img, isPng: false } : null)),
-    ),
-  ]
-
-  const allResults = await runWithConcurrency(tasks, 4, onImageDone)
-  const coverResult = allResults[0]
-  const pageResults = allResults.slice(1)
-
-  if (coverResult) {
-    const prefix = coverResult.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
-    book.titlePage = { image: `${prefix}${coverResult.data}`, title: book.title }
-  }
-
-  let failedImages = 0
-  book.pages = pageResults.map((result, i) => {
-    if (!result) {
-      // A single failed image must not discard the whole book — use a placeholder
-      // so the story still completes; the page can be regenerated later.
-      failedImages++
-      console.warn(`[${bookId}] Image for page ${i + 1} failed after retries — using placeholder`)
-      return { pageNumber: i + 1, text: pages[i].text, image: PLACEHOLDER_IMAGE }
+    if (heroSheet) {
+      const prompt = buildSceneWithHeroPrompt({
+        style,
+        scene,
+        shot,
+        palette,
+        characters: others || undefined,
+        heroName: meta.heroName,
+        cover: isCover,
+        title: isCover ? book.title : undefined,
+      })
+      imagePrompts.push({ pageNumber: which, prompt })
+      const img = await editImage(apiKey, {
+        image: heroSheet,
+        prompt,
+        model: editModel,
+        fallbacks: EDIT_MODEL_FALLBACKS,
+        aspectRatio: '3:2',
+      })
+      if (img) return img.dataUrl
+      console.warn(`[${bookId}] Reference painting refused for ${which}; painting from words`)
     }
-    const prefix = result.isPng ? 'data:image/png;base64,' : 'data:image/webp;base64,'
-    return { pageNumber: i + 1, text: pages[i].text, image: `${prefix}${result.data}` }
-  })
-  if (failedImages > 0) console.warn(`[${bookId}] Completed with ${failedImages} placeholder image(s)`)
 
-  // 3. Complete
+    const prompt = isCover
+      ? buildCoverIllustrationPrompt({ style, scene, palette, characters: textLock, title: book.title })
+      : buildIllustrationPrompt({ style, scene, shot, palette, characters: textLock })
+    if (!heroSheet) imagePrompts.push({ pageNumber: which, prompt })
+    const img = await generateImage(apiKey, {
+      prompt,
+      model: painter,
+      width: 1248,
+      height: 832,
+      seed: isCover ? bookSeed : (bookSeed + (which as number) + 1) % 999_999_999,
+      negativePrompt: isCover ? KQ_COVER_NEGATIVE : NEGATIVE_PROMPT,
+    })
+    return img?.dataUrl || null
+  }
+
+  const tasks: Array<() => Promise<string | null>> = [
+    () => paintOne('cover'),
+    ...pages.map((_, i) => () => paintOne(i)),
+  ]
+  const results = await runWithConcurrency(tasks, 4, tick)
+
+  if (results[0]) book.titlePage = { image: results[0], title: book.title }
+
+  let failed = 0
+  book.pages = pages.map((p: any, i: number) => {
+    const image = results[i + 1]
+    if (!image) failed++
+    return { pageNumber: i + 1, text: String(p.text), image: image || PLACEHOLDER_IMAGE }
+  })
+  if (failed) console.warn(`[${bookId}] Finished with ${failed} placeholder picture(s)`)
+
   book.status = 'completed'
   book.generationProgress = 100
+  book.meta = meta
   if (book.prompts) book.prompts.images = imagePrompts
   await setBook(bookId, book)
-  console.log(`[${bookId}] Book generation complete!`)
+  console.log(`[${bookId}] Book complete`)
 }
 
-// ── Venice image API helpers ─────────────────────────────────────────────────
-
-// A friendly, valid SVG used as a last-resort placeholder so a single failed
-// image never throws away an otherwise-complete book.
+// A calm, valid SVG used as a last-resort placeholder so a single failed
+// picture never throws away an otherwise complete book. The studio can repaint it.
 const PLACEHOLDER_IMAGE = (() => {
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1248" height="832">` +
     `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0%" stop-color="#9b5de5"/><stop offset="100%" stop-color="#4dc9ff"/></linearGradient></defs>` +
+    `<stop offset="0%" stop-color="rgb(58,35,64)"/><stop offset="100%" stop-color="rgb(27,29,58)"/></linearGradient></defs>` +
     `<rect width="100%" height="100%" fill="url(#g)"/>` +
-    `<text x="50%" y="46%" font-family="Arial, sans-serif" font-size="72" fill="#ffffff" text-anchor="middle">✨</text>` +
-    `<text x="50%" y="58%" font-family="Arial, sans-serif" font-size="34" fill="#ffffff" text-anchor="middle" opacity="0.9">Illustration coming soon</text>` +
+    `<text x="50%" y="52%" font-family="Georgia, serif" font-size="40" fill="rgb(246,231,201)" text-anchor="middle" opacity="0.9">This picture is still to be painted</text>` +
     `</svg>`
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 })()
 
-// Runs async tasks with a bounded concurrency pool, preserving result order.
-// Keeps us from firing a dozen image requests at once (429 storms / timeouts).
-async function runWithConcurrency<T>(
-  tasks: Array<() => Promise<T>>,
-  limit: number,
-  onEach?: () => void | Promise<void>,
-): Promise<T[]> {
-  const results = new Array<T>(tasks.length)
-  let next = 0
-  async function worker() {
-    while (next < tasks.length) {
-      const i = next++
-      results[i] = await tasks[i]()
-      if (onEach) await onEach()
-    }
-  }
-  const workers = Array.from({ length: Math.min(limit, tasks.length) }, () => worker())
-  await Promise.all(workers)
-  return results
-}
-
-// fetch with a hard timeout — a hung Venice request must not stall the whole book.
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-// Things we never want in a children's illustration. A dedicated negative
-// prompt removes far more artifacts than baking "no text" into the positive one.
+// Things we never want in a page illustration. A dedicated negative prompt
+// removes far more artifacts than baking "no text" into the positive one.
 const NEGATIVE_PROMPT =
-  'text, words, letters, captions, signature, watermark, logo, extra fingers, extra limbs, deformed hands, fused fingers, distorted face, mutated, disfigured, duplicate characters, cloned face, blurry, lowres, jpeg artifacts, grainy, scary, creepy, gore, dark, gloomy, horror, nsfw'
-
-/** The nearest of the ratios the image API accepts. */
-function closestAspect(width: number, height: number): string {
-  const target = width / height
-  const options: [string, number][] = [
-    ['1:1', 1], ['3:2', 1.5], ['2:3', 0.667], ['16:9', 1.778], ['9:16', 0.5625], ['4:3', 1.333],
-  ]
-  return options.reduce((best, o) => (Math.abs(o[1] - target) < Math.abs(best[1] - target) ? o : best))[0]
-}
-
-async function generateImage(
-  prompt: string,
-  model: string,
-  width: number,
-  height: number,
-  apiKey: string,
-  seed: number,
-  maxAttempts = 3,
-): Promise<string | null> {
-  // Newer models dropped width and height and want an aspect ratio instead. Ask
-  // the modern way once we are told so, then remember it for the rest of the book.
-  let wantAspectRatio = false
-  const aspectRatio = closestAspect(width, height)
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetchWithTimeout(
-        'https://api.venice.ai/api/v1/image/generate',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            prompt,
-            ...(wantAspectRatio ? { aspect_ratio: aspectRatio } : { width, height }),
-            format: 'webp',
-            steps: 20,
-            seed,                       // fixed per book → consistent look across pages
-            negative_prompt: NEGATIVE_PROMPT,
-            cfg_scale: 7,               // stronger adherence to the described character
-            hide_watermark: true,
-            safe_mode: true,
-          }),
-        },
-        90_000,
-      )
-
-      if (res.ok) {
-        const data = await res.json()
-        const img = data.images?.[0]
-        if (img) return img
-      } else {
-        const body = (await res.text()).slice(0, 200)
-        console.error(`Image generation error (attempt ${attempt}): ${res.status} — ${body}`)
-        if (res.status === 400 && !wantAspectRatio && /width|height|aspect/i.test(body)) {
-          wantAspectRatio = true
-          continue
-        }
-        // Don't retry auth/validation errors — they won't recover.
-        if (res.status === 401 || res.status === 400) return null
-      }
-    } catch (err) {
-      console.error(`Image generation exception (attempt ${attempt}):`, err)
-    }
-    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 2000))
-  }
-  return null
-}
-
-// Uses Venice /image/edit to place the cartoon hero character into each scene
-async function editImage(
-  prompt: string,
-  heroBase64: string,
-  aspectRatio: string,
-  apiKey: string,
-  maxAttempts = 3,
-): Promise<{ data: string; isPng: true } | null> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const res = await fetchWithTimeout(
-        'https://api.venice.ai/api/v1/image/edit',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'grok-imagine-edit',
-            prompt: `${prompt.substring(0, 800)} Place the cartoon character from the reference image as the main hero of this scene, keeping their face, hairstyle and apparent age exactly as in the reference (do not change their age).`,
-            image: heroBase64,
-            aspect_ratio: aspectRatio,
-            safe_mode: true,
-          }),
-        },
-        90_000,
-      )
-
-      if (res.ok) {
-        // /image/edit returns binary PNG
-        const pngBuffer = await res.arrayBuffer()
-        const base64 = Buffer.from(pngBuffer).toString('base64')
-        return { data: base64, isPng: true }
-      }
-      console.error(`Image edit error (attempt ${attempt}): ${res.status} — ${(await res.text()).slice(0, 200)}`)
-      if (res.status === 401 || res.status === 400) return null
-    } catch (err) {
-      console.error(`Image edit exception (attempt ${attempt}):`, err)
-    }
-    if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 2000))
-  }
-  return null
-}
+  'text, words, letters, captions, signature, watermark, logo, extra fingers, extra limbs, deformed hands, fused fingers, distorted face, mutated, disfigured, duplicate characters, cloned face, blurry, lowres, jpeg artifacts, grainy, scary, creepy, gore, horror, nsfw'
