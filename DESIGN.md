@@ -163,6 +163,18 @@ is a flip-through book on screen and the same print layout on paper. A4 landscap
 page, cover alone on its sheet, the whole picture always shown (`object-fit: contain`, never
 cropped).
 
+## The magic in the air
+
+`components/MagicLayer.tsx`, mounted once in the root layout, fills every screen with fairy dust,
+fireflies, painted butterflies and the odd shooting star, and sparkles wherever a child taps. It is
+CSS keyframes only (transform and opacity), pointer-events off, under every sheet and dialog, and
+it is not rendered at all under `prefers-reduced-motion`, when a parent turns "Floating magic" off
+in Parent settings, or on paper. While a book is being made, `setMagicLevel('celebrate')` from
+`lib/magic.ts` fills the sky with more of everything. Moments that deserve a flourish (a page
+turning, a hero appearing, a finished book) call `magicBurst`, `magicBurstAt` or `magicShower`,
+which add a few self-removing spans to the DOM and never touch React state. The creatures are soft
+painted shapes in the palette's own colours: no neon, and no glow halos.
+
 ## Before you call it done
 
 - `npx tsc --noEmit` is clean.

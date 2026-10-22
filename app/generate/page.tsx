@@ -7,6 +7,7 @@ import { Header } from '@/components/Header'
 import { Icon } from '@/components/Icons'
 import { ILLUSTRATION_STYLES, getStyle, stylePlate } from '@/lib/illustration-style'
 import { NARRATORS } from '@/lib/narrators'
+import { magicBurstAt, magicShower } from '@/lib/magic'
 
 /* ════════════════════════════════════════════════════════════════════════
    New book: three short steps a parent can do one handed.
@@ -629,6 +630,9 @@ export default function GeneratePage() {
             ageRange: meta?.ageRange || ageRange, illustrationStyle: meta?.illustrationStyle || illustrationStyle,
             createdAt: data.createdAt || new Date().toISOString(), titlePageImage: data.titlePageImage ?? null,
           })
+          // The book arrives in a shower of sparkles; the sky layer carries
+          // them on into the reader.
+          magicShower()
           router.push(`/book/${bookId}`)
         } else if (data.status === 'generating') {
           setGenerationProgress(Math.min(97, data.progress || 0))
@@ -711,6 +715,8 @@ export default function GeneratePage() {
       if (!res.ok) { setHeroError(data.error || 'The hero could not be painted. Please try again.'); return }
       setCharacterImage(data.characterImage)
       setCharacterStyle(illustrationStyle)
+      // The hero appears with a puff of sparkles.
+      setTimeout(() => magicBurstAt(document.querySelector('[data-hero-sheet]'), { count: 14, spread: 90, big: true }), 120)
       setHeroSaved(false)
       setHeroTweak('')
       if (data.hero) {
@@ -1371,7 +1377,7 @@ export default function GeneratePage() {
 function HeroSheet({ image, painting }: { image: string | null; painting: boolean }) {
   if (image) {
     return (
-      <div className="relative overflow-hidden rounded-md border border-kq-amber/50 bg-kq-cream">
+      <div data-hero-sheet className="relative overflow-hidden rounded-md border border-kq-amber/50 bg-kq-cream">
         <img src={image} alt="The painted hero" className="aspect-[3/4] w-full object-contain" />
       </div>
     )

@@ -621,6 +621,134 @@ textarea.kq-input { resize: none; min-height: 110px; line-height: 1.6; }
 @keyframes kqSheetUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .kq-bottom-sheet { animation: kqSheetUp 0.28s ease-out both; }
 
+/* ════════════════ The magic in the air ════════════════
+   components/MagicLayer.tsx. Fairy dust, fireflies, butterflies and the odd
+   shooting star, all transform and opacity, never in the way of a finger.
+   It sits under every sheet and dialog (z 50) and above the page. */
+.kq-magic {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+.kq-magic-bursts { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+
+/* While a book is being made, the sky fills up. */
+.kq-magic-extra { display: none; }
+html[data-magic="celebrate"] .kq-magic-extra { display: block; }
+html[data-magic-paused="1"] .kq-magic *, html[data-magic-paused="1"] .kq-magic { animation-play-state: paused !important; }
+
+/* Fairy dust: specks of lamp light rising and twinkling. */
+.kq-dust {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--kq-cream) 0%, var(--kq-amber) 45%, transparent 72%);
+  will-change: transform, opacity;
+  animation-name: kqDustRise, kqTwinkleSoft;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: normal, alternate;
+}
+@keyframes kqDustRise {
+  from { transform: translate3d(0, 0, 0); }
+  50%  { transform: translate3d(calc(var(--drift) * -0.6), -55vh, 0); }
+  to   { transform: translate3d(var(--drift), -112vh, 0); }
+}
+@keyframes kqTwinkleSoft { from { opacity: 0.15; } to { opacity: 0.85; } }
+
+/* Fireflies: warm dots that wander in small loops and breathe. */
+.kq-firefly {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--kq-amber) 0%, var(--kq-amber) 40%, transparent 75%);
+  will-change: transform, opacity;
+  animation-name: kqWander, kqBreathe;
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: normal, alternate;
+}
+@keyframes kqWander {
+  0%   { transform: translate3d(0, 0, 0); }
+  25%  { transform: translate3d(22px, -16px, 0); }
+  50%  { transform: translate3d(-8px, -30px, 0); }
+  75%  { transform: translate3d(-24px, 2px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+@keyframes kqBreathe { from { opacity: 0.1; } to { opacity: 0.9; } }
+
+/* Butterflies: a slow loop across the glass, a little bob, wings that fold. */
+.kq-bfly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  animation-name: kqFlight;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  opacity: 0.92;
+}
+@keyframes kqFlight {
+  0%   { transform: translate3d(var(--p0x), var(--p0y), 0); }
+  25%  { transform: translate3d(var(--p1x), var(--p1y), 0); }
+  50%  { transform: translate3d(var(--p2x), var(--p2y), 0); }
+  75%  { transform: translate3d(var(--p3x), var(--p3y), 0); }
+  100% { transform: translate3d(var(--p4x), var(--p4y), 0); }
+}
+.kq-bfly-bob { display: block; animation: kqBob 2.8s ease-in-out infinite alternate; }
+@keyframes kqBob {
+  from { transform: translateY(0) rotate(-8deg); }
+  to   { transform: translateY(-9px) rotate(7deg); }
+}
+.kq-bfly-wing { transform-box: fill-box; animation: kqFlap 0.42s ease-in-out infinite alternate; }
+.kq-bfly-left  { transform-origin: right center; }
+.kq-bfly-right { transform-origin: left center; }
+@keyframes kqFlap { from { transform: scaleX(1); } to { transform: scaleX(0.4); } }
+
+/* A shooting star now and then: a thin line of moonlight, no glow. */
+.kq-shooting-star {
+  position: absolute;
+  top: 9%;
+  left: 78%;
+  width: 130px;
+  height: 1.5px;
+  background: linear-gradient(90deg, var(--kq-text), transparent);
+  opacity: 0;
+  animation: kqShoot 17s linear 5s infinite;
+}
+.kq-shooting-star-2 { top: 24%; left: 46%; width: 90px; animation-duration: 23s; animation-delay: 11s; }
+@keyframes kqShoot {
+  0%   { transform: translate3d(0, 0, 0) rotate(-24deg); opacity: 0; }
+  1.5% { opacity: 0.9; }
+  6%   { transform: translate3d(-40vw, 18vw, 0) rotate(-24deg); opacity: 0; }
+  100% { transform: translate3d(-40vw, 18vw, 0) rotate(-24deg); opacity: 0; }
+}
+
+/* Sparkles from a tap, a page turning, a picture arriving. */
+.kq-spark {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--c, var(--kq-amber));
+  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+  animation: kqSpark 0.8s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+.kq-spark-star {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+@keyframes kqSpark {
+  0%   { transform: translate(-50%, -50%) scale(0.3) rotate(0deg); opacity: 1; }
+  70%  { opacity: 0.9; }
+  100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0) rotate(120deg); opacity: 0; }
+}
+
+@media print { .kq-magic, .kq-magic-bursts { display: none !important; } }
+
 /* ════════════════ Accessibility ════════════════
    If the device asks for less motion, every animation collapses to static.
    The Three.js scene reads the same media query and holds a still frame. */
@@ -634,4 +762,5 @@ textarea.kq-input { resize: none; min-height: 110px; line-height: 1.6; }
   .animate-hero-float, .animate-kq-float, .animate-kq-spin,
   .animate-kq-orbit, .animate-kq-orbit-reverse, .animate-shimmer,
   .animate-float, .animate-twinkle { animation: none !important; }
+  .kq-magic, .kq-magic-bursts { display: none !important; }
 }

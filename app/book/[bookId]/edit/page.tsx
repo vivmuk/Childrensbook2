@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Icon } from '@/components/Icons'
 import { readApiKey, type ClientBook } from '@/lib/book-client'
+import { magicBurstAt, magicShower } from '@/lib/magic'
 
 /* ════════════════════════════════════════════════════════════════════════
    The studio: where a parent makes the book their own.
@@ -178,7 +179,11 @@ export default function StudioPage() {
   const run = async (label: string, fn: () => Promise<void>) => {
     if (busy) return
     setBusy(label)
-    try { await fn() } catch (err: any) { setMessage(err.message) } finally { setBusy(null) }
+    try {
+      await fn()
+      // Every finished helper lands on the desk with a puff of sparkles.
+      setTimeout(() => magicBurstAt(document.querySelector('[data-desk]'), { count: 12, spread: 90, big: true }), 80)
+    } catch (err: any) { setMessage(err.message) } finally { setBusy(null) }
   }
 
   const rewrite = (text?: string) => run('rewrite', async () => {
@@ -251,6 +256,7 @@ export default function StudioPage() {
       if (!res.ok) throw new Error(data.error || 'The book could not be saved.')
       load(data)
       setMessage('Saved. Every change is in the book now.')
+      magicShower()
       updateShelfEntry(data)
     } catch (err: any) {
       setMessage(err.message)
@@ -336,7 +342,7 @@ export default function StudioPage() {
           {/* ── The cover on the desk ── */}
           {selected === -1 && (
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <div className="kq-page p-2 sm:p-3">
+              <div data-desk className="kq-page p-2 sm:p-3">
                 {cover.image ? (
                   <img key={cover.image.slice(-40)} src={cover.image} alt="The cover" className="block h-auto max-h-[60dvh] w-full animate-bloom-in rounded-[12px] object-contain" />
                 ) : (
@@ -379,7 +385,7 @@ export default function StudioPage() {
           {page && (
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
               <div className="space-y-3">
-                <div className="kq-page p-2 sm:p-3">
+                <div data-desk className="kq-page p-2 sm:p-3">
                   <img key={page.image.slice(-40)} src={page.image} alt={`Picture for page ${selected + 1}`} className="block h-auto max-h-[52dvh] w-full animate-bloom-in rounded-[12px] object-contain" />
                   <div className="px-2 pb-2 pt-3">
                     <textarea

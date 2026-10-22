@@ -8,6 +8,7 @@ import { useReadAloud } from '@/components/reader/useReadAloud'
 import { bookFileName, renderBookHTML } from '@/lib/book-export'
 import { bookSongs, LS_NARRATOR, readApiKey, splitWords, type ClientBook, type ClientSong } from '@/lib/book-client'
 import { NARRATORS, getNarrator } from '@/lib/narrators'
+import { magicBurst, magicBurstAt } from '@/lib/magic'
 
 /* ════════════════════════════════════════════════════════════════════════
    The reader: a picture book you flip through.
@@ -113,7 +114,11 @@ export default function BookViewerPage() {
 
   const go = useCallback((target: number, dir?: 'next' | 'prev') => {
     if (target < 0 || target >= total) return
-    setDirection(dir || (target > at ? 'next' : 'prev'))
+    const d = dir || (target > at ? 'next' : 'prev')
+    // Sparkles fly off the edge the page turns from.
+    const r = document.querySelector('article.kq-page')?.getBoundingClientRect()
+    if (r) magicBurst(d === 'next' ? r.right - 12 : r.left + 12, r.top + r.height * 0.4, { count: 10, spread: 56, big: true })
+    setDirection(d)
     setAt(target)
   }, [at, total])
 
@@ -218,6 +223,7 @@ export default function BookViewerPage() {
   }
 
   const addSong = (song: ClientSong) => {
+    magicBurstAt(document.querySelector('[role="dialog"]') || document.querySelector('article.kq-page'), { count: 14, spread: 110, big: true })
     setBook(b => b ? {
       ...b,
       songUrl: song.kind === 'theme' ? song.url : b.songUrl,

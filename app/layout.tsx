@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Fraunces, Inter } from 'next/font/google'
 import './globals.css'
+import MagicLayer from '@/components/MagicLayer'
 
 /* Cosy Night-Light type: Fraunces for anything read (headlines, book pages,
    the library titles) and Inter for anything operated (buttons, labels,
@@ -41,7 +42,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Dust, fireflies and butterflies, flying across every screen. */}
+        <MagicLayer />
+      </body>
     </html>
   )
 }
